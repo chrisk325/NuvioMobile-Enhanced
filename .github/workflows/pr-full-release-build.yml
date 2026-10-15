@@ -1,25 +1,35 @@
-name: PR Full Release Build
+name: PR Test Build
+run-name: ${{ github.event_name == 'pull_request' && format('PR #{0} test build', github.event.pull_request.number) || format('Test build - {0}', github.ref_name) }}
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    branches: [enhanced]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr-full-release-build-${{ github.event.pull_request.number || github.ref }}
+  group: pr-test-build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  full-release-build:
-    name: Build fullRelease APK
+  android:
+    name: Build Android test APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    env:
+      RELEASE_PROPERTIES_BASE64: ${{ secrets.NUVIO_LOCAL_PROPERTIES_BASE64 }}
+      RELEASE_KEYSTORE_BASE64: ${{ secrets.NUVIO_RELEASE_KEYSTORE_BASE64 }}
+      CONTRIBUTIONS_URL: https://api.github.com/repos/luqmanfadlli/NuvioMobile-Enhanced/contributors?per_page=100
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
-      - name: Checkout
+      - name: Check out source
         uses: actions/checkout@v6
 
       - name: Set up Java
@@ -31,24 +41,106 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Prepare runtime properties
-        env:
-          LOCAL_PROPERTIES_BASE64: ${{ secrets.NUVIO_LOCAL_PROPERTIES_BASE64 }}
+      - name: Configure build properties
+        id: props
         run: |
-          if [ -n "$LOCAL_PROPERTIES_BASE64" ]; then
-            printf '%s' "$LOCAL_PROPERTIES_BASE64" | base64 --decode > local.properties
+          if [[ -n "${RELEASE_PROPERTIES_BASE64}" ]]; then
+            printf '%s' "${RELEASE_PROPERTIES_BASE64}" | base64 --decode > local.properties
             sed -i -E '/^[[:space:]]*(sdk\.dir|NUVIO_RELEASE_STORE_FILE)[[:space:]]*=/d' local.properties
           else
+            echo "::warning::NUVIO_LOCAL_PROPERTIES_BASE64 is unavailable (fork PR?). Building without runtime properties."
             touch local.properties
           fi
 
-      - name: Build fullRelease APK
-        run: ./gradlew :androidApp:assembleFullRelease -Pnuvio.android.distribution=full -Pnuvio.ios.distribution=appstore --stacktrace
+          if [[ -n "${RELEASE_KEYSTORE_BASE64}" ]]; then
+            keystore_path="${RUNNER_TEMP}/nuvio-release.jks"
+            printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
+            printf '\nNUVIO_RELEASE_STORE_FILE=%s\n' "${keystore_path}" >> local.properties
+            echo "signing=release key" >> "${GITHUB_OUTPUT}"
+          else
+            echo "::warning::Release keystore is unavailable. Relying on the Gradle debug-signing fallback."
+            echo "signing=debug key" >> "${GITHUB_OUTPUT}"
+          fi
 
-      - name: Upload fullRelease APK
+          printf 'CONTRIBUTIONS_URL=%s\n' "${CONTRIBUTIONS_URL}" >> local.properties
+
+          short_sha="${HEAD_SHA::7}"
+          if [[ -n "${PR_NUMBER}" ]]; then
+            apk_name="nuvio-pr${PR_NUMBER}-${short_sha}"
+          else
+            apk_name="nuvio-${GITHUB_REF_NAME//\//-}-${short_sha}"
+          fi
+          echo "apk_name=${apk_name}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build fullRelease APK
+        run: ./gradlew :androidApp:assembleFullRelease --stacktrace
+
+      - name: Name the APK after the PR and commit
+        id: apk
+        run: |
+          src="androidApp/build/outputs/apk/full/release/androidApp-full-release.apk"
+          dest="${RUNNER_TEMP}/${{ steps.props.outputs.apk_name }}.apk"
+          cp "${src}" "${dest}"
+          echo "path=${dest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload test APK
+        id: upload
         uses: actions/upload-artifact@v7
         with:
-          path: androidApp/build/outputs/apk/full/release/androidApp-full-release.apk
+          path: ${{ steps.apk.outputs.path }}
           archive: false
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
+
+      - name: Comment build on PR
+        # Fork PRs get a read-only token, so they build but can't comment.
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          APK_NAME: ${{ steps.props.outputs.apk_name }}
+          SIGNING: ${{ steps.props.outputs.signing }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.event.pull_request.head.sha }}
+        run: |
+          marker='<!-- nuvio-pr-test-build -->'
+          short_sha="${HEAD_SHA::7}"
+          built_at="$(date -u '+%Y-%m-%d %H:%M UTC')"
+
+          {
+            echo "${marker}"
+            if [[ "${JOB_STATUS}" == "success" && -n "${ARTIFACT_URL}" ]]; then
+              echo "### ✅ Android test build ready"
+              echo
+              echo "**[⬇️ Download ${APK_NAME}.apk](${ARTIFACT_URL})**"
+              echo
+              echo "| | |"
+              echo "|---|---|"
+              echo "| Commit | [\`${short_sha}\`](${COMMIT_URL}) |"
+              echo "| Variant | \`fullRelease\`, signed with ${SIGNING} |"
+              echo "| Built | ${built_at} · [run logs](${RUN_URL}) |"
+              echo
+              echo "<sub>Downloading needs a GitHub login. The link expires in 14 days, and this comment updates on every push.</sub>"
+            else
+              echo "### ❌ Android test build failed"
+              echo
+              echo "Commit [\`${short_sha}\`](${COMMIT_URL}) did not build. [See the logs](${RUN_URL})."
+              echo
+              echo "<sub>Updated ${built_at}</sub>"
+            fi
+          } > "${RUNNER_TEMP}/comment.md"
+
+          comment_id="$(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"${marker}\"))) | .id" \
+              | head -n 1
+          )"
+
+          if [[ -n "${comment_id}" ]]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
+              -F body=@"${RUNNER_TEMP}/comment.md" > /dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -F body=@"${RUNNER_TEMP}/comment.md" > /dev/null
+          fi
