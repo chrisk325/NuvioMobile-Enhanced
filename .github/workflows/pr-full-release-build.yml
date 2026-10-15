@@ -31,16 +31,54 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Prepare runtime properties
+      - name: Configure release signing properties
         env:
-          LOCAL_PROPERTIES_BASE64: ${{ secrets.NUVIO_LOCAL_PROPERTIES_BASE64 }}
+          RELEASE_PROPERTIES_BASE64: ${{ secrets.NUVIO_LOCAL_PROPERTIES_BASE64 }}
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.NUVIO_RELEASE_KEYSTORE_BASE64 }}
+        shell: bash
         run: |
-          if [ -n "$LOCAL_PROPERTIES_BASE64" ]; then
-            printf '%s' "$LOCAL_PROPERTIES_BASE64" | base64 --decode > local.properties
-            sed -i -E '/^[[:space:]]*(sdk\.dir|NUVIO_RELEASE_STORE_FILE)[[:space:]]*=/d' local.properties
-          else
-            touch local.properties
+          set -euo pipefail
+
+          if [[ -z "${RELEASE_PROPERTIES_BASE64}" ]]; then
+            echo "::error::Missing NUVIO_LOCAL_PROPERTIES_BASE64 secret"
+            exit 1
           fi
+
+          if [[ -z "${RELEASE_KEYSTORE_BASE64}" ]]; then
+            echo "::error::Missing NUVIO_RELEASE_KEYSTORE_BASE64 secret"
+            exit 1
+          fi
+
+          keystore_path="${RUNNER_TEMP}/nuvio-release.jks"
+
+          printf '%s' "${RELEASE_KEYSTORE_BASE64}" \
+            | base64 --decode > "${keystore_path}"
+
+          printf '%s' "${RELEASE_PROPERTIES_BASE64}" \
+            | base64 --decode > local.properties
+
+          sed -i -E \
+            '/^[[:space:]]*(sdk\.dir|NUVIO_RELEASE_STORE_FILE)[[:space:]]*=/d' \
+            local.properties
+
+          printf '\nNUVIO_RELEASE_STORE_FILE=%s\n' \
+            "${keystore_path}" >> local.properties
+
+          required_properties=(
+            NUVIO_RELEASE_STORE_PASSWORD
+            NUVIO_RELEASE_KEY_ALIAS
+            NUVIO_RELEASE_KEY_PASSWORD
+            TRAKT_CLIENT_ID
+            TRAKT_CLIENT_SECRET
+            SIMKL_CLIENT_ID
+          )
+
+          for property_name in "${required_properties[@]}"; do
+            if ! grep -Eq "^${property_name}=.+" local.properties; then
+              echo "::error::Missing required property: ${property_name}"
+              exit 1
+            fi
+          done
 
       - name: Build fullRelease APK
         run: ./gradlew :androidApp:assembleFullRelease -Pnuvio.android.distribution=full -Pnuvio.ios.distribution=appstore --stacktrace
