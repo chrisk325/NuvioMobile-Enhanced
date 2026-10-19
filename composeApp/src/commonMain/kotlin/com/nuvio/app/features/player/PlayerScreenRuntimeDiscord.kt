@@ -8,6 +8,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
 import com.nuvio.app.features.discord.DiscordPlaybackInfo
+import com.nuvio.app.features.discord.DiscordRpcConfig
 import com.nuvio.app.features.discord.DiscordRpcRepository
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -63,16 +64,19 @@ private fun PlayerScreenRuntime.buildDiscordPlaybackInfo(subtitle: String?): Dis
     } else {
         title.ifBlank { activeStreamTitle }
     }
-    val artwork = if (isLiveTvPlayback) {
-        listOf(activeLogo, poster, background)
-    } else {
-        listOf(poster, background)
-    }.firstOrNull { !it.isNullOrBlank() }?.trim()
     val imdbId = if (isLiveTvPlayback) {
         null
     } else {
         imdbIdPattern.find(parentMetaId)?.value ?: activeVideoId?.let { imdbIdPattern.find(it)?.value }
     }
+    val artworkCandidates = if (isLiveTvPlayback) {
+        listOf(activeLogo, poster, background)
+    } else {
+        listOf(poster, background)
+    }.mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
+    val artwork = artworkCandidates.firstOrNull { it.length <= DiscordRpcConfig.MAX_ARTWORK_URL_LENGTH && '?' !in it }
+        ?: imdbId?.let(DiscordRpcConfig::metahubPosterUrl)
+        ?: artworkCandidates.firstOrNull { it.length <= DiscordRpcConfig.MAX_ARTWORK_URL_LENGTH }
 
     return DiscordPlaybackInfo(
         title = displayTitle,
