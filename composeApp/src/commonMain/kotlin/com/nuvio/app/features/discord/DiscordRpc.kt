@@ -1,6 +1,7 @@
 package com.nuvio.app.features.discord
 
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Clock
 
 internal data class DiscordRpcTimestamps(
@@ -37,6 +38,9 @@ internal class DiscordRpc(
     val user: StateFlow<DiscordReadyUser?>
         get() = discordWebSocket.user
 
+    val lastError: StateFlow<String?>
+        get() = discordWebSocket.lastError
+
     fun closeRPC() {
         discordWebSocket.close()
     }
@@ -49,8 +53,12 @@ internal class DiscordRpc(
         applicationId: String,
     ) {
         if (token.isBlank()) return
-        val largeImage = commonRpc.largeImage?.resolveImage(token, applicationId)
-        val smallImage = commonRpc.smallImage?.resolveImage(token, applicationId)
+        val largeImage = commonRpc.largeImage?.let { image ->
+            withTimeoutOrNull(IMAGE_RESOLVE_TIMEOUT_MS) { image.resolveImage(token, applicationId) }
+        }
+        val smallImage = commonRpc.smallImage?.let { image ->
+            withTimeoutOrNull(IMAGE_RESOLVE_TIMEOUT_MS) { image.resolveImage(token, applicationId) }
+        }
         val buttons = commonRpc.buttons
             .filter { it.label.isNotBlank() && it.url.isNotBlank() }
             .take(2)
@@ -84,6 +92,10 @@ internal class DiscordRpc(
         )
         discordWebSocket.connect()
         discordWebSocket.updatePresence(presence)
+    }
+
+    private companion object {
+        const val IMAGE_RESOLVE_TIMEOUT_MS = 8_000L
     }
 
     private fun String.sanitize(): String =
