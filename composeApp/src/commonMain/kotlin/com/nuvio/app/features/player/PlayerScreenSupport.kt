@@ -62,6 +62,7 @@ internal fun sliderOverlayBottomPadding(metrics: PlayerLayoutMetrics) =
         metrics.sliderTouchHeight +
         PlayerTimeRowHeight +
         PlayerActionRowHeight +
+        PlayerLegacyBarChromeHeight +
         PlayerSliderOverlayGap
 
 internal enum class PlayerSideGesture {
