@@ -56,13 +56,10 @@ internal class DiscordRpc(
         if (token.isBlank()) return
         val largeImage = commonRpc.largeImage?.let { image ->
             withTimeoutOrNull(IMAGE_RESOLVE_TIMEOUT_MS) { image.resolveImage(token, applicationId) }
-        }
+        }?.validAssetKey()
         val smallImage = commonRpc.smallImage?.let { image ->
             withTimeoutOrNull(IMAGE_RESOLVE_TIMEOUT_MS) { image.resolveImage(token, applicationId) }
-        }
-        if (commonRpc.largeImage != null) {
-            InAppLogger.debug("DiscordRPC", "Large image ${commonRpc.largeImage} resolved to $largeImage")
-        }
+        }?.validAssetKey()
         val buttons = commonRpc.buttons
             .filter { it.label.isNotBlank() && it.url.isNotBlank() }
             .take(2)
@@ -100,6 +97,12 @@ internal class DiscordRpc(
 
     private companion object {
         const val IMAGE_RESOLVE_TIMEOUT_MS = 8_000L
+    }
+
+    private fun String.validAssetKey(): String? {
+        if (length <= DiscordRpcConfig.MAX_ASSET_KEY_LENGTH) return this
+        InAppLogger.warn("DiscordRPC", "Dropping image asset, key length $length exceeds ${DiscordRpcConfig.MAX_ASSET_KEY_LENGTH}")
+        return null
     }
 
     private fun String.sanitize(): String =
