@@ -53,4 +53,8 @@
     <string name="discord_rpc_presence_paused">Paused</string>
     <string name="discord_rpc_presence_live">Live</string>
     <string name="discord_rpc_button_imdb">View on IMDb</string>
+    <string name="discord_rpc_test_button">Send test presence</string>
+    <string name="discord_rpc_test_active">Test presence sent. Check your Discord profile; it clears in about a minute.</string>
+    <string name="discord_rpc_test_subtitle">Rich Presence test</string>
+    <string name="discord_rpc_last_error">Last error: %1$s</string>
 </resources>
