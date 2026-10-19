@@ -14,7 +14,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.ImageBitmap
@@ -42,14 +41,20 @@ internal val PlayerGlassTint = Color(0xFF101014).copy(alpha = 0.52f)
 /** Light blur so the video stays readable through the glass. */
 internal val PlayerGlassBlur: Dp = 6.dp
 
-/** Very low tint: mostly transparent, just enough to keep white icons legible on bright scenes. */
-internal val PlayerGlassSurfaceTint = Color.Black.copy(alpha = 0.12f)
+/** Near-clear: a faint white sheen instead of a dark fill. */
+internal val PlayerGlassSurfaceTint = Color.White.copy(alpha = 0.05f)
+
+/**
+ * How strongly the blurred video copy is drawn inside the glass. Below 1 the live video shows through,
+ * so the glass stays translucent (and never turns dark if a captured frame comes back black).
+ */
+internal const val PlayerGlassBackdropOpacity = 0.55f
 
 /** Used when there is no live backdrop (Android < 12, protected/DRM video, glass turned off). */
-internal val PlayerGlassFallback = Color.Black.copy(alpha = 0.38f)
+internal val PlayerGlassFallback = Color.White.copy(alpha = 0.08f)
 
 /** Hairline rim that sells the glass edge on top of Kyant's highlight. */
-internal val PlayerGlassRim = Color.White.copy(alpha = 0.16f)
+internal val PlayerGlassRim = Color.White.copy(alpha = 0.22f)
 
 /**
  * The one glass recipe every player control uses: Kyant backdrop with vibrancy, a light blur, lens
@@ -64,6 +69,7 @@ internal fun Modifier.playerLiquidGlass(
     refractionAmount: Dp = 12.dp,
     tint: Color = PlayerGlassSurfaceTint,
     fallback: Color = PlayerGlassFallback,
+    backdropOpacity: Float = PlayerGlassBackdropOpacity,
     rim: Boolean = true,
 ): Modifier {
     val glass = clip(shape).ambientLiquidGlass(
@@ -76,18 +82,13 @@ internal fun Modifier.playerLiquidGlass(
         withVibrancy = true,
         withHighlight = true,
         withShadow = false,
+        backdropOpacity = backdropOpacity,
     )
     return if (rim) glass.border(0.75.dp, PlayerGlassRim, shape) else glass
 }
 
-// Keep the captured frame close to the real picture so the glass reads as transparent;
-// only a touch of dimming so it sits naturally under the controls' scrims.
-private val VideoFrameColorFilter = ColorFilter.colorMatrix(
-    ColorMatrix().apply {
-        setToSaturation(0.95f)
-        timesAssign(ColorMatrix().apply { setToScale(0.88f, 0.88f, 0.88f, 1f) })
-    },
-)
+// Keep the captured frame identical to the real picture so the glass reads as transparent (no dimming).
+private val VideoFrameColorFilter: ColorFilter? = null
 
 @Stable
 class VideoFrameBackdrop : Backdrop, LiquidGlassBackdropHost {
