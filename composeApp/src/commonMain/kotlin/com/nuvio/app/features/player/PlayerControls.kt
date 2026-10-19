@@ -4,8 +4,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -56,6 +54,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SliderState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -184,7 +183,7 @@ internal fun PlayerControlsShell(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = if (glassActive) 0.5f else 0.7f),
+                            Color.Black.copy(alpha = if (glassActive) 0.35f else 0.7f),
                             Color.Transparent,
                         ),
                     ),
@@ -202,9 +201,9 @@ internal fun PlayerControlsShell(
                             Color.Transparent,
                             Color.Black.copy(
                                 alpha = when {
-                                    useLegacyLayout && glassActive -> 0.45f
+                                    useLegacyLayout && glassActive -> 0.35f
                                     useLegacyLayout -> 0.7f
-                                    glassActive -> 0.7f
+                                    glassActive -> 0.55f
                                     else -> 0.8f
                                 },
                             ),
@@ -813,57 +812,41 @@ private fun ProgressControls(
     val subtitlesPainter = appIconPainter(AppIconResource.PlayerSubtitles)
     val audioPainter = appIconPainter(AppIconResource.PlayerAudioFilled)
 
-    // The glass sits on its own layer behind the bar so the bar's content is never clipped:
-    // the seek-preview thumbnail is drawn above the seek bar, outside the bar's bounds.
-    Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .playerLiquidGlass(
-                    shape = PlayerLegacyBarShape,
-                    refractionHeight = 12.dp,
-                    refractionAmount = 16.dp,
-                ),
+    Column(modifier = modifier) {
+        PlayerChapterLabel(
+            chapters = playbackSnapshot.chapters,
+            positionMs = displayedPositionMs,
+            metrics = metrics,
+            modifier = Modifier.padding(horizontal = 12.dp),
+            onClick = onChaptersClick,
         )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = PlayerLegacyBarVerticalPadding),
+        PlayerSeekBar(
+            durationMs = playbackSnapshot.durationMs,
+            displayedPositionMs = displayedPositionMs,
+            bufferedPositionMs = playbackSnapshot.bufferedPositionMs,
+            chapters = playbackSnapshot.chapters,
+            metrics = metrics,
+            onScrubChange = onScrubChange,
+            onScrubFinished = onScrubFinished,
+            seekPreview = seekPreview,
+            onTouchChange = onTimelineTouchChange,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
         ) {
-            PlayerChapterLabel(
-                chapters = playbackSnapshot.chapters,
-                positionMs = displayedPositionMs,
-                metrics = metrics,
-                modifier = Modifier.padding(horizontal = 12.dp),
-                onClick = onChaptersClick,
-            )
-            PlayerSeekBar(
-                durationMs = playbackSnapshot.durationMs,
-                displayedPositionMs = displayedPositionMs,
-                bufferedPositionMs = playbackSnapshot.bufferedPositionMs,
-                chapters = playbackSnapshot.chapters,
-                metrics = metrics,
-                onScrubChange = onScrubChange,
-                onScrubFinished = onScrubFinished,
-                seekPreview = seekPreview,
-                onTouchChange = onTimelineTouchChange,
-                glassTimeLabels = false,
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp)
-                    .height(PlayerLegacyBarDividerHeight)
-                    .background(Color.White.copy(alpha = 0.12f)),
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
+            // Legacy bottom bar: same compact pill as before, now liquid glass.
+            Surface(
+                color = Color.Transparent,
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.playerLiquidGlass(
+                    shape = RoundedCornerShape(24.dp),
+                    refractionHeight = 10.dp,
+                    refractionAmount = 14.dp,
+                ),
             ) {
                 Row(
-                    modifier = Modifier
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -941,16 +924,6 @@ private fun ProgressControls(
     }
 }
 
-/** Shape of the legacy layout's liquid-glass bottom bar (seek bar + actions). */
-internal val PlayerLegacyBarShape = RoundedCornerShape(28.dp)
-
-internal val PlayerLegacyBarVerticalPadding = 6.dp
-
-internal val PlayerLegacyBarDividerHeight = 0.75.dp
-
-/** Extra height the glass bar adds around the seek bar and action row; keeps overlays clear of it. */
-internal val PlayerLegacyBarChromeHeight = PlayerLegacyBarVerticalPadding * 2 + PlayerLegacyBarDividerHeight
-
 private val PlayerTimelineThumbInset = 2.dp
 
 private const val PlayerTimelineTapDedupePx = 12f
@@ -1008,7 +981,6 @@ internal fun PlayerSeekBar(
     seekPreview: SeekPreviewController? = null,
     chapters: List<PlayerChapter> = emptyList(),
     onTouchChange: (Boolean) -> Unit = {},
-    glassTimeLabels: Boolean = true,
 ) {
     val seekDurationMs = durationMs.coerceAtLeast(1L)
     val bufferedFraction = playerBufferedFraction(bufferedPositionMs, durationMs)
@@ -1064,8 +1036,8 @@ internal fun PlayerSeekBar(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TimePill(text = formatPlaybackTime(displayedPositionMs), fontSize = metrics.timeSize, glass = glassTimeLabels)
-            TimePill(text = formatPlaybackTime(durationMs), fontSize = metrics.timeSize, glass = glassTimeLabels)
+            TimePill(text = formatPlaybackTime(displayedPositionMs), fontSize = metrics.timeSize)
+            TimePill(text = formatPlaybackTime(durationMs), fontSize = metrics.timeSize)
         }
     }
 }
