@@ -8,6 +8,10 @@ internal object DiscordRpcConfig {
     const val LOGIN_URL = "https://discord.com/login"
     const val MAX_TEXT_LENGTH = 128
     const val MAX_BUTTON_LABEL_LENGTH = 32
+    const val MAX_ASSET_KEY_LENGTH = 256
+    const val MAX_ARTWORK_URL_LENGTH = 200
+
+    fun metahubPosterUrl(imdbId: String): String = "https://images.metahub.space/poster/medium/$imdbId/img"
     val APPLICATION_ID_LENGTH_RANGE = 17..20
 
     const val PLAY_ASSET = "app-assets/$APPLICATION_ID/1300361266212241430.png"
