@@ -65,6 +65,7 @@ internal class DiscordGatewayConnection(
     private var reconnectAttempts = 0
     private var heartbeatAcknowledged = true
     private var closed = false
+    private var lastCloseInfo: String? = null
 
     private val _state = MutableStateFlow(DiscordGatewayState.Idle)
     val state: StateFlow<DiscordGatewayState> = _state.asStateFlow()
@@ -129,6 +130,7 @@ internal class DiscordGatewayConnection(
             }
             var closeCode: Int? = null
             var closeMessage: String? = null
+            val usingResumeUrl = resumeGatewayUrl != null
             try {
                 val url = resumeGatewayUrl ?: GATEWAY_URL
                 InAppLogger.info(TAG, "Connecting to $url")
@@ -151,8 +153,12 @@ internal class DiscordGatewayConnection(
                 throw error
             } catch (error: Throwable) {
                 val message = error.message ?: error::class.simpleName ?: "Gateway connection error"
-                _lastError.value = message
+                _lastError.value = lastCloseInfo?.let { "$message (after $it)" } ?: message
                 InAppLogger.error(TAG, "Gateway connection error: $message")
+                if (usingResumeUrl) {
+                    InAppLogger.warn(TAG, "Resume gateway unreachable, falling back to $GATEWAY_URL")
+                    resumeGatewayUrl = null
+                }
             }
 
             heartbeatJob?.cancel()
@@ -163,7 +169,9 @@ internal class DiscordGatewayConnection(
             val code = closeCode
             val fatal = code != null && FATAL_CLOSE_CODES.contains(code)
             if (code != null) {
-                _lastError.value = "Discord closed the connection ($code${closeMessage?.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()})"
+                val info = "Discord closed the connection ($code${closeMessage?.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()})"
+                lastCloseInfo = info
+                _lastError.value = info
             }
             InAppLogger.warn(TAG, "Closed with code: $code, reason: $closeMessage, can_reconnect: ${code != 4004 && !fatal}")
             if (code == 4004) {
@@ -243,6 +251,7 @@ internal class DiscordGatewayConnection(
 
     private suspend fun onSessionReady() {
         reconnectAttempts = 0
+        lastCloseInfo = null
         _lastError.value = null
         _state.value = DiscordGatewayState.Ready
         pendingPresence?.let { sendPresence(it) }
