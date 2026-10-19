@@ -338,6 +338,9 @@ internal class DiscordGatewayConnection(
                 }
             }
             InAppLogger.debug(TAG, "Session $label status=${session["status"].stringValue()} activities=$activities")
+            if (label == "this" && activities.isEmpty() && !pendingPresence?.activities.isNullOrEmpty()) {
+                InAppLogger.warn(TAG, "Discord dropped the activity from this session")
+            }
         }
     }
 
