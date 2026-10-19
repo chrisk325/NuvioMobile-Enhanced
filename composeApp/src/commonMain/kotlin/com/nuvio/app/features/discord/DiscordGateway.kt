@@ -4,7 +4,7 @@ import com.nuvio.app.core.logging.InAppLogger
 import com.nuvio.app.features.discord.DiscordIdentify.Companion.toIdentifyPayload
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
-import io.ktor.client.plugins.websocket.webSocketSession
+import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
@@ -23,9 +23,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 
 internal enum class DiscordGatewayState {
     Idle,
@@ -56,6 +63,7 @@ internal class DiscordGatewayConnection(
     private var resumeGatewayUrl: String? = null
     private var pendingPresence: DiscordPresence? = null
     private var reconnectAttempts = 0
+    private var heartbeatAcknowledged = true
     private var closed = false
 
     private val _state = MutableStateFlow(DiscordGatewayState.Idle)
@@ -63,6 +71,9 @@ internal class DiscordGatewayConnection(
 
     private val _user = MutableStateFlow<DiscordReadyUser?>(null)
     val user: StateFlow<DiscordReadyUser?> = _user.asStateFlow()
+
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
     fun connect() {
         scope.launch {
@@ -117,23 +128,31 @@ internal class DiscordGatewayConnection(
                 DiscordGatewayState.Reconnecting
             }
             var closeCode: Int? = null
+            var closeMessage: String? = null
             try {
-                InAppLogger.info(TAG, "Connect called")
                 val url = resumeGatewayUrl ?: GATEWAY_URL
-                val session = client.webSocketSession(url)
-                websocket = session
-                for (frame in session.incoming) {
-                    if (frame is Frame.Text) {
-                        handleMessage(frame.readText())
+                InAppLogger.info(TAG, "Connecting to $url")
+                client.webSocket(urlString = url) {
+                    websocket = this
+                    heartbeatAcknowledged = true
+                    InAppLogger.info(TAG, "Gateway socket opened")
+                    for (frame in incoming) {
+                        when (frame) {
+                            is Frame.Text -> handleMessage(frame.readText())
+                            is Frame.Close -> InAppLogger.warn(TAG, "Close frame received")
+                            else -> Unit
+                        }
                     }
+                    val reason = withTimeoutOrNull(CLOSE_TIMEOUT_MS) { closeReason.await() }
+                    closeCode = reason?.code?.toInt()
+                    closeMessage = reason?.message
                 }
-                closeCode = withTimeoutOrNull(CLOSE_TIMEOUT_MS) {
-                    session.closeReason.await()
-                }?.code?.toInt()
             } catch (error: CancellationException) {
                 throw error
-            } catch (error: Exception) {
-                InAppLogger.error(TAG, error.message ?: "Gateway connection error")
+            } catch (error: Throwable) {
+                val message = error.message ?: error::class.simpleName ?: "Gateway connection error"
+                _lastError.value = message
+                InAppLogger.error(TAG, "Gateway connection error: $message")
             }
 
             heartbeatJob?.cancel()
@@ -143,7 +162,10 @@ internal class DiscordGatewayConnection(
 
             val code = closeCode
             val fatal = code != null && FATAL_CLOSE_CODES.contains(code)
-            InAppLogger.warn(TAG, "Closed with code: $code, can_reconnect: ${code != 4004 && !fatal}")
+            if (code != null) {
+                _lastError.value = "Discord closed the connection ($code${closeMessage?.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()})"
+            }
+            InAppLogger.warn(TAG, "Closed with code: $code, reason: $closeMessage, can_reconnect: ${code != 4004 && !fatal}")
             if (code == 4004) {
                 _state.value = DiscordGatewayState.AuthenticationFailed
                 return
@@ -165,34 +187,49 @@ internal class DiscordGatewayConnection(
     }
 
     private suspend fun handleMessage(jsonString: String) {
-        val payload = try {
-            json.decodeFromString<DiscordPayload>(jsonString)
+        val root = try {
+            json.parseToJsonElement(jsonString) as? JsonObject
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
             InAppLogger.warn(TAG, "Unable to decode payload: ${error.message.orEmpty()}")
-            return
-        }
-        InAppLogger.debug(TAG, "Received op:${payload.op}, seq:${payload.s}, event :${payload.t}")
+            null
+        } ?: return
 
-        payload.s?.let { sequence = it }
-        when (payload.op) {
-            DiscordOpCode.DISPATCH -> handleDispatch(payload.t, jsonString)
-            DiscordOpCode.HEARTBEAT -> sendHeartbeat()
-            DiscordOpCode.RECONNECT -> reconnectWebSocket()
-            DiscordOpCode.INVALID_SESSION -> handleInvalidSession(jsonString)
-            DiscordOpCode.HELLO -> handleHello(jsonString)
+        val op = root["op"].intValue()
+        val seq = root["s"].intValue()
+        val event = root["t"].stringValue()
+        val data = root["d"]
+        InAppLogger.debug(TAG, "Received op:$op, seq:$seq, event :$event")
+
+        seq?.let { sequence = it }
+        when (op) {
+            DiscordOpCode.DISPATCH.value -> handleDispatch(event, data)
+            DiscordOpCode.HEARTBEAT.value -> sendHeartbeat()
+            DiscordOpCode.RECONNECT.value -> reconnectWebSocket("Reconnect requested")
+            DiscordOpCode.INVALID_SESSION.value -> handleInvalidSession(data)
+            DiscordOpCode.HELLO.value -> handleHello(data)
+            DiscordOpCode.HEARTBEAT_ACK.value -> heartbeatAcknowledged = true
             else -> Unit
         }
     }
 
-    private suspend fun handleDispatch(event: String?, jsonString: String) {
+    private suspend fun handleDispatch(event: String?, data: JsonElement?) {
         when (event) {
             "READY" -> {
-                val ready = decodePayloadData<DiscordReady>(jsonString) ?: return
-                sessionId = ready.sessionId
-                resumeGatewayUrl = ready.resumeGatewayUrl?.let { "$it/?v=10&encoding=json" }
-                ready.user?.let { _user.value = it }
+                val ready = data as? JsonObject
+                sessionId = ready?.get("session_id").stringValue()
+                resumeGatewayUrl = ready?.get("resume_gateway_url").stringValue()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { "${it.trimEnd('/')}/?v=10&encoding=json" }
+                (ready?.get("user") as? JsonObject)?.let { user ->
+                    _user.value = DiscordReadyUser(
+                        id = user["id"].stringValue(),
+                        username = user["username"].stringValue(),
+                        globalName = user["global_name"].stringValue(),
+                        avatar = user["avatar"].stringValue(),
+                    )
+                }
                 InAppLogger.info(TAG, "Session ready")
                 onSessionReady()
             }
@@ -206,13 +243,14 @@ internal class DiscordGatewayConnection(
 
     private suspend fun onSessionReady() {
         reconnectAttempts = 0
+        _lastError.value = null
         _state.value = DiscordGatewayState.Ready
         pendingPresence?.let { sendPresence(it) }
     }
 
-    private suspend fun handleInvalidSession(jsonString: String) {
+    private suspend fun handleInvalidSession(data: JsonElement?) {
         InAppLogger.info(TAG, "Handling Invalid Session")
-        val resumable = decodePayloadData<Boolean>(jsonString) == true
+        val resumable = (data as? JsonPrimitive)?.booleanOrNull == true
         delay(INVALID_SESSION_DELAY_MS)
         if (resumable && !sessionId.isNullOrBlank() && sequence != null) {
             sendResume()
@@ -222,13 +260,13 @@ internal class DiscordGatewayConnection(
         }
     }
 
-    private suspend fun handleHello(jsonString: String) {
+    private suspend fun handleHello(data: JsonElement?) {
         if (sequence != null && !sessionId.isNullOrBlank()) {
             sendResume()
         } else {
             sendIdentify()
         }
-        val interval = decodePayloadData<DiscordHeartbeat>(jsonString)?.heartbeatInterval ?: return
+        val interval = (data as? JsonObject)?.get("heartbeat_interval").longValue() ?: DEFAULT_HEARTBEAT_INTERVAL_MS
         InAppLogger.info(TAG, "Setting heartbeatInterval= $interval")
         startHeartbeatJob(interval)
     }
@@ -239,20 +277,14 @@ internal class DiscordGatewayConnection(
         resumeGatewayUrl = null
     }
 
-    private inline fun <reified T> decodePayloadData(jsonString: String): T? =
-        try {
-            json.decodeFromString<DiscordPayloadData<T>>(jsonString).d
-        } catch (error: Exception) {
-            if (error is CancellationException) throw error
-            null
-        }
-
     private suspend fun sendHeartbeat() {
+        heartbeatAcknowledged = false
         send(op = DiscordOpCode.HEARTBEAT, d = sequence)
     }
 
-    private suspend fun reconnectWebSocket() {
-        websocket?.close(CloseReason(4000, "Attempting to reconnect"))
+    private suspend fun reconnectWebSocket(reason: String) {
+        InAppLogger.info(TAG, reason)
+        websocket?.close(CloseReason(4000, reason))
     }
 
     private suspend fun sendIdentify() {
@@ -280,7 +312,12 @@ internal class DiscordGatewayConnection(
     private fun startHeartbeatJob(interval: Long) {
         heartbeatJob?.cancel()
         heartbeatJob = scope.launch {
+            delay((interval * HEARTBEAT_JITTER).toLong())
             while (isActive) {
+                if (!heartbeatAcknowledged) {
+                    reconnectWebSocket("Heartbeat was not acknowledged")
+                    return@launch
+                }
                 sendHeartbeat()
                 delay(interval)
             }
@@ -289,7 +326,6 @@ internal class DiscordGatewayConnection(
 
     private suspend inline fun <reified T> send(op: DiscordOpCode, d: T?) {
         val session = websocket ?: return
-        if (!session.isActive) return
         val payload = json.encodeToString(
             DiscordOutgoingPayload(
                 op = op,
@@ -305,6 +341,15 @@ internal class DiscordGatewayConnection(
         }
     }
 
+    private fun JsonElement?.stringValue(): String? =
+        (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull
+
+    private fun JsonElement?.intValue(): Int? =
+        (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.intOrNull
+
+    private fun JsonElement?.longValue(): Long? =
+        (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.longOrNull
+
     private companion object {
         const val TAG = "DiscordRPC"
         const val GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json"
@@ -314,6 +359,8 @@ internal class DiscordGatewayConnection(
         const val RECONNECT_MAX_DELAY_MS = 15_000L
         const val INVALID_SESSION_DELAY_MS = 1_500L
         const val CLOSE_TIMEOUT_MS = 3_000L
+        const val DEFAULT_HEARTBEAT_INTERVAL_MS = 41_250L
+        const val HEARTBEAT_JITTER = 0.5
         val FATAL_CLOSE_CODES = setOf(4010, 4011, 4012, 4013, 4014)
     }
 }
