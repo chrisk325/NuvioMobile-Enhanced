@@ -64,6 +64,7 @@ import nuvio.composeapp.generated.resources.discord_rpc_enable_description
 import nuvio.composeapp.generated.resources.discord_rpc_enable_title
 import nuvio.composeapp.generated.resources.discord_rpc_hide_on_pause_description
 import nuvio.composeapp.generated.resources.discord_rpc_hide_on_pause_title
+import nuvio.composeapp.generated.resources.discord_rpc_last_error
 import nuvio.composeapp.generated.resources.discord_rpc_logged_in_as
 import nuvio.composeapp.generated.resources.discord_rpc_logging_in
 import nuvio.composeapp.generated.resources.discord_rpc_login_button
@@ -93,6 +94,8 @@ import nuvio.composeapp.generated.resources.discord_rpc_status_failed
 import nuvio.composeapp.generated.resources.discord_rpc_status_presence_active
 import nuvio.composeapp.generated.resources.discord_rpc_status_title
 import nuvio.composeapp.generated.resources.discord_rpc_status_waiting
+import nuvio.composeapp.generated.resources.discord_rpc_test_active
+import nuvio.composeapp.generated.resources.discord_rpc_test_button
 import nuvio.composeapp.generated.resources.discord_rpc_tos_notice
 import org.jetbrains.compose.resources.stringResource
 
@@ -365,6 +368,26 @@ private fun DiscordAccountRow(
                 OutlinedButton(onClick = onLogoutClick) {
                     Text(stringResource(Res.string.discord_rpc_logout))
                 }
+            }
+            uiState.lastError?.takeIf { it.isNotBlank() }?.let { error ->
+                Text(
+                    text = stringResource(Res.string.discord_rpc_last_error, error),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            OutlinedButton(
+                onClick = DiscordRpcRepository::sendTestPresence,
+                enabled = !uiState.isTestActive,
+            ) {
+                Text(stringResource(Res.string.discord_rpc_test_button))
+            }
+            if (uiState.isTestActive) {
+                Text(
+                    text = stringResource(Res.string.discord_rpc_test_active),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         } else {
             Text(
