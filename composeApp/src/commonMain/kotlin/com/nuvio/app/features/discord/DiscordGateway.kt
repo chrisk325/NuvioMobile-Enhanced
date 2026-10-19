@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -174,6 +175,7 @@ internal class DiscordGatewayConnection(
                 _lastError.value = info
             }
             InAppLogger.warn(TAG, "Closed with code: $code, reason: $closeMessage, can_reconnect: ${code != 4004 && !fatal}")
+            InAppLogger.debug(TAG, "Gateway closed code=$code reason=$closeMessage")
             if (code == 4004) {
                 _state.value = DiscordGatewayState.AuthenticationFailed
                 return
@@ -245,6 +247,7 @@ internal class DiscordGatewayConnection(
                 InAppLogger.info(TAG, "Session Resumed")
                 onSessionReady()
             }
+            "SESSIONS_REPLACE" -> logSessions(data)
             else -> Unit
         }
     }
@@ -315,7 +318,27 @@ internal class DiscordGatewayConnection(
 
     private suspend fun sendPresence(presence: DiscordPresence) {
         InAppLogger.info(TAG, "Sending ${DiscordOpCode.PRESENCE_UPDATE}")
+        InAppLogger.debug(TAG, "Presence payload ${json.encodeToString(presence)}")
         send(op = DiscordOpCode.PRESENCE_UPDATE, d = presence)
+    }
+
+    private fun logSessions(data: JsonElement?) {
+        val sessions = data as? JsonArray ?: return
+        sessions.forEach { element ->
+            val session = element as? JsonObject ?: return@forEach
+            val id = session["session_id"].stringValue()
+            val label = when (id) {
+                sessionId -> "this"
+                "all" -> "all"
+                else -> "other"
+            }
+            val activities = (session["activities"] as? JsonArray).orEmpty().mapNotNull { activity ->
+                (activity as? JsonObject)?.let {
+                    "type=${it["type"].intValue()} name=${it["name"].stringValue()} details=${it["details"].stringValue()} state=${it["state"].stringValue()}"
+                }
+            }
+            InAppLogger.debug(TAG, "Session $label status=${session["status"].stringValue()} activities=$activities")
+        }
     }
 
     private fun startHeartbeatJob(interval: Long) {
