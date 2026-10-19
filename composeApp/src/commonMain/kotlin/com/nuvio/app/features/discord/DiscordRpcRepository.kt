@@ -177,6 +177,7 @@ internal object DiscordRpcRepository {
     private var updateJob: Job? = null
     private var lastSignature: Any? = null
     private var lastStartEpochMs: Long? = null
+    private var lastHiddenReason: String? = null
     private var retryAfterEpochMs = 0L
 
     fun ensureLoaded() {
@@ -273,6 +274,7 @@ internal object DiscordRpcRepository {
 
     fun clearPlayback() {
         scope.launch {
+            InAppLogger.debug(TAG, "Playback cleared")
             playback = null
             stopRpc()
         }
@@ -337,9 +339,23 @@ internal object DiscordRpcRepository {
             info.title.isNotBlank() &&
             !(settings.hideOnPause && info.isPaused)
         if (info == null || !shouldShow) {
+            val reason = when {
+                info == null -> "no playback"
+                currentToken == null -> "not logged in"
+                !state.isSupported -> "unsupported platform"
+                !(settings.enabled || isTest) -> "disabled in settings"
+                privateViewing && !isTest -> "private viewing enabled"
+                info.title.isBlank() -> "blank title"
+                else -> "hidden on pause"
+            }
+            if (reason != lastHiddenReason) {
+                lastHiddenReason = reason
+                InAppLogger.debug(TAG, "Presence not shown: $reason")
+            }
             if (rpc != null || updateJob != null) stopRpc()
             return
         }
+        lastHiddenReason = null
         if (!force && rpc == null && nowEpochMs() < retryAfterEpochMs) return
 
         val startEpochMs = if (info.isPlaying) nowEpochMs() - info.positionMs.coerceAtLeast(0L) else null
