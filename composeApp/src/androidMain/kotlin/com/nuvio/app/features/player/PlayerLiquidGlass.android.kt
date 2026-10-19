@@ -31,6 +31,9 @@ private const val VideoFrameCaptureWidth = 480
 private const val VideoFrameCaptureIntervalMs = 33L
 private const val VideoFrameBufferCount = 3
 
+/** About half a second of all-black captures means PixelCopy can't read this video (DRM/tunneling/device). */
+private const val BlackFrameLimit = 15
+
 /** View tag carried by SurfaceViews that sit over the video (e.g. the libass subtitle layer). */
 internal const val PlayerOverlaySurfaceTag = "nuvio:player-overlay-surface"
 
@@ -43,6 +46,7 @@ internal actual fun rememberVideoFrameBackdrop(enabled: Boolean): VideoFrameBack
         val handler = Handler(Looper.getMainLooper())
         val buffers = arrayOfNulls<Bitmap>(VideoFrameBufferCount)
         var nextBuffer = 0
+        var blackFrames = 0
         snapshotFlow { backdrop.consumers > 0 }
             .distinctUntilChanged()
             .collectLatest { active ->
@@ -61,7 +65,14 @@ internal actual fun rememberVideoFrameBackdrop(enabled: Boolean): VideoFrameBack
                             ?: Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
                                 buffers[nextBuffer] = it
                             }
-                        if (surfaceView.copyFrameInto(bitmap, handler)) {
+                        val copied = surfaceView.copyFrameInto(bitmap, handler)
+                        if (copied && bitmap.isBlankCapture()) {
+                            // Never paint a failed (black) capture into the glass; after a run of them fall
+                            // back to the clear fallback style instead of showing a dark blob.
+                            blackFrames += 1
+                            if (blackFrames >= BlackFrameLimit) backdrop.clearFrame()
+                        } else if (copied) {
+                            blackFrames = 0
                             val location = IntArray(2)
                             surfaceView.getLocationOnScreen(location)
                             backdrop.publishFrame(
@@ -125,6 +136,22 @@ private fun View.findVideoSurfaceView(): SurfaceView? {
     }
     visit(this)
     return fromPlayerView ?: best
+}
+
+/** True when every sampled pixel is pure black, i.e. the copy returned an empty/protected frame. */
+private fun Bitmap.isBlankCapture(): Boolean {
+    val stepX = (width / 8).coerceAtLeast(1)
+    val stepY = (height / 8).coerceAtLeast(1)
+    var y = stepY / 2
+    while (y < height) {
+        var x = stepX / 2
+        while (x < width) {
+            if (getPixel(x, y) and 0x00FFFFFF != 0) return false
+            x += stepX
+        }
+        y += stepY
+    }
+    return true
 }
 
 private suspend fun SurfaceView.copyFrameInto(bitmap: Bitmap, handler: Handler): Boolean {
