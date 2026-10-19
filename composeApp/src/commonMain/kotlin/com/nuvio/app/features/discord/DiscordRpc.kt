@@ -1,5 +1,6 @@
 package com.nuvio.app.features.discord
 
+import com.nuvio.app.core.logging.InAppLogger
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Clock
@@ -58,6 +59,9 @@ internal class DiscordRpc(
         }
         val smallImage = commonRpc.smallImage?.let { image ->
             withTimeoutOrNull(IMAGE_RESOLVE_TIMEOUT_MS) { image.resolveImage(token, applicationId) }
+        }
+        if (commonRpc.largeImage != null) {
+            InAppLogger.debug("DiscordRPC", "Large image ${commonRpc.largeImage} resolved to $largeImage")
         }
         val buttons = commonRpc.buttons
             .filter { it.label.isNotBlank() && it.url.isNotBlank() }
