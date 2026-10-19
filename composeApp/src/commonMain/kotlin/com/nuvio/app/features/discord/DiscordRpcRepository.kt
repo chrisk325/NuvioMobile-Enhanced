@@ -37,6 +37,7 @@ import nuvio.composeapp.generated.resources.discord_rpc_status_dnd
 import nuvio.composeapp.generated.resources.discord_rpc_status_idle
 import nuvio.composeapp.generated.resources.discord_rpc_status_invisible
 import nuvio.composeapp.generated.resources.discord_rpc_status_online
+import nuvio.composeapp.generated.resources.discord_rpc_test_subtitle
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import kotlin.math.abs
@@ -128,6 +129,8 @@ internal data class DiscordRpcUiState(
     val connectionState: DiscordGatewayState = DiscordGatewayState.Idle,
     val tokenExpired: Boolean = false,
     val isPresenceActive: Boolean = false,
+    val lastError: String? = null,
+    val isTestActive: Boolean = false,
 )
 
 internal data class DiscordPlaybackInfo(
@@ -140,6 +143,7 @@ internal data class DiscordPlaybackInfo(
     val durationMs: Long = 0L,
     val isLive: Boolean = false,
     val imdbId: String? = null,
+    val isTest: Boolean = false,
 ) {
     val isPaused: Boolean
         get() = !isPlaying && !isLoading
@@ -151,6 +155,7 @@ internal object DiscordRpcRepository {
     private const val SEEK_TOLERANCE_MS = 3_000L
     private const val DURATION_BUCKET_MS = 5_000L
     private const val FAILURE_COOLDOWN_MS = 60_000L
+    private const val TEST_PRESENCE_DURATION_MS = 60_000L
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -167,6 +172,8 @@ internal object DiscordRpcRepository {
     private var playback: DiscordPlaybackInfo? = null
     private var rpc: DiscordRpc? = null
     private var rpcStateJob: Job? = null
+    private var rpcErrorJob: Job? = null
+    private var testJob: Job? = null
     private var updateJob: Job? = null
     private var lastSignature: Any? = null
     private var lastStartEpochMs: Long? = null
@@ -201,6 +208,8 @@ internal object DiscordRpcRepository {
                 _uiState.update { it.copy(isLoggingIn = false, tokenExpired = true) }
                 return@launch
             }
+            val enabledSettings = _uiState.value.settings.copy(enabled = true)
+            DiscordRpcStorage.saveSettingsPayload(json.encodeToString(enabledSettings))
             runCatching { DiscordRpcStorage.saveToken(normalized) }
                 .onFailure { InAppLogger.error(TAG, "Unable to save Discord token") }
             DiscordRpcStorage.saveUserPayload(json.encodeToString(user))
@@ -212,6 +221,8 @@ internal object DiscordRpcRepository {
                     isLoggingIn = false,
                     user = user,
                     tokenExpired = false,
+                    lastError = null,
+                    settings = enabledSettings,
                 )
             }
             scheduleUpdate(force = true)
@@ -250,6 +261,11 @@ internal object DiscordRpcRepository {
     fun updatePlayback(info: DiscordPlaybackInfo) {
         ensureLoaded()
         scope.launch {
+            if (testJob != null) {
+                testJob?.cancel()
+                testJob = null
+                _uiState.update { it.copy(isTestActive = false) }
+            }
             playback = info
             scheduleUpdate(force = false)
         }
@@ -259,6 +275,37 @@ internal object DiscordRpcRepository {
         scope.launch {
             playback = null
             stopRpc()
+        }
+    }
+
+    fun sendTestPresence() {
+        ensureLoaded()
+        scope.launch {
+            if (token == null) return@launch
+            val currentPlayback = playback
+            if (currentPlayback != null && !currentPlayback.isTest) {
+                scheduleUpdate(force = true)
+                return@launch
+            }
+            testJob?.cancel()
+            playback = DiscordPlaybackInfo(
+                title = DiscordRpcConfig.APP_NAME,
+                subtitle = getString(Res.string.discord_rpc_test_subtitle),
+                isPlaying = true,
+                isTest = true,
+            )
+            retryAfterEpochMs = 0L
+            _uiState.update { it.copy(isTestActive = true, lastError = null) }
+            scheduleUpdate(force = true)
+            testJob = scope.launch {
+                delay(TEST_PRESENCE_DURATION_MS)
+                if (playback?.isTest == true) {
+                    playback = null
+                    stopRpc()
+                }
+                testJob = null
+                _uiState.update { it.copy(isTestActive = false) }
+            }
         }
     }
 
@@ -281,11 +328,12 @@ internal object DiscordRpcRepository {
         val state = _uiState.value
         val settings = state.settings
         val privateViewing = PlayerSettingsRepository.uiState.value.privateViewingEnabled
+        val isTest = info?.isTest == true
         val shouldShow = info != null &&
             currentToken != null &&
             state.isSupported &&
-            settings.enabled &&
-            !privateViewing &&
+            (settings.enabled || isTest) &&
+            (!privateViewing || isTest) &&
             info.title.isNotBlank() &&
             !(settings.hideOnPause && info.isPaused)
         if (info == null || !shouldShow) {
@@ -326,10 +374,18 @@ internal object DiscordRpcRepository {
         val client = rpc?.takeIf { it.token == currentToken } ?: run {
             rpc?.closeRPC()
             rpcStateJob?.cancel()
+            rpcErrorJob?.cancel()
             DiscordRpc(currentToken).also { created ->
                 rpc = created
                 rpcStateJob = scope.launch {
                     created.state.collect { state -> onGatewayStateChanged(created, state) }
+                }
+                rpcErrorJob = scope.launch {
+                    created.lastError.collect { error ->
+                        if (rpc === created && error != null) {
+                            _uiState.update { it.copy(lastError = error) }
+                        }
+                    }
                 }
             }
         }
@@ -344,13 +400,20 @@ internal object DiscordRpcRepository {
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            InAppLogger.error(TAG, "Unable to update presence: ${error.message.orEmpty()}")
+            val message = error.message ?: error::class.simpleName.orEmpty()
+            InAppLogger.error(TAG, "Unable to update presence: $message")
+            _uiState.update { it.copy(lastError = message) }
         }
     }
 
     private suspend fun onGatewayStateChanged(client: DiscordRpc, state: DiscordGatewayState) {
         if (rpc !== client) return
-        _uiState.update { it.copy(connectionState = state) }
+        _uiState.update {
+            it.copy(
+                connectionState = state,
+                lastError = if (state == DiscordGatewayState.Ready) null else it.lastError,
+            )
+        }
         when (state) {
             DiscordGatewayState.AuthenticationFailed -> {
                 InAppLogger.warn(TAG, "Token Seems to be invalid, Please Login again")
@@ -448,6 +511,7 @@ internal object DiscordRpcRepository {
             }
             if (response.status.value !in 200..299) {
                 InAppLogger.warn(TAG, "User lookup failed with ${response.status.value}")
+                _uiState.update { it.copy(lastError = "Discord login check failed (HTTP ${response.status.value})") }
                 null
             } else {
                 json.decodeFromString<DiscordRpcUser>(response.bodyAsText())
@@ -456,10 +520,14 @@ internal object DiscordRpcRepository {
             throw error
         } catch (error: Exception) {
             InAppLogger.error(TAG, "User lookup failed: ${error.message.orEmpty()}")
+            _uiState.update { it.copy(lastError = error.message ?: "Discord login check failed") }
             null
         }
 
     private fun signOut(expired: Boolean) {
+        testJob?.cancel()
+        testJob = null
+        playback = playback?.takeIf { !it.isTest }
         stopRpc()
         token = null
         runCatching { DiscordRpcStorage.saveToken(null) }
@@ -474,6 +542,7 @@ internal object DiscordRpcRepository {
                 tokenExpired = expired,
                 connectionState = DiscordGatewayState.Idle,
                 isPresenceActive = false,
+                isTestActive = false,
             )
         }
     }
@@ -483,6 +552,8 @@ internal object DiscordRpcRepository {
         updateJob = null
         rpcStateJob?.cancel()
         rpcStateJob = null
+        rpcErrorJob?.cancel()
+        rpcErrorJob = null
         rpc?.closeRPC()
         rpc = null
         lastSignature = null
