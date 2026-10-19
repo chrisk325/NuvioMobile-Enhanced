@@ -97,6 +97,10 @@ import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import com.nuvio.app.core.ui.glass.LocalLiquidGlassBackdrop
 import com.nuvio.app.core.ui.glass.ambientLiquidGlass
+import com.nuvio.app.core.ui.glass.isAmbientLiquidGlassActive
+import com.nuvio.app.core.ui.NuvioTokens
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import com.nuvio.app.core.ui.glass.nuvioBackdropSource
 import com.nuvio.app.core.ui.glass.rememberNuvioBackdrop
 
@@ -1490,23 +1494,65 @@ internal fun StreamSearchField(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    NuvioInputField(
-        value = query,
-        onValueChange = onQueryChange,
-        placeholder = stringResource(Res.string.streams_search_placeholder),
-        modifier = modifier,
-        trailingContent = if (query.isEmpty()) null else {
-            {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(Res.string.streams_search_clear),
-                        tint = MaterialTheme.nuvio.colors.textMuted,
-                    )
-                }
+    val trailingContent: (@Composable () -> Unit)? = if (query.isEmpty()) null else {
+        {
+            IconButton(onClick = { onQueryChange("") }) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = stringResource(Res.string.streams_search_clear),
+                    tint = MaterialTheme.nuvio.colors.textMuted,
+                )
             }
-        },
-    )
+        }
+    }
+    if (!isAmbientLiquidGlassActive()) {
+        NuvioInputField(
+            value = query,
+            onValueChange = onQueryChange,
+            placeholder = stringResource(Res.string.streams_search_placeholder),
+            modifier = modifier,
+            trailingContent = trailingContent,
+        )
+        return
+    }
+    val tokens = MaterialTheme.nuvio
+    val fieldShape = RoundedCornerShape(NuvioTokens.Radius.lg)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(fieldShape)
+            .ambientLiquidGlass(
+                shape = fieldShape,
+                tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+                fallback = tokens.colors.surfaceCard,
+                blurRadius = 14.dp,
+                refractionHeight = 8.dp,
+            ),
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = fieldShape,
+            placeholder = {
+                Text(
+                    text = stringResource(Res.string.streams_search_placeholder),
+                    color = tokens.colors.textMuted,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            },
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = tokens.colors.textPrimary),
+            trailingIcon = trailingContent,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = tokens.colors.borderFocus,
+                unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                cursorColor = tokens.colors.accent,
+            ),
+        )
+    }
 }
 
 @Composable
