@@ -9,24 +9,32 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -41,11 +49,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
+import com.nuvio.app.core.ui.NuvioBottomSheetActionRow
+import com.nuvio.app.core.ui.NuvioModalBottomSheet
+import com.nuvio.app.core.ui.dismissNuvioBottomSheet
+import com.nuvio.app.core.ui.nuvioSafeBottomPadding
 import com.nuvio.app.features.details.EpisodeRatingsVisibility
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.details.SPECIALS_SEASON_NUMBER
 import com.nuvio.app.features.details.groupedEpisodesForDisplay
+import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.absoluteValue
@@ -68,6 +81,14 @@ private data class RatingMapCell(
 ) {
     val key: String = "$season:$episode:${video.id}"
     val visibleRating: Double? get() = rating.takeUnless { isHidden }
+}
+
+private data class RatingMapSeason(
+    val number: Int,
+    val cells: List<RatingMapCell>,
+) {
+    val visibleRated: List<RatingMapCell> = cells.filter { it.visibleRating != null }
+    val average: Double? = visibleRated.mapNotNull { it.visibleRating }.takeIf { it.isNotEmpty() }?.average()
 }
 
 private data class RatingMapTier(
@@ -112,7 +133,7 @@ internal fun MetaDetails.hasEpisodeRatingMap(): Boolean {
     return rated >= 2
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailEpisodeRatingMap(
     meta: MetaDetails,
@@ -124,116 +145,137 @@ fun DetailEpisodeRatingMap(
 ) {
     if (!episodeRatingsVisibility.showRatings) return
 
-    val seasons: List<Pair<Int, List<RatingMapCell>>> = remember(meta.videos, episodeRatingsVisibility, isEpisodeWatched) {
+    val seasons: List<RatingMapSeason> = remember(meta.videos, episodeRatingsVisibility, isEpisodeWatched) {
         meta.groupedEpisodesForDisplay()
             .filterKeys { it > SPECIALS_SEASON_NUMBER }
             .toList()
             .sortedBy { it.first }
             .map { (season, episodes) ->
-                season to episodes
-                    .filter { it.episode != null }
-                    .distinctBy { it.episode }
-                    .map { video ->
-                        val score = video.ratingMapScore()
-                        RatingMapCell(
-                            video = video,
-                            season = season,
-                            episode = video.episode ?: 0,
-                            rating = score?.first,
-                            source = score?.second,
-                            isHidden = score != null && !episodeRatingsVisibility.showRating(isEpisodeWatched(video)),
-                        )
-                    }
+                RatingMapSeason(
+                    number = season,
+                    cells = episodes
+                        .filter { it.episode != null }
+                        .distinctBy { it.episode }
+                        .map { video ->
+                            val score = video.ratingMapScore()
+                            RatingMapCell(
+                                video = video,
+                                season = season,
+                                episode = video.episode ?: 0,
+                                rating = score?.first,
+                                source = score?.second,
+                                isHidden = score != null &&
+                                    !episodeRatingsVisibility.showRating(isEpisodeWatched(video)),
+                            )
+                        },
+                )
             }
-            .filter { (_, cells) -> cells.isNotEmpty() }
+            .filter { it.cells.isNotEmpty() }
     }
     if (seasons.isEmpty()) return
 
-    val allCells = remember(seasons) { seasons.flatMap { it.second } }
-    val visibleRated = remember(allCells) { allCells.filter { it.visibleRating != null } }
-    val bestCell = remember(visibleRated) { visibleRated.maxByOrNull { it.visibleRating ?: 0.0 } }
-    val lowestCell = remember(visibleRated) {
-        visibleRated.minByOrNull { it.visibleRating ?: 0.0 }?.takeIf { it.key != bestCell?.key }
-    }
-    val average = remember(visibleRated) {
-        visibleRated.mapNotNull { it.visibleRating }.takeIf { it.isNotEmpty() }?.average()
-    }
+    var selectedSeasonNumber by rememberSaveable(meta.id) { mutableStateOf(seasons.first().number) }
+    val season = seasons.firstOrNull { it.number == selectedSeasonNumber } ?: seasons.first()
+    var selectedKey by rememberSaveable(meta.id, season.number) { mutableStateOf<String?>(null) }
+    var showSeasonSheet by remember { mutableStateOf(false) }
 
-    var selectedKey by rememberSaveable(meta.id) { mutableStateOf<String?>(null) }
-    val selectedCell = allCells.firstOrNull { it.key == selectedKey }
-
+    val bestCell = remember(season) { season.visibleRated.maxByOrNull { it.visibleRating ?: 0.0 } }
+    val lowestCell = remember(season, bestCell) {
+        season.visibleRated.minByOrNull { it.visibleRating ?: 0.0 }?.takeIf { it.key != bestCell?.key }
+    }
+    val selectedCell = season.cells.firstOrNull { it.key == selectedKey }
     val colorScheme = MaterialTheme.colorScheme
-    val panelShape = RoundedCornerShape(16.dp)
+    val canPickSeason = seasons.size > 1
 
     DetailSection(
         title = stringResource(Res.string.details_rating_map),
         modifier = modifier,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (average != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                        .then(
+                            if (canPickSeason) {
+                                Modifier.clickable { showSeasonSheet = true }
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .padding(start = 14.dp, end = if (canPickSeason) 8.dp else 14.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Star,
-                        contentDescription = null,
-                        tint = Color(0xFFF5C518),
-                        modifier = Modifier.size(16.dp),
-                    )
                     Text(
-                        text = stringResource(
-                            Res.string.details_rating_map_summary,
-                            formatRatingMapScore(average),
-                            visibleRated.size,
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colorScheme.onSurfaceVariant,
+                        text = stringResource(Res.string.episodes_season, season.number),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.onSurface,
+                        maxLines = 1,
                     )
+                    if (canPickSeason) {
+                        Icon(
+                            imageVector = Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = stringResource(Res.string.details_seasons),
+                            tint = colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+                season.average?.let { average ->
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Star,
+                            contentDescription = null,
+                            tint = Color(0xFFF5C518),
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = stringResource(
+                                Res.string.details_rating_map_summary,
+                                formatRatingMapScore(average),
+                                season.visibleRated.size,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
 
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val labelWidth = 30.dp
                 val gap = 4.dp
-                val targetCell = if (maxWidth >= 720.dp) 44.dp else 34.dp
-                val gridWidth = maxWidth - labelWidth - gap
-                val columns = floor(((gridWidth + gap) / (targetCell + gap)).toDouble())
+                val targetCell = if (maxWidth >= 720.dp) 46.dp else 36.dp
+                val columns = floor(((maxWidth + gap) / (targetCell + gap)).toDouble())
                     .toInt()
-                    .coerceIn(4, 25)
-                val cellSize: Dp = (gridWidth - gap * (columns - 1)) / columns
+                    .coerceIn(5, 25)
+                val cellSize: Dp = (maxWidth - gap * (columns - 1)) / columns
 
                 Column(verticalArrangement = Arrangement.spacedBy(gap)) {
-                    seasons.forEach { (season, cells) ->
-                        cells.chunked(columns).forEachIndexed { chunkIndex, rowCells ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(gap),
-                            ) {
-                                Box(
-                                    modifier = Modifier.width(labelWidth),
-                                    contentAlignment = Alignment.CenterStart,
-                                ) {
-                                    if (chunkIndex == 0) {
-                                        Text(
-                                            text = stringResource(Res.string.details_rating_map_season_short, season),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                        )
-                                    }
-                                }
-                                rowCells.forEach { cell ->
-                                    RatingMapCellView(
-                                        cell = cell,
-                                        size = cellSize,
-                                        selected = cell.key == selectedKey,
-                                        onClick = {
-                                            selectedKey = if (selectedKey == cell.key) null else cell.key
-                                        },
-                                        onLongClick = { onEpisodeLongPress(cell.video) },
-                                    )
-                                }
+                    season.cells.chunked(columns).forEach { rowCells ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            rowCells.forEach { cell ->
+                                RatingMapCellView(
+                                    cell = cell,
+                                    size = cellSize,
+                                    selected = cell.key == selectedKey,
+                                    onClick = {
+                                        selectedKey = if (selectedKey == cell.key) null else cell.key
+                                    },
+                                    onLongClick = { onEpisodeLongPress(cell.video) },
+                                )
                             }
                         }
                     }
@@ -268,7 +310,7 @@ fun DetailEpisodeRatingMap(
             if (selectedCell != null) {
                 RatingMapSelectionPanel(
                     cell = selectedCell,
-                    shape = panelShape,
+                    shape = RoundedCornerShape(16.dp),
                     onPlay = { onEpisodeClick(selectedCell.video) },
                 )
             } else {
@@ -304,6 +346,75 @@ fun DetailEpisodeRatingMap(
                 }
             }
         }
+    }
+
+    if (showSeasonSheet) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val scope = rememberCoroutineScope()
+        NuvioModalBottomSheet(
+            onDismissRequest = { showSeasonSheet = false },
+            sheetState = sheetState,
+        ) {
+            Text(
+                text = stringResource(Res.string.details_seasons),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp),
+                contentPadding = PaddingValues(bottom = nuvioSafeBottomPadding(16.dp)),
+            ) {
+                items(seasons, key = { it.number }) { item ->
+                    NuvioBottomSheetActionRow(
+                        title = stringResource(Res.string.episodes_season, item.number),
+                        selected = item.number == season.number,
+                        onClick = {
+                            scope.launch {
+                                dismissNuvioBottomSheet(sheetState) {
+                                    selectedSeasonNumber = item.number
+                                    showSeasonSheet = false
+                                }
+                            }
+                        },
+                        trailingContent = {
+                            Text(
+                                text = stringResource(Res.string.details_rating_map_season_rated, item.visibleRated.size),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                            RatingMapAverageBadge(average = item.average)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RatingMapAverageBadge(average: Double?) {
+    val colorScheme = MaterialTheme.colorScheme
+    val tier = average?.let(::tierFor)
+    Box(
+        modifier = Modifier
+            .width(44.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(tier?.fill ?: colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            .padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = average?.let(::formatRatingMapScore) ?: "–",
+            color = tier?.content ?: colorScheme.onSurfaceVariant,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
     }
 }
 
