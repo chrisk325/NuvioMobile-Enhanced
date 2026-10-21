@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.7.4",
+          "buildVersion": "158",
+          "date": "2026-10-21T18:57:57Z",
+          "localizedDescription": "- 35fd13c8 Update mobile-release.yml @chrisk325  \n- [feat Rating map (#12)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/12) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.7.4-beta/nuvio-0.7.4-enhanced-release.ipa",
+          "size": 73583453,
+          "sha256": "3d89d83918747d666ae3e53ef8af68560d6371b07cd5b71654ea05fb7bed365c",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.7.2",
           "buildVersion": "156",
           "date": "2026-10-21T12:10:46Z",
