@@ -2895,7 +2895,7 @@
     <string name="layout_rating_map_sub">Show a color-coded map of episode ratings at the bottom of show and anime pages.</string>
     <string name="details_rating_map">Rating Map</string>
     <string name="details_rating_map_summary">Average %1$s · %2$d episodes rated</string>
-    <string name="details_rating_map_season_short">S%1$d</string>
+    <string name="details_rating_map_season_rated">%1$d rated</string>
     <string name="details_rating_map_best">Best %1$s</string>
     <string name="details_rating_map_lowest">Lowest %1$s</string>
     <string name="details_rating_map_rated">Rated %1$s on %2$s</string>
