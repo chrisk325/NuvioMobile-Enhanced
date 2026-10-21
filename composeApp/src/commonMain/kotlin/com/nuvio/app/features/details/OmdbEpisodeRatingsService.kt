@@ -3,6 +3,7 @@ package com.nuvio.app.features.details
 import co.touchlab.kermit.Logger
 import com.nuvio.app.features.addons.httpGetText
 import com.nuvio.app.features.tmdb.TmdbSettings
+import com.nuvio.app.features.tracking.TrackingAnimeIdMapper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -11,6 +12,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -24,6 +26,21 @@ internal object OmdbEpisodeRatingsService {
     private const val IncompleteSeasonTtlMs = 12L * 60 * 60 * 1000
     private const val MaxEpisodeLookupsPerSeason = 30
     private const val EpisodeLookupParallelism = 6
+    private const val AnimeMappingTimeoutMs = 15_000L
+    private const val MaxAnimeMappingsPerMeta = 6
+    private val animeIdSources = setOf("kitsu", "mal", "anilist", "anidb")
+
+    private data class EpisodeTarget(
+        val imdbId: String,
+        val season: Int,
+        val episode: Int,
+    )
+
+    private data class AnimeVideoRef(
+        val source: String,
+        val id: Long,
+        val episode: Int,
+    )
 
     private val log = Logger.withTag("OmdbEpisodeRatings")
     private val json = Json { ignoreUnknownKeys = true }
@@ -39,7 +56,12 @@ internal object OmdbEpisodeRatingsService {
     fun shouldApply(meta: MetaDetails, settings: TmdbSettings): Boolean =
         hasApiKey &&
             (!settings.enabled || settings.useEpisodeRatings) &&
-            meta.videos.any { it.season != null && it.episode != null }
+            meta.type != "movie" &&
+            meta.videos.any { video ->
+                (video.season != null && video.episode != null) ||
+                    (video.imdbSeason != null && video.imdbEpisode != null) ||
+                    animeVideoRef(video.id) != null
+            }
 
     suspend fun applyTo(
         meta: MetaDetails,
@@ -47,33 +69,98 @@ internal object OmdbEpisodeRatingsService {
         settings: TmdbSettings,
     ): MetaDetails {
         if (!shouldApply(meta, settings)) return meta
-        val imdbId = extractImdbId(meta.imdbId, meta.id, fallbackItemId) ?: return meta
+        val defaultImdbId = extractImdbId(meta.imdbId, meta.id, fallbackItemId)
+        val animeMappings = resolveAnimeMappings(meta)
+        val targets = meta.videos.map { video ->
+            targetFor(video = video, defaultImdbId = defaultImdbId, animeMappings = animeMappings)
+        }
+        if (targets.all { it == null }) return meta
+
         val nowIso = Clock.System.now().toString()
-        val episodesBySeason = meta.videos
-            .filter { video ->
-                val released = video.released?.takeIf { it.isNotBlank() }
+        val airedTargets = meta.videos.indices
+            .filter { index ->
+                val released = meta.videos[index].released?.takeIf { it.isNotBlank() }
                 released == null || released <= nowIso
             }
-            .mapNotNull { video ->
-                val season = video.season ?: return@mapNotNull null
-                val episode = video.episode ?: return@mapNotNull null
-                season to episode
+            .mapNotNull { index -> targets[index] }
+
+        val ratings = mutableMapOf<EpisodeTarget, Double>()
+        targets.filterNotNull().groupBy { it.imdbId }.forEach { (imdbId, imdbTargets) ->
+            val seasonRatings = fetchRatings(
+                imdbId = imdbId,
+                seasonNumbers = imdbTargets.map { it.season }.distinct(),
+                airedEpisodesBySeason = airedTargets
+                    .filter { it.imdbId == imdbId }
+                    .groupBy({ it.season }, { it.episode })
+                    .mapValues { (_, episodes) -> episodes.toSet() },
+            )
+            seasonRatings.forEach { (key, rating) ->
+                ratings[EpisodeTarget(imdbId = imdbId, season = key.first, episode = key.second)] = rating
             }
-            .groupBy({ it.first }, { it.second })
-            .mapValues { (_, episodes) -> episodes.toSet() }
-        val ratings = fetchRatings(
-            imdbId = imdbId,
-            seasonNumbers = meta.videos.mapNotNull { it.season }.distinct(),
-            airedEpisodesBySeason = episodesBySeason,
-        )
+        }
         if (ratings.isEmpty()) return meta
         return meta.copy(
-            videos = meta.videos.map { video ->
-                val season = video.season ?: return@map video
-                val episode = video.episode ?: return@map video
-                ratings[season to episode]?.let { video.copy(imdbRating = it) } ?: video
+            videos = meta.videos.mapIndexed { index, video ->
+                targets[index]?.let(ratings::get)?.let { video.copy(imdbRating = it) } ?: video
             },
         )
+    }
+
+    private fun targetFor(
+        video: MetaVideo,
+        defaultImdbId: String?,
+        animeMappings: Map<Pair<String, Long>, TrackingAnimeIdMapper.AnimeImdbMapping>,
+    ): EpisodeTarget? {
+        val mappedSeason = video.imdbSeason
+        val mappedEpisode = video.imdbEpisode?.takeIf { it > 0 }
+        if (mappedSeason != null && mappedSeason >= 0 && mappedEpisode != null) {
+            val imdbId = extractImdbId(video.imdbId) ?: defaultImdbId
+            if (imdbId != null) {
+                return EpisodeTarget(imdbId = imdbId, season = mappedSeason, episode = mappedEpisode)
+            }
+        }
+        val animeRef = animeVideoRef(video.id)
+        if (animeRef != null) {
+            val mapping = animeMappings[animeRef.source to animeRef.id]
+            if (mapping != null) {
+                val (season, episode) = mapping.imdbEpisodeFor(animeRef.episode) ?: return null
+                return EpisodeTarget(imdbId = mapping.imdb, season = season, episode = episode)
+            }
+        }
+        val season = video.season ?: return null
+        val episode = video.episode ?: return null
+        val imdbId = defaultImdbId ?: return null
+        return EpisodeTarget(imdbId = imdbId, season = season, episode = episode)
+    }
+
+    private suspend fun resolveAnimeMappings(
+        meta: MetaDetails,
+    ): Map<Pair<String, Long>, TrackingAnimeIdMapper.AnimeImdbMapping> {
+        val refs = meta.videos
+            .filter { video -> video.imdbSeason == null || video.imdbEpisode == null }
+            .mapNotNull { video -> animeVideoRef(video.id) }
+            .map { ref -> ref.source to ref.id }
+            .distinct()
+            .take(MaxAnimeMappingsPerMeta)
+        if (refs.isEmpty()) return emptyMap()
+        return refs.mapNotNull { ref ->
+            val mapping = withTimeoutOrNull(AnimeMappingTimeoutMs) {
+                TrackingAnimeIdMapper.animeImdbMapping(ref.first, ref.second)
+            }
+            if (mapping == null) {
+                log.w { "No IMDb mapping found for anime ${ref.first}:${ref.second}" }
+            }
+            mapping?.let { ref to it }
+        }.toMap()
+    }
+
+    private fun animeVideoRef(videoId: String): AnimeVideoRef? {
+        val parts = videoId.trim().split(':')
+        if (parts.size < 3) return null
+        val source = parts[0].lowercase().takeIf { it in animeIdSources } ?: return null
+        val id = parts[1].toLongOrNull()?.takeIf { it > 0L } ?: return null
+        val episode = parts[2].toIntOrNull()?.takeIf { it > 0 } ?: return null
+        return AnimeVideoRef(source = source, id = id, episode = episode)
     }
 
     fun extractImdbId(vararg candidates: String?): String? =
