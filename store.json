@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.7.2",
+          "buildVersion": "156",
+          "date": "2026-10-21T12:10:46Z",
+          "localizedDescription": "- 42dbee2c feat(settings): add an in-app rating switch to Tracking @luqmanfadlli  \n- adaa098c feat(ratings): let in-app rating be switched off per profile @luqmanfadlli  \n- b212edda feat(player): swap volume and brightness slider position on gesture @luqmanfadlli  \n- 28ea6939 feat(player): reorder the legacy toolbars and add switch engine @luqmanfadlli  \n- 0ad834d3 feat(player): rearrange the new layout's toolbars @luqmanfadlli  \n- c27cfa45 feat(player): bring the legacy seek bar closer to the bottom bar @luqmanfadlli  \n- aae43965 feat(player): align top toolbar spacing with the bottom bar @luqmanfadlli  \n- [fix selected page visibility in the bottom nav bar (#232)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/232) @chrisk325  \n- 99d0e36e perf(ios): stop republishing identical Now Playing info every second @luqmanfadlli  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.7.2-beta/nuvio-0.7.2-enhanced-release.ipa",
+          "size": 73502282,
+          "sha256": "8a435bf5c72b4501bba35cd99befba421981c104791f5ce60db3b48546150c71",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.7.1",
           "buildVersion": "155",
           "date": "2026-10-21T08:52:55Z",
