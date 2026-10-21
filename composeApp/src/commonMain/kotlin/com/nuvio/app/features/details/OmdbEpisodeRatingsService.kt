@@ -2,6 +2,7 @@ package com.nuvio.app.features.details
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.features.addons.httpGetText
+import com.nuvio.app.features.player.skip.SimklIdResolver
 import com.nuvio.app.features.tmdb.TmdbSettings
 import com.nuvio.app.features.tracking.TrackingAnimeIdMapper
 import kotlinx.coroutines.CancellationException
@@ -28,6 +29,9 @@ internal object OmdbEpisodeRatingsService {
     private const val EpisodeLookupParallelism = 6
     private const val AnimeMappingTimeoutMs = 15_000L
     private const val MaxAnimeMappingsPerMeta = 6
+    private const val TvdbLookupTimeoutMs = 10_000L
+    private val tvdbIdRegex = Regex("(?i)tvdb[:_](\\d+)")
+    private val tvdbImdbCache = mutableMapOf<String, String?>()
     private val animeIdSources = setOf("kitsu", "mal", "anilist", "anidb")
 
     private data class EpisodeTarget(
@@ -70,6 +74,7 @@ internal object OmdbEpisodeRatingsService {
     ): MetaDetails {
         if (!shouldApply(meta, settings)) return meta
         val defaultImdbId = extractImdbId(meta.imdbId, meta.id, fallbackItemId)
+            ?: resolveImdbFromTvdb(meta, fallbackItemId)
         val animeMappings = resolveAnimeMappings(meta)
         val targets = meta.videos.map { video ->
             targetFor(video = video, defaultImdbId = defaultImdbId, animeMappings = animeMappings)
@@ -131,6 +136,33 @@ internal object OmdbEpisodeRatingsService {
         val episode = video.episode ?: return null
         val imdbId = defaultImdbId ?: return null
         return EpisodeTarget(imdbId = imdbId, season = season, episode = episode)
+    }
+
+    private fun extractTvdbId(meta: MetaDetails, fallbackItemId: String): String? {
+        meta.tvdbId?.trim()?.takeIf { id -> id.isNotEmpty() && id.all(Char::isDigit) && id.trimStart('0').isNotEmpty() }
+            ?.let { return it }
+        return listOfNotNull(meta.id, fallbackItemId, meta.videos.firstOrNull()?.id)
+            .firstNotNullOfOrNull { candidate ->
+                tvdbIdRegex.find(candidate)?.groupValues?.getOrNull(1)?.takeIf { it.trimStart('0').isNotEmpty() }
+            }
+    }
+
+    private suspend fun resolveImdbFromTvdb(meta: MetaDetails, fallbackItemId: String): String? {
+        val tvdbId = extractTvdbId(meta, fallbackItemId) ?: return null
+        cacheLock.withLock {
+            if (tvdbImdbCache.containsKey(tvdbId)) return tvdbImdbCache[tvdbId]
+        }
+        val resolved = withTimeoutOrNull(TvdbLookupTimeoutMs) {
+            SimklIdResolver.resolveIds("tvdb", tvdbId)
+        }
+        val imdbId = extractImdbId(resolved?.imdb)
+        if (resolved != null) {
+            cacheLock.withLock { tvdbImdbCache[tvdbId] = imdbId }
+        }
+        if (imdbId == null) {
+            log.w { "No IMDb id found for tvdb:$tvdbId" }
+        }
+        return imdbId
     }
 
     private suspend fun resolveAnimeMappings(
