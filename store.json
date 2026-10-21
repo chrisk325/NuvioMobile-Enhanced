@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.7.1",
+          "buildVersion": "155",
+          "date": "2026-10-21T08:52:55Z",
+          "localizedDescription": "- 726f6d0d fix selected page visibility in the bottom nav bar @chrisk325  \n- 081211e6 Update AppUpdaterRepository.kt @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.7.1-beta/nuvio-0.7.1-enhanced-release.ipa",
+          "size": 73496239,
+          "sha256": "3a2cb356d4b8456eac94959fb0570af5bdd3d2fba41f6b0c38a6324c031cf3de",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.6.3",
           "buildVersion": "146",
           "date": "2026-10-21T04:26:46Z",
