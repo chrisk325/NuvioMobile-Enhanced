@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.7.5",
+          "buildVersion": "159",
+          "date": "2026-10-22T05:11:55Z",
+          "localizedDescription": "- e592dd26 fix episode navigator having a black background for vertical list mode @chrisk325  \n- [feat Rating map (#239)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/239) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.7.5-beta/nuvio-0.7.5-enhanced-release.ipa",
+          "size": 73584093,
+          "sha256": "2567d95bc5323de3ade74331ec3a29c762a448ccb75d370bff67fa7b33739262",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.7.4",
           "buildVersion": "158",
           "date": "2026-10-21T18:57:57Z",
