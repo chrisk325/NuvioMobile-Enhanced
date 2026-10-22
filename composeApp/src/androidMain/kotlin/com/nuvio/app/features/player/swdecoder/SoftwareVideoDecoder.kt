@@ -23,8 +23,8 @@ internal class SoftwareVideoDecoder(
     format: Format,
     threads: Int,
 ) : SimpleDecoder<DecoderInputBuffer, VideoDecoderOutputBuffer, SoftwareVideoDecoderException>(
-    arrayOfNulls<DecoderInputBuffer>(INPUT_BUFFERS),
-    arrayOfNulls<VideoDecoderOutputBuffer>(OUTPUT_BUFFERS),
+    emptyBuffers<DecoderInputBuffer>(INPUT_BUFFERS),
+    emptyBuffers<VideoDecoderOutputBuffer>(OUTPUT_BUFFERS),
 ) {
     private val codecName: String
     private var handle = 0L
@@ -192,6 +192,9 @@ internal class SoftwareVideoDecoder(
             format.initializationData.forEach { output.write(it) }
             return output.toByteArray()
         }
+
+        @Suppress("UNCHECKED_CAST")
+        private inline fun <reified T> emptyBuffers(size: Int): Array<T> = arrayOfNulls<T>(size) as Array<T>
 
         private fun align(value: Int): Int = (value + STRIDE_ALIGNMENT - 1) and (STRIDE_ALIGNMENT - 1).inv()
 
