@@ -259,10 +259,12 @@ jobs:
     name: Build iOS IPA
     if: inputs.mode != 'dry-run' && (inputs.target == 'all' || inputs.target == 'ios-only')
     needs: prepare
-    runs-on: macos-26
+    # Same runner and Xcode as the working "Build Test IPA" workflow.
+    runs-on: xcode-27
     timeout-minutes: 180
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      EXPECTED_IOS_SDK_MAJOR: "27"
       GRADLE_OPTS: -Dfile.encoding=UTF-8
       KOTLIN_DAEMON_JVMARGS: -Xmx1024M
       NUVIO_GRADLE_JVMARGS: -Xmx2048M -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=768M -XX:+UseG1GC
@@ -291,10 +293,18 @@ jobs:
           restore-keys: |
             konan-${{ runner.os }}-${{ runner.arch }}-
 
-      - name: Verify Apple toolchain
+      - name: Select and verify Apple toolchain
         run: |
+          # Point every tool (xcrun, clang, Gradle, Kotlin/Native) at the same Xcode,
+          # not just the xcodebuild binary.
+          sudo xcode-select -s "${DEVELOPER_DIR%/Contents/Developer}"
           xcodebuild -version
-          xcrun --sdk iphoneos --show-sdk-version
+          sdk_version="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iOS SDK: ${sdk_version}"
+          if [[ "${sdk_version%%.*}" != "${EXPECTED_IOS_SDK_MAJOR}" ]]; then
+            echo "Expected iOS SDK ${EXPECTED_IOS_SDK_MAJOR}.x but got ${sdk_version}." >&2
+            exit 1
+          fi
 
       - name: Configure runtime properties
         run: |
@@ -321,6 +331,9 @@ jobs:
       - name: Prepare iOS dependencies
         run: ./scripts/prepare-ios-dependencies.sh
 
+      - name: Clear stale derived data
+        run: rm -rf build/ios-derived-full-release
+
       - name: Build unsigned full IPA
         run: |
           (
@@ -334,7 +347,15 @@ jobs:
           ) &
           monitor_pid=$!
           trap 'kill "${monitor_pid}" 2>/dev/null || true' EXIT
-          ./scripts/build-ios-ipa.sh "${{ needs.prepare.outputs.version }}"
+          set -o pipefail
+          ./scripts/build-ios-ipa.sh "${{ needs.prepare.outputs.version }}" 2>&1 | tee ios-build.log
+
+      - name: Show Swift compile errors
+        if: failure()
+        run: |
+          if [[ -f ios-build.log ]]; then
+            grep -nE "\.swift:[0-9]+:[0-9]+: error:|Stack dump|Killed: 9" ios-build.log || echo "No Swift error lines found in ios-build.log."
+          fi
 
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v7
