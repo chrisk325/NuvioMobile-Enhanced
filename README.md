@@ -12,7 +12,7 @@
   </p>
 
   <p>
-    <a href="https://github.com/luqmanfadlli/NuvioMobile-Enhanced/releases/latest">Releases</a> ·
+    <a href="https://github.com/chrisk325/NuvioMobile-Enhanced/releases/latest">Releases</a> ·
     <a href="https://github.com/NuvioMedia/NuvioMobile">Upstream project</a> ·
     <a href="https://nuvio.tv">nuvio.tv</a> ·
     <a href="https://nuvio.tv/support">Support Nuvio</a>
@@ -32,13 +32,13 @@
 Add this source, then install **Nuvio Enhanced** from it:
 
 ```
-https://github.com/luqmanfadlli/NuvioMobile-Enhanced/raw/refs/heads/enhanced/store.json
+https://github.com/chrisk325/NuvioMobile-Enhanced/blob/enhanced/store.json
 ```
-or grab the IPA from [the latest release](https://github.com/luqmanfadlli/NuvioMobile-Enhanced/releases/latest).
+or grab the IPA from [the latest release](https://github.com/chrisk325/NuvioMobile-Enhanced/releases/latest).
 
 ### Android
 
-Grab the APK from [the latest release](https://github.com/luqmanfadlli/NuvioMobile-Enhanced/releases/latest).
+Grab the APK from [the latest release](https://github.com/chrisk325/NuvioMobile-Enhanced/releases/latest).
 
 ---
 
