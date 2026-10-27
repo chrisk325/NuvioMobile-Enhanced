@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.8.5",
+          "buildVersion": "171",
+          "date": "2026-10-27T17:27:18Z",
+          "localizedDescription": "- [Pmdb tracker with full scrobbling, rating, personal lists, watched history (#20)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/20) @chrisk325  \n- caad335e update ci ios @chrisk325  \n- cd9c90fb Delete .github/workflows/pr-full-debug-build.yml @chrisk325  \n- [fix chapter panel size and make it use kyant0 blur (#19)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/19) @chrisk325  \n- f050f502 Delete .github/workflows/discontinue-legacy-main.yml @chrisk325  \n- 2edb56df Update mobile-release.yml @chrisk325  \n- cc94a1f0 Update AppUpdaterRepository.kt @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.8.5-beta/nuvio-0.8.5-enhanced-release.ipa",
+          "size": 73230118,
+          "sha256": "b294220cb0b6d108d3440c2361406c14d61908e5091212858be7c0ebf5245b25",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.6.5",
           "buildVersion": "148",
           "date": "2026-10-27T03:40:02Z",
