@@ -1459,6 +1459,8 @@
     <string name="settings_playback_tunneled_playback">Tunneled Playback</string>
     <string name="settings_playback_audio_passthrough">Audio Passthrough</string>
     <string name="settings_playback_audio_passthrough_description">Send Dolby and DTS audio undecoded to a soundbar or AV receiver. Leave off on phones: volume boost and dialogue-friendly stereo downmix only work when the app decodes audio</string>
+    <string name="settings_playback_night_mode_button">Night Mode Button</string>
+    <string name="settings_playback_night_mode_button_description">Show a player button that evens out loud and quiet scenes, for listening at a low volume. Turning it off also turns night mode off. Has no effect on passthrough</string>
     <string name="settings_playback_exo_native_memory">ExoPlayer Native Memory (Experimental)</string>
     <string name="settings_playback_exo_native_memory_description">Keep playback buffers in native memory instead of the Java heap, so large files can buffer further without memory pressure. Use more RAM.</string>
     <string name="settings_playback_exo_native_memory_info">Device memory: %1$s GB. Safe buffer limit: %2$s MB.</string>
@@ -2935,6 +2937,9 @@
     <string name="settings_playback_toolbar_note">Buttons that do not apply to the current video, such as Next Episode on a movie, are skipped.</string>
     <string name="player_toolbar_button_resize">Resize</string>
     <string name="player_toolbar_button_quality">Quality</string>
+    <string name="player_night_mode">Night mode</string>
+    <string name="player_night_mode_on">On</string>
+    <string name="player_night_mode_off">Off</string>
     <string name="settings_playback_legacy_bottom_buttons">Bottom bar buttons</string>
     <string name="settings_playback_legacy_bottom_buttons_description">Choose which buttons appear in the bottom bar and their order.</string>
     <string name="settings_playback_legacy_top_buttons">Top bar buttons</string>

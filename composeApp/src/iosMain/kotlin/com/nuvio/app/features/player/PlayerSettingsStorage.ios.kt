@@ -71,6 +71,8 @@ actual object PlayerSettingsStorage {
     private const val mapDV7ToHevcKey = "map_dv7_to_hevc"
     private const val tunnelingEnabledKey = "tunneling_enabled"
     private const val androidAudioPassthroughEnabledKey = "android_audio_passthrough_enabled"
+    private const val nightModeButtonEnabledKey = "night_mode_button_enabled"
+    private const val nightModeEnabledKey = "night_mode_enabled"
     private const val streamAutoPlayModeKey = "stream_auto_play_mode"
     private const val streamAutoPlaySourceKey = "stream_auto_play_source"
     private const val streamAutoPlaySelectedAddonsKey = "stream_auto_play_selected_addons"
@@ -751,6 +753,34 @@ actual object PlayerSettingsStorage {
 
     actual fun saveAndroidAudioPassthroughEnabled(enabled: Boolean) {
         NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(androidAudioPassthroughEnabledKey))
+    }
+
+    actual fun loadNightModeButtonEnabled(): Boolean? {
+        val defaults = NSUserDefaults.standardUserDefaults
+        val key = ProfileScopedKey.of(nightModeButtonEnabledKey)
+        return if (defaults.objectForKey(key) != null) {
+            defaults.boolForKey(key)
+        } else {
+            null
+        }
+    }
+
+    actual fun saveNightModeButtonEnabled(enabled: Boolean) {
+        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(nightModeButtonEnabledKey))
+    }
+
+    actual fun loadNightModeEnabled(): Boolean? {
+        val defaults = NSUserDefaults.standardUserDefaults
+        val key = ProfileScopedKey.of(nightModeEnabledKey)
+        return if (defaults.objectForKey(key) != null) {
+            defaults.boolForKey(key)
+        } else {
+            null
+        }
+    }
+
+    actual fun saveNightModeEnabled(enabled: Boolean) {
+        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(nightModeEnabledKey))
     }
 
     actual fun loadMapDV7ToHevc(): Boolean? {

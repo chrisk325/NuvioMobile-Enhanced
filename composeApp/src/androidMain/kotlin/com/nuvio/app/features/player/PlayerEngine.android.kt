@@ -101,12 +101,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import java.io.IOException
 import java.io.File
 import java.net.HttpURLConnection
@@ -349,7 +352,15 @@ private fun ExoPlayerSurface(
     var chaptersProbeDone by remember(playerSourceKey) { mutableStateOf(false) }
     val effectiveDecoderPriority = decoderPriorityOverride ?: playerSettings.decoderPriority
     val volumeBoostAudioProcessor = remember(playerSourceKey) {
-        PlayerOutputAudioProcessor(stereoDownmixEnabled = !playerSettings.androidAudioPassthroughEnabled)
+        PlayerOutputAudioProcessor(stereoDownmixEnabled = !playerSettings.androidAudioPassthroughEnabled).apply {
+            nightModeEnabled = playerSettings.nightModeButtonEnabled && playerSettings.nightModeEnabled
+        }
+    }
+    LaunchedEffect(volumeBoostAudioProcessor) {
+        PlayerSettingsRepository.uiState
+            .map { it.nightModeButtonEnabled && it.nightModeEnabled }
+            .distinctUntilChanged()
+            .collect { volumeBoostAudioProcessor.nightModeEnabled = it }
     }
 
     var resolvedMediaItem by remember(playerSourceKey, externalSubtitles) {
@@ -3353,9 +3364,17 @@ private class PlayerOutputAudioProcessor(
             field = value.coerceIn(0f, 2f)
         }
 
+    @Volatile
+    var nightModeEnabled: Boolean = false
+
     private var downmix = false
     private var limiterGain = 1f
     private var releaseCoefficient = 0f
+    private var nightLevel = 0f
+    private var nightGain = 1f
+    private var nightAttackCoefficient = 0f
+    private var nightReleaseCoefficient = 0f
+    private var frameMeanSquare = 0f
     private val frame = FloatArray(MAX_CHANNELS)
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
@@ -3364,6 +3383,8 @@ private class PlayerOutputAudioProcessor(
         if (channels <= 0 || channels > MAX_CHANNELS) return AudioProcessor.AudioFormat.NOT_SET
         downmix = stereoDownmixEnabled && (channels == 6 || channels == 8)
         releaseCoefficient = 1f - exp(-1f / (LIMITER_RELEASE_SECONDS * inputAudioFormat.sampleRate))
+        nightAttackCoefficient = 1f - exp(-1f / (NIGHT_ATTACK_SECONDS * inputAudioFormat.sampleRate))
+        nightReleaseCoefficient = 1f - exp(-1f / (NIGHT_RELEASE_SECONDS * inputAudioFormat.sampleRate))
         return if (downmix) {
             AudioProcessor.AudioFormat(inputAudioFormat.sampleRate, 2, C.ENCODING_PCM_16BIT)
         } else {
@@ -3378,8 +3399,9 @@ private class PlayerOutputAudioProcessor(
         val frames = input.remaining() / (2 * inputChannels)
         val output = replaceOutputBuffer(frames * outputChannels * 2).order(ByteOrder.nativeOrder())
         val gain = playerBoostLinearGain(level)
+        val night = nightModeEnabled
 
-        if (!downmix && gain == 1f && limiterGain >= 1f) {
+        if (!downmix && gain == 1f && !night && limiterGain >= 1f) {
             val bytes = frames * inputChannels * 2
             val slice = input.duplicate()
             slice.limit(slice.position() + bytes)
@@ -3392,9 +3414,16 @@ private class PlayerOutputAudioProcessor(
                 } else {
                     readFrame(input, inputChannels)
                 }
+                var frameGain = gain
+                if (night) {
+                    val coefficient = if (frameMeanSquare > nightLevel) nightAttackCoefficient else nightReleaseCoefficient
+                    nightLevel += (frameMeanSquare - nightLevel) * coefficient
+                    if (it % NIGHT_CONTROL_FRAMES == 0) nightGain = nightCompressorGain(nightLevel)
+                    frameGain *= nightGain
+                }
                 var peak = 0f
                 for (channel in 0 until outputChannels) {
-                    val boosted = frame[channel] * gain
+                    val boosted = frame[channel] * frameGain
                     frame[channel] = boosted
                     val magnitude = abs(boosted)
                     if (magnitude > peak) peak = magnitude
@@ -3419,9 +3448,19 @@ private class PlayerOutputAudioProcessor(
     }
 
     private fun readFrame(input: ByteBuffer, channels: Int) {
+        var sum = 0f
         for (channel in 0 until channels) {
-            frame[channel] = input.short / SHORT_SCALE
+            val sample = input.short / SHORT_SCALE
+            frame[channel] = sample
+            sum += sample * sample
         }
+        frameMeanSquare = sum / channels
+    }
+
+    private fun nightCompressorGain(meanSquare: Float): Float {
+        val over = 10f * log10(maxOf(meanSquare, 1e-10f)) - NIGHT_THRESHOLD_DB
+        val gainDb = NIGHT_MAKEUP_DB - maxOf(over, 0f) * (1f - 1f / NIGHT_RATIO)
+        return 10f.pow(gainDb / 20f)
     }
 
     private fun downmixToStereo(channels: Int) {
@@ -3440,11 +3479,15 @@ private class PlayerOutputAudioProcessor(
 
     override fun onFlush() {
         limiterGain = 1f
+        nightLevel = 0f
+        nightGain = 1f
     }
 
     override fun onReset() {
         limiterGain = 1f
         downmix = false
+        nightLevel = 0f
+        nightGain = 1f
     }
 
     private companion object {
@@ -3454,6 +3497,12 @@ private class PlayerOutputAudioProcessor(
         const val LIMITER_RELEASE_SECONDS = 0.15f
         const val SURROUND_COEFFICIENT = 0.707f
         const val DOWNMIX_SCALE = 0.8f
+        const val NIGHT_THRESHOLD_DB = -24f
+        const val NIGHT_RATIO = 6f
+        const val NIGHT_MAKEUP_DB = 12f
+        const val NIGHT_ATTACK_SECONDS = 0.005f
+        const val NIGHT_RELEASE_SECONDS = 0.3f
+        const val NIGHT_CONTROL_FRAMES = 32
     }
 }
 

@@ -1211,6 +1211,15 @@ private fun PlaybackSettingsSection(
                     )
                     SettingsGroupDivider(isTablet = isTablet)
                     SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_playback_night_mode_button),
+                        description = stringResource(Res.string.settings_playback_night_mode_button_description),
+                        checked = autoPlayPlayerSettings.nightModeButtonEnabled,
+                        enabled = exoOptionsEnabled,
+                        isTablet = isTablet,
+                        onCheckedChange = PlayerSettingsRepository::setNightModeButtonEnabled,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsSwitchRow(
                         title = stringResource(Res.string.settings_playback_exo_native_memory),
                         description = stringResource(Res.string.settings_playback_exo_native_memory_description),
                         checked = autoPlayPlayerSettings.exoNativeMemoryEnabled,

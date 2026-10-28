@@ -746,6 +746,8 @@ internal object SettingsConfigTransfer {
         PlayerSettingsStorage.loadMapDV7ToHevc()?.let { put("map_d_v7_to_hevc", encodeSyncBoolean(it)) }
         PlayerSettingsStorage.loadTunnelingEnabled()?.let { put("tunneling_enabled", encodeSyncBoolean(it)) }
         PlayerSettingsStorage.loadAndroidAudioPassthroughEnabled()?.let { put("android_audio_passthrough_enabled", encodeSyncBoolean(it)) }
+        PlayerSettingsStorage.loadNightModeButtonEnabled()?.let { put("night_mode_button_enabled", encodeSyncBoolean(it)) }
+        PlayerSettingsStorage.loadNightModeEnabled()?.let { put("night_mode_enabled", encodeSyncBoolean(it)) }
         PlayerSettingsStorage.loadExoNativeMemoryEnabled()?.let { put("exo_native_memory_enabled", encodeSyncBoolean(it)) }
         PlayerSettingsStorage.loadCustomPlaybackBuffersEnabled()?.let { put("custom_playback_buffers_enabled", encodeSyncBoolean(it)) }
         PlayerSettingsStorage.loadVodDiskCacheEnabled()?.let { put("vod_disk_cache_enabled", encodeSyncBoolean(it)) }
@@ -852,6 +854,8 @@ internal object SettingsConfigTransfer {
         payload.decodeSyncBoolean("map_d_v7_to_hevc")?.let { PlayerSettingsStorage.saveMapDV7ToHevc(it) }
         payload.decodeSyncBoolean("tunneling_enabled")?.let { PlayerSettingsStorage.saveTunnelingEnabled(it) }
         payload.decodeSyncBoolean("android_audio_passthrough_enabled")?.let { PlayerSettingsStorage.saveAndroidAudioPassthroughEnabled(it) }
+        payload.decodeSyncBoolean("night_mode_button_enabled")?.let { PlayerSettingsStorage.saveNightModeButtonEnabled(it) }
+        payload.decodeSyncBoolean("night_mode_enabled")?.let { PlayerSettingsStorage.saveNightModeEnabled(it) }
         payload.decodeSyncBoolean("exo_native_memory_enabled")?.let { PlayerSettingsStorage.saveExoNativeMemoryEnabled(it) }
         payload.decodeSyncBoolean("custom_playback_buffers_enabled")?.let { PlayerSettingsStorage.saveCustomPlaybackBuffersEnabled(it) }
         payload.decodeSyncBoolean("vod_disk_cache_enabled")?.let { PlayerSettingsStorage.saveVodDiskCacheEnabled(it) }
