@@ -72,6 +72,8 @@ data class PlayerSettingsUiState(
     val mapDV7ToHevc: Boolean = false,
     val tunnelingEnabled: Boolean = false,
     val androidAudioPassthroughEnabled: Boolean = false,
+    val nightModeButtonEnabled: Boolean = true,
+    val nightModeEnabled: Boolean = false,
     val exoNativeMemoryEnabled: Boolean = false,
     val customPlaybackBuffersEnabled: Boolean = false,
     val vodDiskCacheEnabled: Boolean = false,
@@ -170,6 +172,8 @@ object PlayerSettingsRepository {
     private var mapDV7ToHevc = false
     private var tunnelingEnabled = false
     private var androidAudioPassthroughEnabled = false
+    private var nightModeButtonEnabled = true
+    private var nightModeEnabled = false
     private var exoNativeMemoryEnabled = false
     private var customPlaybackBuffersEnabled = false
     private var vodDiskCacheEnabled = false
@@ -273,6 +277,8 @@ object PlayerSettingsRepository {
         mapDV7ToHevc = false
         tunnelingEnabled = false
         androidAudioPassthroughEnabled = false
+        nightModeButtonEnabled = true
+        nightModeEnabled = false
         exoNativeMemoryEnabled = false
         customPlaybackBuffersEnabled = false
         vodDiskCacheEnabled = false
@@ -411,6 +417,8 @@ object PlayerSettingsRepository {
         mapDV7ToHevc = PlayerSettingsStorage.loadMapDV7ToHevc() ?: false
         tunnelingEnabled = PlayerSettingsStorage.loadTunnelingEnabled() ?: false
         androidAudioPassthroughEnabled = PlayerSettingsStorage.loadAndroidAudioPassthroughEnabled() ?: false
+        nightModeButtonEnabled = PlayerSettingsStorage.loadNightModeButtonEnabled() ?: true
+        nightModeEnabled = PlayerSettingsStorage.loadNightModeEnabled() ?: false
         exoNativeMemoryEnabled = PlayerSettingsStorage.loadExoNativeMemoryEnabled() ?: false
         customPlaybackBuffersEnabled = PlayerSettingsStorage.loadCustomPlaybackBuffersEnabled() ?: false
         vodDiskCacheEnabled = PlayerSettingsStorage.loadVodDiskCacheEnabled() ?: false
@@ -847,6 +855,22 @@ object PlayerSettingsRepository {
         androidAudioPassthroughEnabled = enabled
         publish()
         PlayerSettingsStorage.saveAndroidAudioPassthroughEnabled(enabled)
+    }
+
+    fun setNightModeButtonEnabled(enabled: Boolean) {
+        ensureLoaded()
+        if (nightModeButtonEnabled == enabled) return
+        nightModeButtonEnabled = enabled
+        publish()
+        PlayerSettingsStorage.saveNightModeButtonEnabled(enabled)
+    }
+
+    fun setNightModeEnabled(enabled: Boolean) {
+        ensureLoaded()
+        if (nightModeEnabled == enabled) return
+        nightModeEnabled = enabled
+        publish()
+        PlayerSettingsStorage.saveNightModeEnabled(enabled)
     }
 
     fun setExoNativeMemoryEnabled(value: Boolean) {
@@ -1354,6 +1378,8 @@ object PlayerSettingsRepository {
             mapDV7ToHevc = mapDV7ToHevc,
             tunnelingEnabled = tunnelingEnabled,
             androidAudioPassthroughEnabled = androidAudioPassthroughEnabled,
+            nightModeButtonEnabled = nightModeButtonEnabled,
+            nightModeEnabled = nightModeEnabled,
             exoNativeMemoryEnabled = exoNativeMemoryEnabled,
             customPlaybackBuffersEnabled = customPlaybackBuffersEnabled,
             vodDiskCacheEnabled = vodDiskCacheEnabled,
