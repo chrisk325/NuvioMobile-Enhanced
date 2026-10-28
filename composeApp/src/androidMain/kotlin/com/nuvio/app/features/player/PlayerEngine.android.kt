@@ -3491,7 +3491,7 @@ private class PlayerOutputAudioProcessor(
     }
 
     private companion object {
-        const val MAX_CHANNELS = 8
+        const val MAX_CHANNELS = 24
         const val SHORT_SCALE = 32768f
         const val LIMITER_CEILING = 0.94f
         const val LIMITER_RELEASE_SECONDS = 0.15f
