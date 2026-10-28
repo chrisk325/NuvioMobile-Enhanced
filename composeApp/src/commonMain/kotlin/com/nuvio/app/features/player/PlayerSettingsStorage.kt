@@ -111,6 +111,10 @@ internal expect object PlayerSettingsStorage {
     fun saveTunnelingEnabled(enabled: Boolean)
     fun loadAndroidAudioPassthroughEnabled(): Boolean?
     fun saveAndroidAudioPassthroughEnabled(enabled: Boolean)
+    fun loadNightModeButtonEnabled(): Boolean?
+    fun saveNightModeButtonEnabled(enabled: Boolean)
+    fun loadNightModeEnabled(): Boolean?
+    fun saveNightModeEnabled(enabled: Boolean)
     fun loadExoNativeMemoryEnabled(): Boolean?
     fun saveExoNativeMemoryEnabled(value: Boolean)
     fun loadCustomPlaybackBuffersEnabled(): Boolean?
