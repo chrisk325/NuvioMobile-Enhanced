@@ -3,6 +3,7 @@ package com.nuvio.app.features.player
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
@@ -29,9 +30,13 @@ internal fun PlayerScreenRuntime.BindDiscordRpcEffects() {
         )
     }
     val currentSubtitle = rememberUpdatedState(subtitle)
+    val metaImdbId = (metaUiState.meta ?: playerMeta)?.takeIf { it.id == parentMetaId }?.imdbId
+    val resolvedImdbId = produceState<String?>(null, parentMetaId, activeVideoId, metaImdbId, liveTv) {
+        value = if (liveTv) null else resolveParentalGuideImdbId()
+    }
 
     LaunchedEffect(Unit) {
-        snapshotFlow { buildDiscordPlaybackInfo(currentSubtitle.value) }
+        snapshotFlow { buildDiscordPlaybackInfo(currentSubtitle.value, resolvedImdbId.value) }
             .distinctUntilChanged()
             .collect { info -> DiscordRpcRepository.updatePlayback(info) }
     }
@@ -57,7 +62,7 @@ private fun buildDiscordSubtitle(
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" - ")
 }
 
-private fun PlayerScreenRuntime.buildDiscordPlaybackInfo(subtitle: String?): DiscordPlaybackInfo {
+private fun PlayerScreenRuntime.buildDiscordPlaybackInfo(subtitle: String?, resolvedImdbId: String?): DiscordPlaybackInfo {
     val snapshot = playbackSnapshot
     val displayTitle = if (isLiveTvPlayback) {
         activeStreamTitle.ifBlank { title }
@@ -67,7 +72,9 @@ private fun PlayerScreenRuntime.buildDiscordPlaybackInfo(subtitle: String?): Dis
     val imdbId = if (isLiveTvPlayback) {
         null
     } else {
-        imdbIdPattern.find(parentMetaId)?.value ?: activeVideoId?.let { imdbIdPattern.find(it)?.value }
+        imdbIdPattern.find(parentMetaId)?.value
+            ?: activeVideoId?.let { imdbIdPattern.find(it)?.value }
+            ?: resolvedImdbId?.let { imdbIdPattern.find(it)?.value }
     }
     val artworkCandidates = if (isLiveTvPlayback) {
         listOf(activeLogo, poster, background)
