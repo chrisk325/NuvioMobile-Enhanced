@@ -98,10 +98,23 @@ internal class DiscordGatewayConnection(
         scope.launch {
             if (closed) return@launch
             closed = true
+            val lastStatus = pendingPresence?.status
             pendingPresence = null
             heartbeatJob?.cancel()
             heartbeatJob = null
             val session = websocket
+            if (session != null && _state.value == DiscordGatewayState.Ready) {
+                withTimeoutOrNull(CLOSE_TIMEOUT_MS) {
+                    sendPresence(
+                        DiscordPresence(
+                            activities = emptyList(),
+                            afk = true,
+                            since = 0L,
+                            status = lastStatus ?: "online",
+                        ),
+                    )
+                }
+            }
             websocket = null
             if (session != null) {
                 withTimeoutOrNull(CLOSE_TIMEOUT_MS) {
