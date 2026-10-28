@@ -7,6 +7,7 @@ enum class PlayerToolbarButton(val storageId: String) {
     SUBTITLES("subtitles"),
     CHAPTERS("chapters"),
     AUDIO("audio"),
+    NIGHT_MODE("night_mode"),
     QUALITY("quality"),
     SOURCES("sources"),
     EPISODES("episodes"),
@@ -58,6 +59,7 @@ data class PlayerToolbarLayout(val entries: List<PlayerToolbarEntry>) {
                 PlayerToolbarButton.RESIZE,
                 PlayerToolbarButton.SUBTITLES,
                 PlayerToolbarButton.CHAPTERS,
+                PlayerToolbarButton.NIGHT_MODE,
             ).map { PlayerToolbarEntry(it, visible = true) } +
                 listOf(
                     PlayerToolbarButton.AUDIO,
