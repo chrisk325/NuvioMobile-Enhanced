@@ -35,16 +35,6 @@ on:
         description: Optional commit to start the release notes after (default - the last "chore(store) publish" commit on this branch)
         required: false
         type: string
-      ios_disable_phases:
-        description: "iOS Release: Kotlin/Native phases to skip."
-        required: false
-        type: choice
-        default: skip-both
-        options:
-          - full
-          - skip-static-init
-          - skip-devirtualization
-          - skip-both
 
 permissions:
   contents: read
@@ -274,15 +264,16 @@ jobs:
     name: Build iOS IPA
     if: inputs.mode != 'dry-run' && (inputs.target == 'all' || inputs.target == 'ios-only')
     needs: prepare
+    # Same runner and Xcode as the working "Build Test IPA" workflow.
     runs-on: xcode-27
     timeout-minutes: 180
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      EXPECTED_IOS_SDK_MAJOR: "27"
       GRADLE_OPTS: -Dfile.encoding=UTF-8
       KOTLIN_DAEMON_JVMARGS: -Xmx1024M
       NUVIO_GRADLE_JVMARGS: -Xmx2048M -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=768M -XX:+UseG1GC
       NUVIO_KOTLIN_NATIVE_JVMARGS: -Xmx9216M -XX:+UseG1GC
-      NUVIO_IOS_PHASE_PROFILE: ${{ inputs.ios_disable_phases }}
       RELEASE_PROPERTIES_BASE64: ${{ secrets.NUVIO_LOCAL_PROPERTIES_BASE64 }}
       CONTRIBUTIONS_URL: ${{ secrets.CONTRIBUTIONS_URL }}
 
@@ -307,10 +298,18 @@ jobs:
           restore-keys: |
             konan-${{ runner.os }}-${{ runner.arch }}-
 
-      - name: Verify Apple toolchain
+      - name: Select and verify Apple toolchain
         run: |
+          # Point every tool (xcrun, clang, Gradle, Kotlin/Native) at the same Xcode,
+          # not just the xcodebuild binary.
+          sudo xcode-select -s "${DEVELOPER_DIR%/Contents/Developer}"
           xcodebuild -version
-          xcrun --sdk iphoneos --show-sdk-version
+          sdk_version="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iOS SDK: ${sdk_version}"
+          if [[ "${sdk_version%%.*}" != "${EXPECTED_IOS_SDK_MAJOR}" ]]; then
+            echo "Expected iOS SDK ${EXPECTED_IOS_SDK_MAJOR}.x but got ${sdk_version}." >&2
+            exit 1
+          fi
 
       - name: Configure runtime properties
         run: |
@@ -331,20 +330,14 @@ jobs:
             echo "org.gradle.parallel=false"
             echo "org.gradle.workers.max=1"
             echo "kotlin.native.disableCompilerDaemon=true"
-            case "${NUVIO_IOS_PHASE_PROFILE:-skip-both}" in
-              full) NUVIO_IOS_DISABLE_PHASES="" ;;
-              skip-static-init) NUVIO_IOS_DISABLE_PHASES="RemoveRedundantCallsToStaticInitializersPhase" ;;
-              skip-devirtualization) NUVIO_IOS_DISABLE_PHASES="DevirtualizationAnalysis,Devirtualization" ;;
-              *) NUVIO_IOS_DISABLE_PHASES="DevirtualizationAnalysis,Devirtualization,RemoveRedundantCallsToStaticInitializersPhase" ;;
-            esac
-            if [ -n "${NUVIO_IOS_DISABLE_PHASES}" ]; then
-              echo "nuvio.ios.releaseDisablePhases=${NUVIO_IOS_DISABLE_PHASES}"
-            fi
           } >> "${gradle_user_home}/gradle.properties"
           cat "${gradle_user_home}/gradle.properties"
 
       - name: Prepare iOS dependencies
         run: ./scripts/prepare-ios-dependencies.sh
+
+      - name: Clear stale derived data
+        run: rm -rf build/ios-derived-full-release
 
       - name: Build unsigned full IPA
         run: |
@@ -359,7 +352,15 @@ jobs:
           ) &
           monitor_pid=$!
           trap 'kill "${monitor_pid}" 2>/dev/null || true' EXIT
-          ./scripts/build-ios-ipa.sh "${{ needs.prepare.outputs.version }}"
+          set -o pipefail
+          ./scripts/build-ios-ipa.sh "${{ needs.prepare.outputs.version }}" 2>&1 | tee ios-build.log
+
+      - name: Show Swift compile errors
+        if: failure()
+        run: |
+          if [[ -f ios-build.log ]]; then
+            grep -nE "\.swift:[0-9]+:[0-9]+: error:|Stack dump|Killed: 9" ios-build.log || echo "No Swift error lines found in ios-build.log."
+          fi
 
       - name: Upload iOS artifact
         uses: actions/upload-artifact@v7
