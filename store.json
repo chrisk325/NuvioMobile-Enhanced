@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.0",
+          "buildVersion": "177",
+          "date": "2026-11-04T14:23:40Z",
+          "localizedDescription": "- ea7a6d8c fix repo @chrisk325  \n- 37b578ce fix ci @chrisk325  \n- cf3062ac Delete .github/workflows/pr-full-debug-build.yml @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.0-beta/nuvio-0.9.0-enhanced-release.ipa",
+          "size": 74144274,
+          "sha256": "ca634a92f203afe6eefea8dc5046ade041549f47cd7ee955f5e690039b1f8281",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.6.7",
           "buildVersion": "150",
           "date": "2026-11-04T12:31:13Z",
