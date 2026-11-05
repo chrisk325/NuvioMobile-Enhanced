@@ -58,15 +58,11 @@ actual object PlayerSettingsStorage {
     private const val androidPlaybackEngineKey = "android_playback_engine"
     private const val animeSkipClientIdKey = "animeskip_client_id"
     private const val animeSkipEnabledKey = "animeskip_enabled"
-    private const val audioAmplificationDbKey = "audio_amplification_db"
-    private const val audioOutputChannelsKey = "audio_output_channels"
     private const val autoSkipMovieCreditsKey = "auto_skip_movie_credits"
     private const val autoSkipPostCreditsKey = "auto_skip_post_credits"
     private const val autoSkipSegmentTypesKey = "auto_skip_segment_types"
     private const val autoSwitchPlaybackEngineOnErrorKey = "auto_switch_playback_engine_on_error"
-    private const val centerMixLevelDbKey = "center_mix_level_db"
     private const val decoderPriorityKey = "decoder_priority"
-    private const val downmixEnabledKey = "downmix_enabled"
     private const val introDbApiKeyKey = "introdb_api_key"
     private const val introSubmitEnabledKey = "intro_submit_enabled"
     private const val iosAudioOutputModeKey = "ios_audio_output_mode"
@@ -85,7 +81,6 @@ actual object PlayerSettingsStorage {
     private const val iosToneMappingModeKey = "ios_tone_mapping_mode"
     private const val iosVideoOutputPresetKey = "ios_video_output_preset"
     private const val libassRenderTypeKey = "libass_render_type"
-    private const val maintainOriginalAudioOnDownmixKey = "maintain_original_audio_on_downmix"
     private const val mapDV7ToHevcKey = "map_dv7_to_hevc"
     private const val miniPlayerEnabledKey = "mini_player_enabled"
     private const val nextEpisodeThresholdMinutesBeforeEndKey = "next_episode_threshold_minutes_before_end_v2"
@@ -93,10 +88,8 @@ actual object PlayerSettingsStorage {
     private const val nextEpisodeThresholdPercentKey = "next_episode_threshold_percent_v2"
     private const val nightModeButtonEnabledKey = "night_mode_button_enabled"
     private const val nightModeEnabledKey = "night_mode_enabled"
-    private const val persistAudioAmplificationKey = "persist_audio_amplification"
     private const val preloadNextEpisodeSourcesKey = "preload_next_episode_sources"
     private const val privateViewingEnabledKey = "private_viewing_enabled"
-    private const val rememberAudioDelayPerDeviceKey = "remember_audio_delay_per_device"
     private const val skipIntroEnabledKey = "skip_intro_enabled"
     private const val streamAutoPlayModeKey = "stream_auto_play_mode"
     private const val streamAutoPlayNextEpisodeEnabledKey = "stream_auto_play_next_episode_enabled"
@@ -157,13 +150,6 @@ actual object PlayerSettingsStorage {
         androidLibmpvHardwareDecodingEnabledKey,
         androidLibmpvYuv420pEnabledKey,
         androidExoChaptersEnabledKey,
-        rememberAudioDelayPerDeviceKey,
-        persistAudioAmplificationKey,
-        audioAmplificationDbKey,
-        downmixEnabledKey,
-        audioOutputChannelsKey,
-        maintainOriginalAudioOnDownmixKey,
-        centerMixLevelDbKey,
         decoderPriorityKey,
         mapDV7ToHevcKey,
         tunnelingEnabledKey,
@@ -725,97 +711,6 @@ actual object PlayerSettingsStorage {
 
     actual fun saveAndroidExoChaptersEnabled(enabled: Boolean) {
         NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(androidExoChaptersEnabledKey))
-    }
-
-    actual fun loadRememberAudioDelayPerDevice(): Boolean? {
-        val defaults = NSUserDefaults.standardUserDefaults
-        val key = ProfileScopedKey.of(rememberAudioDelayPerDeviceKey)
-        return if (defaults.objectForKey(key) != null) {
-            defaults.boolForKey(key)
-        } else {
-            null
-        }
-    }
-
-    actual fun saveRememberAudioDelayPerDevice(enabled: Boolean) {
-        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(rememberAudioDelayPerDeviceKey))
-    }
-
-    actual fun loadPersistAudioAmplification(): Boolean? {
-        val defaults = NSUserDefaults.standardUserDefaults
-        val key = ProfileScopedKey.of(persistAudioAmplificationKey)
-        return if (defaults.objectForKey(key) != null) {
-            defaults.boolForKey(key)
-        } else {
-            null
-        }
-    }
-
-    actual fun savePersistAudioAmplification(enabled: Boolean) {
-        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(persistAudioAmplificationKey))
-    }
-
-    actual fun loadAudioAmplificationDb(): Int? {
-        val defaults = NSUserDefaults.standardUserDefaults
-        val key = ProfileScopedKey.of(audioAmplificationDbKey)
-        return if (defaults.objectForKey(key) != null) {
-            defaults.integerForKey(key).toInt()
-        } else {
-            null
-        }
-    }
-
-    actual fun saveAudioAmplificationDb(db: Int) {
-        NSUserDefaults.standardUserDefaults.setInteger(db.toLong(), forKey = ProfileScopedKey.of(audioAmplificationDbKey))
-    }
-
-    actual fun loadDownmixEnabled(): Boolean? {
-        val defaults = NSUserDefaults.standardUserDefaults
-        val key = ProfileScopedKey.of(downmixEnabledKey)
-        return if (defaults.objectForKey(key) != null) {
-            defaults.boolForKey(key)
-        } else {
-            null
-        }
-    }
-
-    actual fun saveDownmixEnabled(enabled: Boolean) {
-        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(downmixEnabledKey))
-    }
-
-    actual fun loadAudioOutputChannels(): String? =
-        NSUserDefaults.standardUserDefaults.stringForKey(ProfileScopedKey.of(audioOutputChannelsKey))
-
-    actual fun saveAudioOutputChannels(value: String) {
-        NSUserDefaults.standardUserDefaults.setObject(value, forKey = ProfileScopedKey.of(audioOutputChannelsKey))
-    }
-
-    actual fun loadMaintainOriginalAudioOnDownmix(): Boolean? {
-        val defaults = NSUserDefaults.standardUserDefaults
-        val key = ProfileScopedKey.of(maintainOriginalAudioOnDownmixKey)
-        return if (defaults.objectForKey(key) != null) {
-            defaults.boolForKey(key)
-        } else {
-            null
-        }
-    }
-
-    actual fun saveMaintainOriginalAudioOnDownmix(enabled: Boolean) {
-        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(maintainOriginalAudioOnDownmixKey))
-    }
-
-    actual fun loadCenterMixLevelDb(): Int? {
-        val defaults = NSUserDefaults.standardUserDefaults
-        val key = ProfileScopedKey.of(centerMixLevelDbKey)
-        return if (defaults.objectForKey(key) != null) {
-            defaults.integerForKey(key).toInt()
-        } else {
-            null
-        }
-    }
-
-    actual fun saveCenterMixLevelDb(db: Int) {
-        NSUserDefaults.standardUserDefaults.setInteger(db.toLong(), forKey = ProfileScopedKey.of(centerMixLevelDbKey))
     }
 
     actual fun loadDecoderPriority(): Int? {
@@ -1385,13 +1280,6 @@ actual object PlayerSettingsStorage {
         }
         loadAndroidLibmpvYuv420pEnabled()?.let { put(androidLibmpvYuv420pEnabledKey, encodeSyncBoolean(it)) }
         loadAndroidExoChaptersEnabled()?.let { put(androidExoChaptersEnabledKey, encodeSyncBoolean(it)) }
-        loadRememberAudioDelayPerDevice()?.let { put(rememberAudioDelayPerDeviceKey, encodeSyncBoolean(it)) }
-        loadPersistAudioAmplification()?.let { put(persistAudioAmplificationKey, encodeSyncBoolean(it)) }
-        loadAudioAmplificationDb()?.let { put(audioAmplificationDbKey, encodeSyncInt(it)) }
-        loadDownmixEnabled()?.let { put(downmixEnabledKey, encodeSyncBoolean(it)) }
-        loadAudioOutputChannels()?.let { put(audioOutputChannelsKey, encodeSyncString(it)) }
-        loadMaintainOriginalAudioOnDownmix()?.let { put(maintainOriginalAudioOnDownmixKey, encodeSyncBoolean(it)) }
-        loadCenterMixLevelDb()?.let { put(centerMixLevelDbKey, encodeSyncInt(it)) }
         loadDecoderPriority()?.let { put(decoderPriorityKey, encodeSyncInt(it)) }
         loadMapDV7ToHevc()?.let { put(mapDV7ToHevcKey, encodeSyncBoolean(it)) }
         loadTunnelingEnabled()?.let { put(tunnelingEnabledKey, encodeSyncBoolean(it)) }
@@ -1481,13 +1369,6 @@ actual object PlayerSettingsStorage {
             ?.let(::saveAndroidLibmpvHardwareDecodingEnabled)
         payload.decodeSyncBoolean(androidLibmpvYuv420pEnabledKey)?.let(::saveAndroidLibmpvYuv420pEnabled)
         payload.decodeSyncBoolean(androidExoChaptersEnabledKey)?.let(::saveAndroidExoChaptersEnabled)
-        payload.decodeSyncBoolean(rememberAudioDelayPerDeviceKey)?.let(::saveRememberAudioDelayPerDevice)
-        payload.decodeSyncBoolean(persistAudioAmplificationKey)?.let(::savePersistAudioAmplification)
-        payload.decodeSyncInt(audioAmplificationDbKey)?.let(::saveAudioAmplificationDb)
-        payload.decodeSyncBoolean(downmixEnabledKey)?.let(::saveDownmixEnabled)
-        payload.decodeSyncString(audioOutputChannelsKey)?.let(::saveAudioOutputChannels)
-        payload.decodeSyncBoolean(maintainOriginalAudioOnDownmixKey)?.let(::saveMaintainOriginalAudioOnDownmix)
-        payload.decodeSyncInt(centerMixLevelDbKey)?.let(::saveCenterMixLevelDb)
         payload.decodeSyncInt(decoderPriorityKey)?.let(::saveDecoderPriority)
         payload.decodeSyncBoolean(mapDV7ToHevcKey)?.let(::saveMapDV7ToHevc)
         payload.decodeSyncBoolean(tunnelingEnabledKey)?.let(::saveTunnelingEnabled)
