@@ -61,11 +61,13 @@ class PlayerGestureOverlayTest {
                         .testTag("surface")
                         .playerSurfaceDragGestures(
                             gestureController = null,
+                            playerController = runtime.playerController,
                             layoutSize = IntSize(480, 270),
                             playbackGesturesEnabled = true,
                             sideGestureSystemEdgeExclusionPx = 0f,
                             playerControlsLockedState = callbacks.playerControlsLocked,
                             touchGesturesEnabledState = callbacks.touchGesturesEnabled,
+                            swipeToSeekEnabledState = callbacks.swipeToSeekEnabled,
                             isHoldToSpeedGestureActiveState = callbacks.isHoldToSpeedGestureActive,
                             currentPositionMsState = callbacks.currentPositionMs,
                             currentDurationMsState = callbacks.currentDurationMs,

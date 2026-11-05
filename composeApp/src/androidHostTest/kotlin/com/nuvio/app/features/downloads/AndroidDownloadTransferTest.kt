@@ -25,6 +25,25 @@ import kotlin.test.assertTrue
 class AndroidDownloadTransferTest {
     @get:Rule val temporary = TemporaryFolder()
 
+    /** Transfers into `<fileName>.part` in [directory], as the scheduler does, and returns that file. */
+    private suspend fun transferToPartialFile(
+        item: DownloadItem,
+        directory: File,
+        validator: String?,
+        onHeaders: (Long?, String?) -> Unit,
+        onProgress: (Long, Long?) -> Unit,
+    ): File {
+        val partial = File(directory, "${item.fileName}.part")
+        transferAndroidDownload(
+            item = item,
+            sink = FileDownloadSink(partial),
+            validator = validator,
+            onHeaders = onHeaders,
+            onProgress = onProgress,
+        )
+        return partial
+    }
+
     @Test
     fun resumesPartialFileWithRangeAndValidator(): Unit = runBlocking {
         MockWebServer().use { server ->
@@ -33,7 +52,7 @@ class AndroidDownloadTransferTest {
             val directory = temporary.newFolder()
             File(directory, "video.mkv.part").writeText("hello")
 
-            val output = transferAndroidDownload(downloadItem(server.url("/video").toString()), directory,
+            val output = transferToPartialFile(downloadItem(server.url("/video").toString()), directory,
                 "\"version-1\"", onHeaders = { _, _ -> }, onProgress = { _, _ -> })
 
             assertEquals("hello world", output.readText())
@@ -51,7 +70,7 @@ class AndroidDownloadTransferTest {
             server.enqueue(MockResponse().setBody("new file"))
             val directory = temporary.newFolder()
             File(directory, "video.mkv.part").writeText("old prefix")
-            val output = transferAndroidDownload(downloadItem(server.url("/video").toString()), directory,
+            val output = transferToPartialFile(downloadItem(server.url("/video").toString()), directory,
                 null, onHeaders = { _, _ -> }, onProgress = { _, _ -> })
             assertEquals("new file", output.readText())
         }
@@ -64,7 +83,7 @@ class AndroidDownloadTransferTest {
             server.enqueue(MockResponse().setBody("replacement"))
             val directory = temporary.newFolder()
             File(directory, "video.mkv.part").writeText("old prefix")
-            val output = transferAndroidDownload(downloadItem(server.url("/video").toString()), directory,
+            val output = transferToPartialFile(downloadItem(server.url("/video").toString()), directory,
                 null, onHeaders = { _, _ -> }, onProgress = { _, _ -> })
             assertEquals("replacement", output.readText())
             assertEquals("bytes=10-", server.takeRequest().getHeader("Range"))
@@ -79,7 +98,7 @@ class AndroidDownloadTransferTest {
             val directory = temporary.newFolder()
             val partial = File(directory, "video.mkv.part").apply { writeText("hello") }
             assertFailsWith<IOException> {
-                transferAndroidDownload(downloadItem(server.url("/video").toString()), directory,
+                transferToPartialFile(downloadItem(server.url("/video").toString()), directory,
                     null, onHeaders = { _, _ -> }, onProgress = { _, _ -> })
             }
             assertEquals("hello", partial.readText())
@@ -92,7 +111,7 @@ class AndroidDownloadTransferTest {
             server.enqueue(MockResponse().setBody("abcdefghij").setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY))
             val directory = temporary.newFolder()
             assertFailsWith<IOException> {
-                transferAndroidDownload(downloadItem(server.url("/video").toString()), directory,
+                transferToPartialFile(downloadItem(server.url("/video").toString()), directory,
                     null, onHeaders = { _, _ -> }, onProgress = { _, _ -> })
             }
             assertFalse(File(directory, "video.mkv").exists())
@@ -106,7 +125,7 @@ class AndroidDownloadTransferTest {
             server.enqueue(MockResponse().setBody("abcdefghij").throttleBody(1, 10, TimeUnit.SECONDS))
             val directory = temporary.newFolder()
             val task = async(Dispatchers.Default) {
-                transferAndroidDownload(downloadItem(server.url("/video").toString()), directory,
+                transferToPartialFile(downloadItem(server.url("/video").toString()), directory,
                     null, onHeaders = { _, _ -> }, onProgress = { _, _ -> })
             }
             withContext(Dispatchers.IO) { server.takeRequest(5, TimeUnit.SECONDS) }
