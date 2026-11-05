@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -58,9 +59,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.format.extractReleaseYearForDisplay
-import com.nuvio.app.core.ui.ArtworkBackdrop
 import com.nuvio.app.core.ui.NuvioTokens
-import com.nuvio.app.core.ui.featherArtwork
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.formatRuntimeForDisplay
 import com.nuvio.app.features.player.MiniPlayerController
@@ -77,7 +76,6 @@ import com.nuvio.app.core.ui.LocalVerticalBarPadding
 fun TabletDetailBackdrop(
     meta: MetaDetails,
     cinematic: Boolean,
-    backdropImage: ImageBitmap?,
     scrollOffsetPx: () -> Float,
     heroHeightPx: () -> Int,
     heroTrailerSourceUrl: String?,
@@ -97,22 +95,10 @@ fun TabletDetailBackdrop(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (cinematic) {
-            ArtworkBackdrop(
-                image = backdropImage,
-                alignment = BiasAlignment(0f, BackdropVerticalBias),
-            )
-        }
         BackdropArtwork(
             meta = meta,
             gradientColor = backgroundColor,
-            modifier = if (cinematic) {
-                Modifier
-                    .graphicsLayer { alpha = 1f - scrollProgress() }
-                    .featherArtwork()
-            } else {
-                Modifier
-            },
+            blur = false,
             heroTrailerSourceUrl = heroTrailerSourceUrl,
             heroTrailerSourceAudioUrl = heroTrailerSourceAudioUrl,
             heroTrailerReady = heroTrailerReady,
@@ -122,14 +108,22 @@ fun TabletDetailBackdrop(
             onHeroTrailerReady = onHeroTrailerReady,
             onHeroTrailerFinished = onHeroTrailerFinished,
         )
-        if (!cinematic) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { alpha = scrollProgress() * 0.86f }
-                    .background(backgroundColor),
+        if (cinematic) {
+            BackdropArtwork(
+                meta = meta,
+                gradientColor = backgroundColor,
+                blur = true,
+                modifier = Modifier.graphicsLayer { alpha = scrollProgress() },
             )
         }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    alpha = scrollProgress() * if (cinematic) 0.36f else 0.86f
+                }
+                .background(backgroundColor),
+        )
     }
 }
 
@@ -137,6 +131,7 @@ fun TabletDetailBackdrop(
 private fun BackdropArtwork(
     meta: MetaDetails,
     gradientColor: Color,
+    blur: Boolean,
     modifier: Modifier = Modifier,
     heroTrailerSourceUrl: String? = null,
     heroTrailerSourceAudioUrl: String? = null,
@@ -162,6 +157,7 @@ private fun BackdropArtwork(
     )
     val artworkModifier = Modifier
         .fillMaxSize()
+        .then(if (blur) Modifier.blur(30.dp) else Modifier)
 
     Box(
         modifier = modifier

@@ -19,7 +19,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import nuvio.composeapp.generated.resources.Res
-import nuvio.composeapp.generated.resources.autosync_toast_no_fit
+import nuvio.composeapp.generated.resources.autosync_toast_failed
+import nuvio.composeapp.generated.resources.autosync_toast_failed_no_reference
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 
@@ -156,10 +157,11 @@ internal class LibmpvAutoSyncCoordinator(
                 currentCoroutineContext().ensureActive()
                 if (token != operationToken) return@launch
                 if (resolved == null) {
-                    // Only a confirmed no-fit is worth telling; anything else stays silent.
-                    if (outcome == AutoSyncAnalysisOutcome.NO_FIT) {
-                        showFailure(token, Res.string.autosync_toast_no_fit)
-                    }
+                    showFailure(token, when (outcome) {
+                        AutoSyncAnalysisOutcome.NO_SUBTITLE_TRACKS,
+                        AutoSyncAnalysisOutcome.NO_USABLE_REFERENCE -> Res.string.autosync_toast_failed_no_reference
+                        else -> Res.string.autosync_toast_failed
+                    })
                     return@launch
                 }
 
@@ -171,7 +173,10 @@ internal class LibmpvAutoSyncCoordinator(
                     val path = writeRetimedSubtitle(chosenUrl, resolved, subtitleLanguage)
                     currentCoroutineContext().ensureActive()
                     if (token != operationToken) return@launch
-                    if (path == null) return@launch
+                    if (path == null) {
+                        showFailure(token, Res.string.autosync_toast_failed)
+                        return@launch
+                    }
                     replaceExternalSubtitle(url, path)
                 }
                 base.setSubtitleDelayMs(0)
@@ -180,7 +185,8 @@ internal class LibmpvAutoSyncCoordinator(
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (_: Exception) {
-                // Technical failures stay silent: the original subtitle keeps its timing.
+                if (token != operationToken) return@launch
+                showFailure(token, Res.string.autosync_toast_failed)
             }
         }
     }
