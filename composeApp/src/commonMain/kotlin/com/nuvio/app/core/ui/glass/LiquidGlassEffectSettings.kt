@@ -102,9 +102,6 @@ internal object LiquidGlassEffectDefaults {
 
 private val liquidGlassSettingsJson = Json {
     ignoreUnknownKeys = true
-    // Write every field: a value equal to the class default (e.g. affectTabIcons = false) would
-    // otherwise be dropped and decode back to the per-surface default (true for the selection lens).
-    encodeDefaults = true
 }
 
 internal fun encodeLiquidGlassEffectSettings(

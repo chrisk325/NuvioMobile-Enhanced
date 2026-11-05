@@ -61,15 +61,11 @@ class AndroidDownloadLifecycleTest {
     }
 
     @Test
-    fun missingSystemJobIsRescheduledInsteadOfPaused() {
-        // A transfer whose system job went missing (e.g. after a reboot) is scheduled again so
-        // the download keeps going; it is only paused when the system refuses the job.
-        val context = RuntimeEnvironment.getApplication()
-        val scheduler = AndroidDownloadScheduler(context)
+    fun missingSystemJobIsPausedInsteadOfSilentlyRescheduling() {
+        val scheduler = AndroidDownloadScheduler(RuntimeEnvironment.getApplication())
         val transfer = scheduler.store.begin(downloadItem().copy(fileName = "stopped.mkv"))
 
-        assertEquals(DownloadStatus.Downloading, scheduler.restore(transfer.item).status)
-        assertEquals(DownloadStatus.Downloading, assertNotNull(scheduler.store.get(transfer.item.fileName)).item.status)
+        assertEquals(DownloadStatus.Paused, scheduler.restore(transfer.item).status)
     }
 
     @Test

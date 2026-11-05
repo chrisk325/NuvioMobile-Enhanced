@@ -8,11 +8,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.SemanticsNodeInteraction
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
@@ -105,7 +100,7 @@ class SettingsPagesTest {
         var opened = ""
         compose.setContent {
             NuvioTheme {
-                LazyColumn(Modifier.fillMaxSize().testTag(SettingsList)) {
+                LazyColumn(Modifier.fillMaxSize()) {
                     layoutSettingsContent(
                         isTablet = false,
                         liquidGlassNativeTabBarSupported = false,
@@ -127,10 +122,10 @@ class SettingsPagesTest {
             "Streams" to "streams",
             "Detail Page" to "details",
         ).forEach { (label, destination) ->
-            scrollListTo(hasText(label) and hasClickAction()).performClick()
+            compose.onNode(hasText(label) and hasClickAction()).performScrollTo().performClick()
             assertEquals(destination, opened)
         }
-        scrollListTo(hasText("Navigation Bar") and hasClickAction()).performClick()
+        compose.onNode(hasText("Navigation Bar") and hasClickAction()).performScrollTo().performClick()
         compose.onNodeWithText("Classic").performScrollTo().performClick()
         assertEquals(NavBarStyle.CLASSIC, ThemeSettingsRepository.navBarStyle.value)
         compose.runOnIdle { ThemeSettingsRepository.onProfileChanged() }
@@ -142,7 +137,7 @@ class SettingsPagesTest {
         val page = mutableStateOf(SettingsPage.Playback)
         compose.setContent {
             NuvioTheme {
-                LazyColumn(Modifier.fillMaxSize().testTag(SettingsList)) {
+                LazyColumn(Modifier.fillMaxSize()) {
                     if (page.value != SettingsPage.Playback) {
                         item {
                             Button(onClick = { page.value = page.value.previousPage()!! }) { Text("Back") }
@@ -152,21 +147,21 @@ class SettingsPagesTest {
                 }
             }
         }
-        scrollListTo(hasText("Player interface")).performClick()
-        scrollListTo(hasText("Touch Gestures")).performClick()
+        compose.onNodeWithText("Player interface").performScrollTo().performClick()
+        compose.onNodeWithText("Touch Gestures").performScrollTo().performClick()
         assertFalse(PlayerSettingsRepository.uiState.value.touchGesturesEnabled)
         assertEquals(false, PlayerSettingsStorage.loadTouchGesturesEnabled())
-        scrollListTo(hasText("Back")).performClick()
-        scrollListTo(hasText("Audio")).performClick()
+        compose.onNodeWithText("Back").performScrollTo().performClick()
+        compose.onNodeWithText("Audio").performScrollTo().performClick()
         compose.onNodeWithText("Preferred Audio Language").performClick()
         compose.onNodeWithText("Original language").performClick()
         assertEquals("original", PlayerSettingsRepository.uiState.value.preferredAudioLanguage)
         compose.runOnIdle { PlayerSettingsRepository.onProfileChanged() }
         assertFalse(PlayerSettingsRepository.uiState.value.touchGesturesEnabled)
         assertEquals("original", PlayerSettingsRepository.uiState.value.preferredAudioLanguage)
-        scrollListTo(hasText("Back")).performClick()
-        scrollListTo(hasText("Player")).performClick()
-        scrollListTo(hasText("Auto-switch engine on playback error")).performClick()
+        compose.onNodeWithText("Back").performScrollTo().performClick()
+        compose.onNodeWithText("Player").performScrollTo().performClick()
+        compose.onNodeWithText("Auto-switch engine on playback error").performScrollTo().performClick()
         assertFalse(PlayerSettingsRepository.uiState.value.autoSwitchPlaybackEngineOnError)
         assertEquals(false, PlayerSettingsStorage.loadAutoSwitchPlaybackEngineOnError())
         compose.runOnIdle { PlayerSettingsRepository.onProfileChanged() }
@@ -174,7 +169,7 @@ class SettingsPagesTest {
         compose.onNodeWithText("Playback Engine").performClick()
         compose.onNodeWithText("libmpv").performClick()
         assertEquals(AndroidPlaybackEngine.Libmpv, PlayerSettingsRepository.uiState.value.androidPlaybackEngine)
-        scrollListTo(hasText("Back")).performClick()
+        compose.onNodeWithText("Back").performScrollTo().performClick()
         compose.onNodeWithText("Buffer and cache").assertDoesNotExist()
     }
 
@@ -250,15 +245,5 @@ class SettingsPagesTest {
             assertTrue(entries.none { it.target == SettingsSearchTarget.Page(SettingsPage.PlaybackBuffer) })
             assertTrue(entries.any { it.target == SettingsSearchTarget.Page(SettingsPage.PlaybackVideo) })
         }
-    }
-
-    /** Scrolls the lazy settings list until [matcher] is composed; plain performScrollTo() cannot reach rows a lazy list has not composed yet. */
-    private fun scrollListTo(matcher: SemanticsMatcher): SemanticsNodeInteraction {
-        compose.onNodeWithTag(SettingsList).performScrollToNode(matcher)
-        return compose.onNode(matcher)
-    }
-
-    private companion object {
-        const val SettingsList = "settings-list"
     }
 }

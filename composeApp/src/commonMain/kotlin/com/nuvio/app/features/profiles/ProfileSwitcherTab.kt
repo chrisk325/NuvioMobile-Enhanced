@@ -859,12 +859,11 @@ fun ActiveProfileMiniAvatar(
         profileAvatarImageUrl(profile, avatarItem)
     }
 
-    val borderColor = resolveProfileAvatarBorderColor(
-        selected = selected,
-        avatarColor = avatarColor,
-        selectedBorderColor = tokens.colors.borderSelected,
-        defaultIconColorOverride = iconColorOverride,
-    )
+    val borderColor = if (selected) {
+        tokens.colors.borderSelected
+    } else {
+        avatarColor.copy(alpha = 0.5f)
+    }
 
     Box(
         modifier = Modifier
@@ -904,19 +903,4 @@ fun ActiveProfileMiniAvatar(
             )
         }
     }
-}
-
-/**
- * Ring colour of the profile avatar in the navigation bar. The selected ring keeps the theme
- * colour; an unselected ring follows the custom inactive icon colour when one is set.
- */
-internal fun resolveProfileAvatarBorderColor(
-    selected: Boolean,
-    avatarColor: Color,
-    selectedBorderColor: Color,
-    defaultIconColorOverride: Color?,
-): Color = when {
-    selected -> selectedBorderColor
-    defaultIconColorOverride != null -> defaultIconColorOverride
-    else -> avatarColor.copy(alpha = 0.5f)
 }

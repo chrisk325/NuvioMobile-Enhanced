@@ -19,8 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioAsyncImage
 
@@ -66,7 +64,6 @@ private fun AvatarChoiceItem(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    val imageUrl = avatarImageUrl(avatar)
     Box(
         modifier = modifier
             .clip(CircleShape)
@@ -79,17 +76,10 @@ private fun AvatarChoiceItem(
                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 shape = CircleShape,
             )
-            .clickable(onClick = onClick)
-            // Avatars without an image URL draw no image to carry the label, so label the tile.
-            .then(
-                if (imageUrl == null) {
-                    Modifier.semantics { contentDescription = avatar.displayName }
-                } else {
-                    Modifier
-                },
-            ),
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
+        val imageUrl = avatarImageUrl(avatar)
         if (imageUrl != null) {
             NuvioAsyncImage(
                 imageUrl = imageUrl,

@@ -1,10 +1,7 @@
 package com.nuvio.app.features.whatsnew
 
-import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.monthsUntil
 import kotlinx.datetime.periodUntil
-import kotlinx.datetime.plus
 import kotlin.time.Instant
 
 internal enum class LastCheckedUnit {
@@ -48,15 +45,14 @@ internal fun calculateLastCheckedAge(
     val start = Instant.fromEpochMilliseconds(fetchedAtMillis)
     val end = Instant.fromEpochMilliseconds(effectiveNowMillis)
     val calendarPeriod = start.periodUntil(end, timeZone)
-    val totalMonths = calendarMonthsBetween(start, end, timeZone)
 
     return when {
-        totalMonths >= 12 -> LastCheckedAge(
-            amount = (totalMonths / 12).toLong(),
+        calendarPeriod.years >= 1 -> LastCheckedAge(
+            amount = calendarPeriod.years.toLong(),
             unit = LastCheckedUnit.YEAR,
         )
-        totalMonths >= 1 -> LastCheckedAge(
-            amount = totalMonths.toLong(),
+        calendarPeriod.months >= 1 -> LastCheckedAge(
+            amount = calendarPeriod.months.toLong(),
             unit = LastCheckedUnit.MONTH,
         )
         calendarPeriod.days >= 7 -> LastCheckedAge(
@@ -76,15 +72,4 @@ internal fun calculateLastCheckedAge(
             unit = LastCheckedUnit.HOUR,
         )
     }
-}
-
-/**
- * Whole calendar months from [start] to [end], where adding a month clamps to the end of a shorter
- * month: Jan 31 to Feb 28 is one month. [periodUntil] alone compares the day of the month and
- * would call that 28 days.
- */
-private fun calendarMonthsBetween(start: Instant, end: Instant, timeZone: TimeZone): Int {
-    var months = start.monthsUntil(end, timeZone)
-    while (start.plus(months + 1, DateTimeUnit.MONTH, timeZone) <= end) months++
-    return months
 }
