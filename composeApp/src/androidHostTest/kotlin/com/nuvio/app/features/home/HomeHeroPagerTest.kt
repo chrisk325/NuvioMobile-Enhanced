@@ -75,7 +75,10 @@ class HomeHeroPagerTest {
     }
 
     private fun assertWrapFrames(expectedIndex: Int) {
-        val intermediateTitle = (1..6)
+        // The hero keeps the pages next to the current one composed (at zero alpha) so swipes do
+        // not recompose, so titles 1 and 6 may exist off-screen. A wrap that animated through the
+        // list would bring in the titles in between.
+        val intermediateTitle = (2..5)
             .map { hasText("Hero $it") }
             .reduce { matcher, next -> matcher or next }
         repeat(100) {
