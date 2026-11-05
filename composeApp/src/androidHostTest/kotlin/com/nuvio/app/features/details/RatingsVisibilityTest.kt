@@ -60,13 +60,21 @@ class RatingsVisibilityTest {
     }
 
     @Test
-    fun allEpisodeLayoutsRespectVisibilityForFetchedAndAddonRatings() {
+    fun allEpisodeLayoutsRespectVisibilityForImdbAndTmdbRatings() {
+        // Episode ratings arrive on the episode itself: OMDb enrichment fills imdbRating and TMDB
+        // enrichment fills tmdbRating. Every layout shows both and applies the visibility setting.
         val visibility = mutableStateOf(EpisodeRatingsVisibility.SHOW_ALL)
         val watchedKeys = mutableStateOf(emptySet<String>())
         val progress = mutableStateOf(emptyMap<String, WatchProgressEntry>())
-        val ratings = mutableStateOf(mapOf((1 to 1) to 8.4))
         val layout = mutableStateOf(0)
-        val episode = MetaVideo(id = "tt1234567:1:1", title = "Episode", season = 1, episode = 1, rating = 6.2)
+        val episode = MetaVideo(
+            id = "tt1234567:1:1",
+            title = "Episode",
+            season = 1,
+            episode = 1,
+            imdbRating = 8.4,
+            tmdbRating = 6.2,
+        )
         val meta = MetaDetails(id = "tt1234567", type = "series", name = "Series", videos = listOf(episode))
         compose.setContent {
             NuvioTheme {
@@ -76,7 +84,7 @@ class RatingsVisibilityTest {
                         episode = episode,
                         progressByVideoId = progress.value,
                         watchedKeys = watchedKeys.value,
-                        episodeRatings = ratings.value,
+                        episodeRatings = emptyMap(),
                         episodeRatingsVisibility = visibility.value,
                         blurUnwatchedEpisodes = false,
                         onEpisodeClick = null,
@@ -88,9 +96,18 @@ class RatingsVisibilityTest {
                         episodeCardStyle = if (layout.value == 0) MetaEpisodeCardStyle.Horizontal else MetaEpisodeCardStyle.List,
                         progressByVideoId = progress.value,
                         watchedKeys = watchedKeys.value,
-                        episodeRatings = ratings.value,
+                        episodeRatings = emptyMap(),
                         episodeRatingsVisibility = visibility.value,
                     )
+                }
+            }
+        }
+        fun assertRatingsShown(shown: Boolean) {
+            listOf("8.4", "6.2").forEach { rating ->
+                if (shown) {
+                    compose.onNodeWithText(rating).assertIsDisplayed()
+                } else {
+                    compose.onNodeWithText(rating).assertDoesNotExist()
                 }
             }
         }
@@ -100,31 +117,21 @@ class RatingsVisibilityTest {
                 visibility.value = EpisodeRatingsVisibility.SHOW_ALL
                 watchedKeys.value = emptySet()
                 progress.value = emptyMap()
-                ratings.value = mapOf((1 to 1) to 8.4)
             }
-            compose.onNodeWithText("8.4").assertIsDisplayed()
-            compose.onNodeWithText("6.2").assertDoesNotExist()
+            assertRatingsShown(true)
 
             compose.runOnIdle { visibility.value = EpisodeRatingsVisibility.HIDE_UNWATCHED_EPISODES }
-            compose.onNodeWithText("8.4").assertDoesNotExist()
-            compose.onNodeWithText("6.2").assertDoesNotExist()
+            assertRatingsShown(false)
 
             compose.runOnIdle { watchedKeys.value = watchedItemKeys(meta.type, meta.id, 1, 1).toSet() }
-            compose.onNodeWithText("8.4").assertIsDisplayed()
+            assertRatingsShown(true)
 
             compose.runOnIdle { visibility.value = EpisodeRatingsVisibility.HIDE_EPISODES }
-            compose.onNodeWithText("8.4").assertDoesNotExist()
-
-            compose.runOnIdle { ratings.value = emptyMap() }
-            compose.onNodeWithText("6.2").assertDoesNotExist()
-
-            compose.runOnIdle { visibility.value = EpisodeRatingsVisibility.HIDE_UNWATCHED_EPISODES }
-            compose.onNodeWithText("6.2").assertIsDisplayed()
-
-            compose.runOnIdle { watchedKeys.value = emptySet() }
-            compose.onNodeWithText("6.2").assertDoesNotExist()
+            assertRatingsShown(false)
 
             compose.runOnIdle {
+                visibility.value = EpisodeRatingsVisibility.HIDE_UNWATCHED_EPISODES
+                watchedKeys.value = emptySet()
                 progress.value = mapOf(episode.id to WatchProgressEntry(
                     contentType = meta.type,
                     parentMetaId = meta.id,
@@ -138,13 +145,7 @@ class RatingsVisibilityTest {
                     lastUpdatedEpochMs = 1,
                 ))
             }
-            compose.onNodeWithText("6.2").assertIsDisplayed()
-
-            compose.runOnIdle {
-                progress.value = emptyMap()
-                visibility.value = EpisodeRatingsVisibility.SHOW_ALL
-            }
-            compose.onNodeWithText("6.2").assertIsDisplayed()
+            assertRatingsShown(true)
         }
     }
 }
