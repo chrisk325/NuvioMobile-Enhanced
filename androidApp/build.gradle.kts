@@ -19,6 +19,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.sentry.android.gradle)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 val localProps = Properties().apply {
@@ -247,8 +248,20 @@ sentry {
     }
 }
 
+// Baseline profile: `./gradlew :androidApp:generateFullBaselineProfile` (device or emulator with
+// API 28+ attached) runs the journeys in :baselineprofile and writes the result to
+// src/main/generated/baselineProfiles/, which is packaged into every build alongside
+// src/main/baseline-prof.txt. Regenerate it after big UI changes.
+baselineProfile {
+    mergeIntoMain = true
+    saveInSrc = true
+    automaticGenerationDuringBuild = false
+}
+
 dependencies {
     implementation(project(":composeApp"))
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
     implementation(libs.androidx.appcompat)
     implementation(libs.compose.runtime)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
