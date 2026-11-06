@@ -3,11 +3,6 @@ plugins {
     alias(libs.plugins.androidx.baselineprofile)
 }
 
-// Generates the app's baseline profile (ahead-of-time compiled code for startup and the main
-// scrolling surfaces). Run with a device or emulator (API 28+) attached:
-//   ./gradlew :androidApp:generateFullBaselineProfile
-// The installed app should be set up (profile chosen, addons installed) so the home screen has
-// rows to scroll; otherwise only the first-run screens are covered.
 android {
     namespace = "com.nuvio.baselineprofile"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -19,7 +14,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Must mirror :androidApp's flavors so each app variant has a matching generator variant.
     flavorDimensions += "distribution"
     productFlavors {
         create("full") {
@@ -48,7 +42,6 @@ dependencies {
     implementation(libs.androidx.uiautomator)
 }
 
-// Hands the tested app's real applicationId to the generator as the `targetAppId` argument.
 androidComponents {
     onVariants { variant ->
         val artifactsLoader = variant.artifacts.getBuiltArtifactsLoader()

@@ -22,11 +22,6 @@ internal fun ScreenActivityEffect(
     LaunchedEffect(active, *keys) { block(active) }
 }
 
-/**
- * An endlessly repeating float animation that only runs while its screen is the visible one
- * ([LocalScreenActive]). On a tab that is kept alive in the background it holds [initialValue]
- * instead of producing a new frame (and recomposing its readers) 60–120 times a second.
- */
 @Composable
 internal fun rememberScreenActiveInfiniteFloat(
     initialValue: Float,

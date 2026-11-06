@@ -15,11 +15,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/**
- * Records the code paths of a cold start plus scrolling the home screen (vertical list and the
- * horizontal poster rows), so they ship ahead-of-time compiled instead of being interpreted and
- * JIT-compiled during the first scrolls after every install or update.
- */
 @RunWith(AndroidJUnit4::class)
 @LargeTest
 class BaselineProfileGenerator {
@@ -50,7 +45,6 @@ class BaselineProfileGenerator {
         device.waitForIdle()
     }
 
-    /** Flings each visible horizontal row (wider than tall) right and back. */
     private fun MacrobenchmarkScope.flingHorizontalRows() {
         val rows = try {
             device.findObjects(By.scrollable(true)).filter { it.visibleBounds.isHorizontalRow() }
@@ -68,7 +62,6 @@ class BaselineProfileGenerator {
             target.setGestureMargin(device.displayWidth / 5)
             target.fling(direction)
         } catch (_: StaleObjectException) {
-            // The element was recycled by the lazy list between lookup and gesture; skip it.
         }
         device.waitForIdle()
     }

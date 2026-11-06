@@ -342,8 +342,6 @@ tasks.withType<KotlinCompilationTask<*>>().configureEach {
 
 composeCompiler {
     stabilityConfigurationFiles.add(layout.projectDirectory.file("compose-stability.conf"))
-    // Opt-in diagnostics: ./gradlew :composeApp:compileAndroidMain -Pnuvio.composeCompilerReports=true
-    // writes per-composable skippability/stability reports to build/compose_compiler.
     if (providers.gradleProperty("nuvio.composeCompilerReports").map(String::toBoolean).getOrElse(false)) {
         reportsDestination.set(layout.buildDirectory.dir("compose_compiler"))
         metricsDestination.set(layout.buildDirectory.dir("compose_compiler"))

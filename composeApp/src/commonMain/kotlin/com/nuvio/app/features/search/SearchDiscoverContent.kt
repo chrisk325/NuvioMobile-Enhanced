@@ -110,7 +110,6 @@ internal fun LazyListScope.discoverContent(
     }
 }
 
-// Lets the list recycle a scrolled-away row of posters for the next one instead of rebuilding it.
 private const val DiscoverPosterRowContentType = "discover_poster_row"
 private const val DiscoverSkeletonRowContentType = "discover_skeleton_row"
 

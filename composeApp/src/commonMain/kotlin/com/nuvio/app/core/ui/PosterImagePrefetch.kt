@@ -20,22 +20,10 @@ import kotlinx.coroutines.flow.filter
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/**
- * How many items of a horizontal shelf are composed ahead of time when the vertical list
- * prefetches the row it is about to scroll on screen. Compose's default is 2, so a row of
- * 4–5 visible posters built the rest on the frame it appeared, which showed up as a hitch at
- * the moment a new row entered the screen.
- */
 internal const val ShelfNestedPrefetchItemCount = 5
 
-/** Posters beyond the composed/prefetched ones whose images are warmed up while a row scrolls. */
 private const val ShelfImagePrefetchAheadCount = 6
 
-/**
- * Items right after the last visible one are already composed by the row's own prefetch and
- * start loading their image themselves, so the image warm-up starts after them to avoid
- * fetching the same poster twice.
- */
 private const val ShelfImagePrefetchSkipCount = 2
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -47,10 +35,6 @@ fun rememberShelfRowListState(): LazyListState =
         },
     )
 
-/**
- * The model a poster card hands to Coil. Shared with [PosterRowImagePrefetchEffect] so a
- * prefetched poster lands under exactly the memory-cache key the card will look up.
- */
 internal fun posterImageModel(
     platformContext: PlatformContext,
     imageUrl: String,
@@ -73,13 +57,6 @@ internal data class PosterPrefetchTarget(
     val shape: NuvioPosterShape,
 )
 
-/**
- * Loads the images of the next few posters of a shelf into Coil's caches while the row is on
- * screen, decoded at the card's own size, so they are ready (a memory-cache hit, drawn without
- * waiting) by the time they scroll into view.
- *
- * [targets] must be index-aligned with the row's items.
- */
 @Composable
 internal fun PosterRowImagePrefetchEffect(
     state: LazyListState,

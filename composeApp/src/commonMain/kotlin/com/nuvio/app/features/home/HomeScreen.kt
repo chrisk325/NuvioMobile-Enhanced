@@ -1298,8 +1298,6 @@ private const val HOME_CATALOG_PREVIEW_LIMIT = 18
 private const val HOME_CONTINUE_WATCHING_SECTION_KEY = "home_continue_watching"
 private const val HOME_UPCOMING_SECTION_KEY = "home_upcoming"
 
-// Content types let the home list hand a scrolled-away row's composition to the next row of the
-// same kind instead of building every row from scratch.
 private const val HOME_CATALOG_ROW_CONTENT_TYPE = "home_catalog_row"
 private const val HOME_COLLECTION_ROW_CONTENT_TYPE = "home_collection_row"
 private const val HOME_CONTINUE_WATCHING_ROW_CONTENT_TYPE = "home_continue_watching_row"

@@ -48,7 +48,6 @@ internal data class HomePosterImages(
     val shape: NuvioPosterShape,
 )
 
-/** The artwork [HomePosterCard] shows for [this] item; shared with the row image prefetcher. */
 internal fun MetaPreview.homePosterImages(
     posterCardStyle: PosterCardStyleUiState,
     useLandscapeBackdropMode: Boolean,
@@ -71,7 +70,6 @@ internal fun MetaPreview.homePosterImages(
     )
 }
 
-/** Mirrors the image [NuvioPosterCard] requests for these [HomePosterImages]. */
 internal fun HomePosterImages.toPrefetchTarget(): PosterPrefetchTarget? {
     val url = imageUrl?.takeIf { it.isNotBlank() } ?: return null
     val fallback = fallbackImageUrl?.takeIf { it.isNotBlank() && it != url }

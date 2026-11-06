@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 
 @Composable
 fun rememberCardDepthStyleUiState(): CardDepthStyleUiState {
-    // Cheap flag check; keeps reloading after a profile switch clears the local state.
     CardDepthStyleRepository.ensureLoaded()
     val shared = LocalCardDepthStyleState.current
     if (shared != null) return shared.value
@@ -76,8 +75,6 @@ fun Modifier.cardDepthVisual(
     }
 
     return if (sheen > 0f) {
-        // drawWithCache: the outline, clip path and gradient only change with the card's size,
-        // so build them once per size instead of on every frame while the card scrolls.
         withEdge.drawWithCache {
             val sheenHeight = size.height * 0.22f
             if (sheenHeight <= 0f) {

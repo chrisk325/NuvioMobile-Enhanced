@@ -248,10 +248,6 @@ sentry {
     }
 }
 
-// Baseline profile: `./gradlew :androidApp:generateFullBaselineProfile` (device or emulator with
-// API 28+ attached) runs the journeys in :baselineprofile and writes the result to
-// src/main/generated/baselineProfiles/, which is packaged into every build alongside
-// src/main/baseline-prof.txt. Regenerate it after big UI changes.
 baselineProfile {
     mergeIntoMain = true
     saveInSrc = true

@@ -5,7 +5,6 @@ import androidx.compose.runtime.collectAsState
 
 @Composable
 internal fun rememberPosterCardStyleUiState(): PosterCardStyleUiState {
-    // Cheap flag check; keeps reloading after a profile switch clears the local state.
     PosterCardStyleRepository.ensureLoaded()
     val shared = LocalPosterCardStyleState.current
     if (shared != null) return shared.value
