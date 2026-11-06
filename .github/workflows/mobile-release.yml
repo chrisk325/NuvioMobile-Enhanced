@@ -274,6 +274,10 @@ jobs:
       KOTLIN_DAEMON_JVMARGS: -Xmx1024M
       NUVIO_GRADLE_JVMARGS: -Xmx2048M -Dfile.encoding=UTF-8 -XX:MaxMetaspaceSize=768M -XX:+UseG1GC
       NUVIO_KOTLIN_NATIVE_JVMARGS: -Xmx9216M -XX:+UseG1GC
+      # The full Release link runs out of heap in Kotlin/Native's whole-program
+      # devirtualization pass on this runner (~7 GB RAM). Skip the same phases
+      # the "Build Test IPA" workflow skips by default.
+      NUVIO_IOS_DISABLE_PHASES: DevirtualizationAnalysis,Devirtualization,RemoveRedundantCallsToStaticInitializersPhase
       RELEASE_PROPERTIES_BASE64: ${{ secrets.NUVIO_LOCAL_PROPERTIES_BASE64 }}
       CONTRIBUTIONS_URL: ${{ secrets.CONTRIBUTIONS_URL }}
 
@@ -330,6 +334,9 @@ jobs:
             echo "org.gradle.parallel=false"
             echo "org.gradle.workers.max=1"
             echo "kotlin.native.disableCompilerDaemon=true"
+            if [ -n "${NUVIO_IOS_DISABLE_PHASES}" ]; then
+              echo "nuvio.ios.releaseDisablePhases=${NUVIO_IOS_DISABLE_PHASES}"
+            fi
           } >> "${gradle_user_home}/gradle.properties"
           cat "${gradle_user_home}/gradle.properties"
 
