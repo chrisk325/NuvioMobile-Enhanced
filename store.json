@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.3",
+          "buildVersion": "180",
+          "date": "2026-11-06T05:58:27Z",
+          "localizedDescription": "- [fix(details): blend hero artwork smoothly into the cinematic backdrop (#31)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/31) @chrisk325  \n- [blur (#29)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/29) @chrisk325  \n- 8fd79e99 Delete .github/workflows/discontinue-legacy-main.yml @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.3-beta/nuvio-0.9.3-enhanced-release.ipa",
+          "size": 74452480,
+          "sha256": "2e327aa666391e9845770cc4b70dbc50378d60efca9c6a62e3ae47674821c856",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.9.1",
           "buildVersion": "178",
           "date": "2026-11-06T04:13:56Z",
