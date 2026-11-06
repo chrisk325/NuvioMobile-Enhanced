@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.1",
+          "buildVersion": "178",
+          "date": "2026-11-06T04:13:56Z",
+          "localizedDescription": "- 131381f4 Update AppUpdaterRepository.kt @chrisk325  \n- d413a0fa fix ci @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.1-beta/nuvio-0.9.1-enhanced-release.ipa",
+          "size": 74447155,
+          "sha256": "09591dda3e0a43428c506a37c2cede268c3b1edd31f012e1d07c9b46be2533fb",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.6.8",
           "buildVersion": "151",
           "date": "2026-11-05T22:56:54Z",
