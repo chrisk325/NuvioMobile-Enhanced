@@ -2,7 +2,6 @@ package com.nuvio.app.features.player
 
 import android.content.Context
 import androidx.annotation.OptIn
-import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
@@ -18,7 +17,6 @@ import androidx.media3.extractor.mkv.MatroskaExtractor
 import androidx.media3.extractor.text.SubtitleParser
 import com.nuvio.app.features.autosync.AutoSyncLibassSubtitles
 import com.nuvio.tv.libass.media.AssHandler
-import com.nuvio.tv.libass.media.effect.AssFrameTimeMapper
 import com.nuvio.tv.libass.media.extractor.AssMatroskaExtractor
 import com.nuvio.tv.libass.media.parser.AssSubtitleParserFactory
 import com.nuvio.tv.libass.media.render.AssRenderersFactory
@@ -66,19 +64,6 @@ internal fun ExoPlayer.Builder.buildWithAssSupportCompat(
 }
 
 internal fun ExoPlayer.getAssHandlerCompat(): AssHandler? = assHandlersByPlayer[this]
-
-private val assFrameTimeMapperGetter by lazy {
-    runCatching { AssHandler::class.java.getMethod("getFrameTimeMapper\$nuvio_libass_release") }.getOrNull()
-}
-
-@OptIn(UnstableApi::class)
-internal fun AssHandler.effectsPipelineMediaTimeUs(presentationTimeUs: Long): Long {
-    val mapper = assFrameTimeMapperGetter
-        ?.let { getter -> runCatching { getter.invoke(this) as? AssFrameTimeMapper }.getOrNull() }
-        ?: return presentationTimeUs
-    val mediaTimeUs = mapper.toMediaTimeUs(presentationTimeUs)
-    return if (mediaTimeUs == C.TIME_UNSET) presentationTimeUs else mediaTimeUs
-}
 
 /**
  * Whether a text track is ASS/SSA. Subtitles parsed during extraction (e.g. addon subtitles

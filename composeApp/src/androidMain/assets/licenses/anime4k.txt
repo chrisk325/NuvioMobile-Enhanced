@@ -1,4 +1,4 @@
-Anime4K GLSL shaders (Anime4K_Upscale_CNN_x2_S, Anime4K_Restore_CNN_S)
+Anime4K GLSL shaders (Anime4K_Upscale_CNN_x2_S, Anime4K_Restore_CNN_S, Anime4K_Darken_HQ, Anime4K_Thin_HQ)
 Source: https://github.com/bloc97/Anime4K
 
 MIT License

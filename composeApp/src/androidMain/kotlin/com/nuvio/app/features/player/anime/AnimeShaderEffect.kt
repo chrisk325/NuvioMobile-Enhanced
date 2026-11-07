@@ -19,16 +19,17 @@ import kotlin.math.roundToInt
 
 @UnstableApi
 internal class AnimeShaderEffect(
+    private val passes: List<MpvUserShaderPass>,
     private val sharpenPasses: List<MpvUserShaderPass>,
     private val upscalePasses: List<MpvUserShaderPass>,
     private val displayLongSide: Int,
     private val displayShortSide: Int,
     private val statusTracker: AnimeShaderStatusTracker? = null,
 ) : GlEffect {
-    private val passes = sharpenPasses + upscalePasses
 
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
         AnimeShaderProgram(
+            passes = passes,
             sharpenPasses = sharpenPasses,
             upscalePasses = upscalePasses,
             displayLongSide = displayLongSide,
@@ -89,6 +90,7 @@ internal class AnimeShaderEffect(
 
 @UnstableApi
 private class AnimeShaderProgram(
+    private val passes: List<MpvUserShaderPass>,
     private val sharpenPasses: List<MpvUserShaderPass>,
     private val upscalePasses: List<MpvUserShaderPass>,
     private val displayLongSide: Int,
@@ -96,7 +98,6 @@ private class AnimeShaderProgram(
     private val useHdr: Boolean,
     private val statusTracker: AnimeShaderStatusTracker?,
 ) : BaseGlShaderProgram(useHdr, OUTPUT_FRAME_CAPACITY) {
-    private val passes = sharpenPasses + upscalePasses
 
     private class CompiledPass(
         val program: Int,

@@ -18,6 +18,9 @@ class MpvUserShaderTest {
         ),
     )
     private val restore = shader("Anime4K_Restore_CNN_S.glsl")
+    private val finalSharpen = shader("Nuvio_Line_Sharpen.glsl")
+    private val darken = shader("Anime4K_Darken_HQ.glsl")
+    private val thin = shader("Anime4K_Thin_HQ.glsl")
 
     @Test
     fun parsesBundledAnime4kShaders() {
@@ -122,6 +125,43 @@ class MpvUserShaderTest {
         assertEquals(listOf<AnimeEnhancementStatus?>(status), updates)
         tracker.clear(newProgram)
         assertEquals(listOf(status, null), updates)
+    }
+
+    @Test
+    fun runsTheLineSharpenerAfterTheUpscaler() {
+        assertEquals(1, finalSharpen.size)
+        assertEquals(listOf("HOOKED"), finalSharpen.single().binds)
+        val plan = AnimeShaderEffect.planFor(restore + upscale + finalSharpen, 1920, 1080, 2400, 1080)
+        assertEquals(10, plan.passes.size)
+        assertEquals(finalSharpen.single(), plan.passes.last().pass)
+        assertEquals(listOf("MAIN"), plan.passes.last().binds)
+        assertEquals(MpvTextureSize(3840, 2160), plan.passes.last().size)
+        assertEquals(MpvTextureSize(2560, 1440), plan.outputSize)
+        assertTrue(animePassFragmentShader(plan.passes.last()).contains("nuvioFragColor = vec4(hook().rgb, 1.0);"))
+
+        val sharpenOnly = AnimeShaderEffect.planFor(restore + finalSharpen, 1920, 1080, 2400, 1080)
+        assertEquals(5, sharpenOnly.passes.size)
+        assertEquals(MpvTextureSize(1920, 1080), sharpenOnly.outputSize)
+        assertEquals(
+            AnimeEnhancementStatus(true, false, 1920, 1080, 1920, 1080),
+            sharpenOnly.toAnimeEnhancementStatus(MpvTextureSize(1920, 1080), restore + finalSharpen, emptyList()),
+        )
+    }
+
+    @Test
+    fun runsTheFullLineSharpenChainAroundTheUpscaler() {
+        assertEquals(5, darken.size)
+        assertEquals(8, thin.size)
+        val chain = restore + darken + thin + upscale + finalSharpen
+        val plan = AnimeShaderEffect.planFor(chain, 1920, 1080, 2400, 1080)
+        assertEquals(chain.size, plan.passes.size)
+        assertEquals(MpvTextureSize(1920, 1080), plan.passes[restore.size + darken.size + thin.size - 1].size)
+        assertEquals(MpvTextureSize(3840, 2160), plan.passes.last().size)
+        assertEquals(MpvTextureSize(2560, 1440), plan.outputSize)
+        assertEquals(
+            AnimeEnhancementStatus(true, true, 1920, 1080, 2560, 1440),
+            plan.toAnimeEnhancementStatus(MpvTextureSize(1920, 1080), restore + darken + thin + finalSharpen, upscale),
+        )
     }
 
     @Test

@@ -67,7 +67,3 @@
 
 -keep class com.nuvio.app.features.player.aiostreams.AssSurface { *; }
 -keep interface com.nuvio.app.features.player.aiostreams.Thumbnails$Listener { *; }
-
--keepclassmembers class com.nuvio.tv.libass.media.AssHandler {
-    com.nuvio.tv.libass.media.effect.AssFrameTimeMapper getFrameTimeMapper$nuvio_libass_release();
-}

@@ -14,15 +14,19 @@ import kotlin.math.min
 internal object AnimeShaders {
     private const val TAG = "AnimeShaders"
     private const val ASSET_DIR = "anime4k"
-    private const val LINE_SHARPEN_SHADER = "Anime4K_Restore_CNN_S.glsl"
+    private const val RESTORE_SHADER = "Anime4K_Restore_CNN_S.glsl"
+    private const val DARKEN_SHADER = "Anime4K_Darken_HQ.glsl"
+    private const val THIN_SHADER = "Anime4K_Thin_HQ.glsl"
     private const val UPSCALE_SHADER = "Anime4K_Upscale_CNN_x2_S.glsl"
+    private const val FINAL_SHARPEN_SHADER = "Nuvio_Line_Sharpen.glsl"
     private const val UPSCALE_CONDITION = "//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *"
     const val MINIMUM_UPSCALE_LONG_SIDE = 2560
     const val MINIMUM_UPSCALE_SHORT_SIDE = 1440
 
     fun shaderNames(upscaleEnabled: Boolean, lineSharpenEnabled: Boolean): List<String> = buildList {
-        if (lineSharpenEnabled) add(LINE_SHARPEN_SHADER)
+        if (lineSharpenEnabled) addAll(listOf(RESTORE_SHADER, DARKEN_SHADER, THIN_SHADER))
         if (upscaleEnabled) add(UPSCALE_SHADER)
+        if (lineSharpenEnabled) add(FINAL_SHARPEN_SHADER)
     }
 
     fun mpvShaderPaths(context: Context, upscaleEnabled: Boolean, lineSharpenEnabled: Boolean): List<String> {
@@ -54,10 +58,12 @@ internal object AnimeShaders {
         if (!upscaleEnabled && !lineSharpenEnabled) return emptyList()
         return runCatching {
             val (longSide, shortSide) = displaySize(context)
+            val passes = orderedPasses(context, upscaleEnabled, lineSharpenEnabled)
             listOf<Effect>(
                 AnimeShaderEffect(
-                    sharpenPasses = if (lineSharpenEnabled) parsedShader(context, LINE_SHARPEN_SHADER) else emptyList(),
-                    upscalePasses = if (upscaleEnabled) parsedShader(context, UPSCALE_SHADER) else emptyList(),
+                    passes = passes.ordered,
+                    sharpenPasses = passes.sharpen,
+                    upscalePasses = passes.upscale,
                     displayLongSide = longSide,
                     displayShortSide = shortSide,
                     statusTracker = statusTracker,
@@ -77,17 +83,37 @@ internal object AnimeShaders {
         outputHeight: Int,
     ): AnimeEnhancementStatus? {
         val upscaleEnabled = shaderPaths.any { it.endsWith("/$UPSCALE_SHADER") }
-        val lineSharpenEnabled = shaderPaths.any { it.endsWith("/$LINE_SHARPEN_SHADER") }
+        val lineSharpenEnabled = shaderPaths.any { it.endsWith("/$RESTORE_SHADER") }
         if (!upscaleEnabled && !lineSharpenEnabled) return null
         if (videoWidth <= 0 || videoHeight <= 0 || outputWidth <= 0 || outputHeight <= 0) return null
         return runCatching {
-            val sharpenPasses = if (lineSharpenEnabled) parsedShader(context, LINE_SHARPEN_SHADER) else emptyList()
-            val upscalePasses = if (upscaleEnabled) parsedShader(context, UPSCALE_SHADER) else emptyList()
+            val passes = orderedPasses(context, upscaleEnabled, lineSharpenEnabled)
             val input = MpvTextureSize(videoWidth, videoHeight)
             MpvUserShaderParser
-                .plan(sharpenPasses + upscalePasses, input, MpvTextureSize(outputWidth, outputHeight))
-                .toAnimeEnhancementStatus(input, sharpenPasses, upscalePasses)
+                .plan(passes.ordered, input, MpvTextureSize(outputWidth, outputHeight))
+                .toAnimeEnhancementStatus(input, passes.sharpen, passes.upscale)
         }.getOrNull()
+    }
+
+    private class OrderedPasses(
+        val ordered: List<MpvUserShaderPass>,
+        val sharpen: List<MpvUserShaderPass>,
+        val upscale: List<MpvUserShaderPass>,
+    )
+
+    private fun orderedPasses(context: Context, upscaleEnabled: Boolean, lineSharpenEnabled: Boolean): OrderedPasses {
+        val restore = if (lineSharpenEnabled) {
+            parsedShader(context, RESTORE_SHADER) + parsedShader(context, DARKEN_SHADER) + parsedShader(context, THIN_SHADER)
+        } else {
+            emptyList()
+        }
+        val upscale = if (upscaleEnabled) parsedShader(context, UPSCALE_SHADER) else emptyList()
+        val finalSharpen = if (lineSharpenEnabled) parsedShader(context, FINAL_SHARPEN_SHADER) else emptyList()
+        return OrderedPasses(
+            ordered = restore + upscale + finalSharpen,
+            sharpen = restore + finalSharpen,
+            upscale = upscale,
+        )
     }
 
     private val parsedShaders = mutableMapOf<String, List<MpvUserShaderPass>>()

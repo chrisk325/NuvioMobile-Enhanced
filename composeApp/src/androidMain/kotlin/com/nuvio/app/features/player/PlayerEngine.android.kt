@@ -646,7 +646,11 @@ private fun ExoPlayerSurface(
                 // player rebuild via the remember key.
                 var assVideoEffects = emptyList<Effect>()
                 if (videoEffectsNeeded) {
-                    val effectiveMode = if (playerSettings.tunnelingEnabled) "OVERLAY" else playerSettings.libassRenderMode
+                    val effectiveMode = when {
+                        playerSettings.tunnelingEnabled -> "OVERLAY"
+                        animeVideoEffects.isNotEmpty() -> "VIDEO_EFFECT"
+                        else -> playerSettings.libassRenderMode
+                    }
                     if (effectiveMode != "OVERLAY") {
                         builtPlayer.getAssHandlerCompat()?.let { handler ->
                             assVideoEffects = listOf(com.nuvio.tv.libass.media.effect.AssVideoEffectAsync(handler))
@@ -659,6 +663,7 @@ private fun ExoPlayerSurface(
                 }
                 exoVideoEffects.update(
                     pipelineConfigured = videoEffects.isNotEmpty(),
+                    animeBuilt = animeVideoEffects.isNotEmpty(),
                     upscaleEnabled = animeUpscaleEnabled,
                     lineSharpenEnabled = animeLineSharpenEnabled,
                 )
@@ -680,6 +685,7 @@ private fun ExoPlayerSurface(
                     }
                     exoVideoEffects.update(
                         pipelineConfigured = animeVideoEffects.isNotEmpty(),
+                        animeBuilt = animeVideoEffects.isNotEmpty(),
                         upscaleEnabled = animeUpscaleEnabled,
                         lineSharpenEnabled = animeLineSharpenEnabled,
                     )
@@ -867,6 +873,7 @@ private fun ExoPlayerSurface(
         if (!exoVideoEffects.pipelineConfigured && !upscale && !sharpen) {
             exoVideoEffects.update(
                 pipelineConfigured = false,
+                animeBuilt = false,
                 upscaleEnabled = false,
                 lineSharpenEnabled = false,
             )
@@ -879,6 +886,11 @@ private fun ExoPlayerSurface(
         if (selectedSubtitle >= 0) {
             pendingSubtitleTrackIndex.clear()
             pendingSubtitleTrackIndex.add(selectedSubtitle)
+        }
+        if (useLibass && (upscale || sharpen) && !videoEffectsNeeded &&
+            exoPlayer.currentTracks.hasSelectedAssWithoutDolbyVision()
+        ) {
+            videoEffectsNeeded = true
         }
         fallbackStartPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
         animeRebuildGeneration += 1
@@ -1106,7 +1118,7 @@ private fun ExoPlayerSurface(
                 }
                 // Trigger player rebuild with video effects when ASS track becomes selected
                 // and render mode is VIDEO_EFFECT.
-                if (!videoEffectsNeeded && useLibass && libassRenderMode != "OVERLAY") {
+                if (!videoEffectsNeeded && useLibass && exoVideoEffects.libassRenderMode(libassRenderMode) != "OVERLAY") {
                     val hasSelectedAss = tracks.groups.any { group ->
                         group.isSelected && group.type == C.TRACK_TYPE_TEXT &&
                             (0 until group.length).any { i ->
@@ -1673,9 +1685,8 @@ private fun ExoPlayerSurface(
                     syncLibassOverlay(
                         player = exoPlayer,
                         enabled = useLibass,
-                        renderMode = libassRenderMode,
+                        renderMode = exoVideoEffects.libassRenderMode(libassRenderMode),
                         tunnelingEnabled = playerSettings.tunnelingEnabled,
-                        effectsPipelineActive = { exoVideoEffects.pipelineConfigured },
                     )
                     aiostreamsAss?.attach(this)
                     aiostreamsAss?.setStyle(currentSubtitleStyle)
@@ -1694,9 +1705,8 @@ private fun ExoPlayerSurface(
                 playerView.syncLibassOverlay(
                     player = exoPlayer,
                     enabled = useLibass,
-                    renderMode = libassRenderMode,
+                    renderMode = exoVideoEffects.libassRenderMode(libassRenderMode),
                     tunnelingEnabled = playerSettings.tunnelingEnabled,
-                    effectsPipelineActive = { exoVideoEffects.pipelineConfigured },
                 )
                 aiostreamsAss?.attach(playerView)
                 aiostreamsAss?.setStyle(currentSubtitleStyle)
@@ -3207,22 +3217,46 @@ private class ExoVideoEffectsHolder {
     var pipelineConfigured = false
         private set
     @Volatile
+    var animeBuilt = false
+        private set
+    @Volatile
     private var upscaleEnabled = false
     @Volatile
     private var lineSharpenEnabled = false
 
     fun update(
         pipelineConfigured: Boolean,
+        animeBuilt: Boolean,
         upscaleEnabled: Boolean,
         lineSharpenEnabled: Boolean,
     ) {
         this.pipelineConfigured = pipelineConfigured
+        this.animeBuilt = animeBuilt
         this.upscaleEnabled = upscaleEnabled
         this.lineSharpenEnabled = lineSharpenEnabled
     }
 
     fun matches(upscaleEnabled: Boolean, lineSharpenEnabled: Boolean): Boolean =
         this.upscaleEnabled == upscaleEnabled && this.lineSharpenEnabled == lineSharpenEnabled
+
+    fun libassRenderMode(configuredMode: String): String =
+        if (animeBuilt) "VIDEO_EFFECT" else configuredMode
+}
+
+private fun androidx.media3.common.Tracks.hasSelectedAssWithoutDolbyVision(): Boolean {
+    val hasSelectedAss = groups.any { group ->
+        group.isSelected && group.type == C.TRACK_TYPE_TEXT &&
+            (0 until group.length).any { i ->
+                group.isTrackSelected(i) && group.getTrackFormat(i).isAssSubtitleFormat()
+            }
+    }
+    val hasDvVideo = groups.any { group ->
+        group.isSelected && group.type == C.TRACK_TYPE_VIDEO &&
+            (0 until group.length).any { i ->
+                group.getTrackFormat(i).sampleMimeType == MimeTypes.VIDEO_DOLBY_VISION
+            }
+    }
+    return hasSelectedAss && !hasDvVideo
 }
 
 private fun androidx.media3.common.Tracks.selectedTextTrackOrdinal(): Int {
@@ -3545,7 +3579,6 @@ private fun PlayerView.syncLibassOverlay(
     enabled: Boolean,
     renderMode: String = "VIDEO_EFFECT",
     tunnelingEnabled: Boolean = false,
-    effectsPipelineActive: () -> Boolean = { false },
 ) {
     // Atlas pipeline always draws through AssSubtitleSurfaceView in the top-level overlay container.
     val containerId = R.id.libass_overlay_container_gl
@@ -3579,12 +3612,7 @@ private fun PlayerView.syncLibassOverlay(
     // When it doesn't fire (tunneled playback), AssPositionRenderer in the
     // RenderersFactory provides position-based fallback on every render loop.
     assHandler.videoFrameCallback = { presentationTimeUs, releaseTimeNs ->
-        val mediaTimeUs = if (effectsPipelineActive()) {
-            assHandler.effectsPipelineMediaTimeUs(presentationTimeUs)
-        } else {
-            presentationTimeUs
-        }
-        assSubtitleView.requestRender(mediaTimeUs, releaseTimeNs)
+        assSubtitleView.requestRender(presentationTimeUs, releaseTimeNs)
     }
     overlayContainer.addView(
         assSubtitleView,
