@@ -331,6 +331,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
                     initialPositionRequestKey = initialPositionRequestKey,
                     resizeMode = if (partyPanelInset > 0.dp) PlayerResizeMode.Fit else resizeMode,
                     playbackEngine = playbackEngineOverride ?: resolvedAutoEngine,
+                    animeContent = isAnimePlayback,
                     onInitialPositionHandled = { key, handled ->
                         if (active.value && playbackKey == activePlaybackKey && key == currentInitialPositionRequestKey()) {
                             initialSeekApplied = handled
@@ -643,9 +644,13 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
                 { showUserRatingSheet = true }
             } else null,
             userRating = userRating,
-            onVideoSettingsClick = {
-                showVideoSettingsModal = true
-                controlsVisible = true
+            onVideoSettingsClick = if (isIos || isAnimePlayback) {
+                {
+                    showVideoSettingsModal = true
+                    controlsVisible = true
+                }
+            } else {
+                null
             },
             onSourcesClick = if (!isLiveTvPlayback && activeVideoId != null) {
                 {

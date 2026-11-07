@@ -154,6 +154,7 @@ actual fun PlatformPlayerSurface(
     initialPositionRequestKey: String?,
     resizeMode: PlayerResizeMode,
     playbackEngine: AndroidPlaybackEngine?,
+    animeContent: Boolean,
     useNativeController: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
@@ -227,6 +228,7 @@ actual fun PlatformPlayerSurface(
             initialPositionRequestKey = initialPositionRequestKey,
             resizeMode = resizeMode,
             useNativeController = useNativeController,
+            animeContent = animeContent,
             onInitialPositionHandled = onInitialPositionHandled,
             onControllerReady = surfaceOnControllerReady,
             onSnapshot = surfaceOnSnapshot,
@@ -249,8 +251,9 @@ actual fun PlatformPlayerSurface(
                 videoOutput = playerSettings.androidLibmpvVideoOutput,
                 hardwareDecodingEnabled = playerSettings.androidLibmpvHardwareDecodingEnabled,
                 yuv420pEnabled = playerSettings.androidLibmpvYuv420pEnabled,
-                animeUpscaleEnabled = playerSettings.androidAnimeUpscaleEnabled,
-                animeLineSharpenEnabled = playerSettings.androidAnimeLineSharpenEnabled,
+                animeUpscaleEnabled = animeContent && playerSettings.androidAnimeUpscaleEnabled,
+                animeLineSharpenEnabled = animeContent && playerSettings.androidAnimeLineSharpenEnabled,
+                animeContent = animeContent,
                 preferredSubtitleLanguage = playerSettings.preferredSubtitleLanguage,
                 onControllerReady = surfaceOnControllerReady,
                 onSnapshot = surfaceOnSnapshot,
@@ -291,6 +294,7 @@ private fun ExoPlayerSurface(
     initialPositionRequestKey: String?,
     resizeMode: PlayerResizeMode,
     useNativeController: Boolean,
+    animeContent: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -300,6 +304,7 @@ private fun ExoPlayerSurface(
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestOnSnapshot = rememberUpdatedState(onSnapshot)
     val latestOnError = rememberUpdatedState(onError)
+    val latestAnimeContent = rememberUpdatedState(animeContent)
     val latestOnInitialPositionHandled = rememberUpdatedState(onInitialPositionHandled)
     val latestPlayWhenReady = rememberUpdatedState(playWhenReady)
     val coroutineScope = rememberCoroutineScope()
@@ -588,8 +593,8 @@ private fun ExoPlayerSurface(
         val loadControl = playerSettings.buildPlaybackLoadControl(localFileSource = isLocalFileSource)
 
         val liveAnimeSettings = PlayerSettingsRepository.uiState.value
-        val animeUpscaleEnabled = liveAnimeSettings.androidAnimeUpscaleEnabled
-        val animeLineSharpenEnabled = liveAnimeSettings.androidAnimeLineSharpenEnabled
+        val animeUpscaleEnabled = latestAnimeContent.value && liveAnimeSettings.androidAnimeUpscaleEnabled
+        val animeLineSharpenEnabled = latestAnimeContent.value && liveAnimeSettings.androidAnimeLineSharpenEnabled
         val animeVideoEffects = if (playerSettings.tunnelingEnabled) {
             emptyList()
         } else {
@@ -851,9 +856,14 @@ private fun ExoPlayerSurface(
     }
 
     val liveSettings by PlayerSettingsRepository.uiState.collectAsState()
-    LaunchedEffect(exoPlayer, liveSettings.androidAnimeUpscaleEnabled, liveSettings.androidAnimeLineSharpenEnabled) {
-        val upscale = liveSettings.androidAnimeUpscaleEnabled
-        val sharpen = liveSettings.androidAnimeLineSharpenEnabled
+    LaunchedEffect(
+        exoPlayer,
+        animeContent,
+        liveSettings.androidAnimeUpscaleEnabled,
+        liveSettings.androidAnimeLineSharpenEnabled,
+    ) {
+        val upscale = animeContent && liveSettings.androidAnimeUpscaleEnabled
+        val sharpen = animeContent && liveSettings.androidAnimeLineSharpenEnabled
         if (playerSettings.tunnelingEnabled) return@LaunchedEffect
         if (exoVideoEffects.matches(upscale, sharpen)) return@LaunchedEffect
         if (exoVideoEffects.pipelineConfigured) {
@@ -1727,6 +1737,7 @@ private fun LibmpvPlayerSurface(
     yuv420pEnabled: Boolean,
     animeUpscaleEnabled: Boolean,
     animeLineSharpenEnabled: Boolean,
+    animeContent: Boolean,
     preferredSubtitleLanguage: String?,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -1991,14 +2002,15 @@ private fun LibmpvPlayerSurface(
     val liveAnimeSettings by PlayerSettingsRepository.uiState.collectAsState()
     LaunchedEffect(
         playerViewRef,
+        animeContent,
         liveAnimeSettings.androidAnimeUpscaleEnabled,
         liveAnimeSettings.androidAnimeLineSharpenEnabled,
     ) {
         val view = playerViewRef ?: return@LaunchedEffect
         val paths = AnimeShaders.mpvShaderPaths(
             context = context,
-            upscaleEnabled = liveAnimeSettings.androidAnimeUpscaleEnabled,
-            lineSharpenEnabled = liveAnimeSettings.androidAnimeLineSharpenEnabled,
+            upscaleEnabled = animeContent && liveAnimeSettings.androidAnimeUpscaleEnabled,
+            lineSharpenEnabled = animeContent && liveAnimeSettings.androidAnimeLineSharpenEnabled,
         )
         view.setAnimeShaderPaths(paths)
     }
