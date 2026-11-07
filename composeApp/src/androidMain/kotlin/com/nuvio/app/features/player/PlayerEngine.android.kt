@@ -855,7 +855,7 @@ private fun ExoPlayerSurface(
         dispatchExoPlayerSnapshot()
     }
 
-    val liveSettings by PlayerSettingsRepository.uiState.collectAsState()
+    val liveSettings by rememberAnimeToggles()
     LaunchedEffect(
         exoPlayer,
         animeContent,
@@ -1686,6 +1686,7 @@ private fun ExoPlayerSurface(
                         enabled = useLibass,
                         renderMode = libassRenderMode,
                         tunnelingEnabled = playerSettings.tunnelingEnabled,
+                        effectsPipelineActive = { exoVideoEffects.pipelineConfigured },
                     )
                     aiostreamsAss?.attach(this)
                     aiostreamsAss?.setStyle(currentSubtitleStyle)
@@ -1706,6 +1707,7 @@ private fun ExoPlayerSurface(
                     enabled = useLibass,
                     renderMode = libassRenderMode,
                     tunnelingEnabled = playerSettings.tunnelingEnabled,
+                    effectsPipelineActive = { exoVideoEffects.pipelineConfigured },
                 )
                 aiostreamsAss?.attach(playerView)
                 aiostreamsAss?.setStyle(currentSubtitleStyle)
@@ -1999,7 +2001,7 @@ private fun LibmpvPlayerSurface(
         )
     }
 
-    val liveAnimeSettings by PlayerSettingsRepository.uiState.collectAsState()
+    val liveAnimeSettings by rememberAnimeToggles()
     LaunchedEffect(
         playerViewRef,
         animeContent,
@@ -3189,12 +3191,36 @@ private class ExoMediaInfoCache {
     }
 }
 
+private data class AnimeToggles(
+    val androidAnimeUpscaleEnabled: Boolean,
+    val androidAnimeLineSharpenEnabled: Boolean,
+)
+
+private fun PlayerSettingsUiState.animeToggles() = AnimeToggles(
+    androidAnimeUpscaleEnabled = androidAnimeUpscaleEnabled,
+    androidAnimeLineSharpenEnabled = androidAnimeLineSharpenEnabled,
+)
+
+@Composable
+private fun rememberAnimeToggles(): androidx.compose.runtime.State<AnimeToggles> {
+    val toggles = remember {
+        PlayerSettingsRepository.uiState
+            .map { it.animeToggles() }
+            .distinctUntilChanged()
+    }
+    return toggles.collectAsState(initial = PlayerSettingsRepository.uiState.value.animeToggles())
+}
+
 private class ExoVideoEffectsHolder {
+    @Volatile
     var pipelineConfigured = false
         private set
+    @Volatile
     var assEffects: List<Effect> = emptyList()
         private set
+    @Volatile
     private var upscaleEnabled = false
+    @Volatile
     private var lineSharpenEnabled = false
 
     fun update(
@@ -3533,6 +3559,7 @@ private fun PlayerView.syncLibassOverlay(
     enabled: Boolean,
     renderMode: String = "VIDEO_EFFECT",
     tunnelingEnabled: Boolean = false,
+    effectsPipelineActive: () -> Boolean = { false },
 ) {
     // Atlas pipeline always draws through AssSubtitleSurfaceView in the top-level overlay container.
     val containerId = R.id.libass_overlay_container_gl
@@ -3566,7 +3593,12 @@ private fun PlayerView.syncLibassOverlay(
     // When it doesn't fire (tunneled playback), AssPositionRenderer in the
     // RenderersFactory provides position-based fallback on every render loop.
     assHandler.videoFrameCallback = { presentationTimeUs, releaseTimeNs ->
-        assSubtitleView.requestRender(presentationTimeUs, releaseTimeNs)
+        val mediaTimeUs = if (effectsPipelineActive()) {
+            assHandler.effectsPipelineMediaTimeUs(presentationTimeUs)
+        } else {
+            presentationTimeUs
+        }
+        assSubtitleView.requestRender(mediaTimeUs, releaseTimeNs)
     }
     overlayContainer.addView(
         assSubtitleView,

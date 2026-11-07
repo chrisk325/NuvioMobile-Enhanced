@@ -95,7 +95,7 @@ private class AnimeShaderProgram(
     private val displayShortSide: Int,
     private val useHdr: Boolean,
     private val statusTracker: AnimeShaderStatusTracker?,
-) : BaseGlShaderProgram(useHdr, 1) {
+) : BaseGlShaderProgram(useHdr, OUTPUT_FRAME_CAPACITY) {
     private val passes = sharpenPasses + upscalePasses
 
     private class CompiledPass(
@@ -314,6 +314,7 @@ private class AnimeShaderProgram(
 
     private companion object {
         const val TAG = "AnimeShaderEffect"
+        const val OUTPUT_FRAME_CAPACITY = 3
         const val MAIN = "MAIN"
 
         val QUAD = floatArrayOf(

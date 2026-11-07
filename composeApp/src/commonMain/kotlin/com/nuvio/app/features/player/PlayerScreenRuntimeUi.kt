@@ -318,6 +318,8 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
                 DisposableEffect(Unit) {
                     onDispose { active.value = false }
                 }
+                val animeContentState = remember { mutableStateOf(false) }
+                if (isAnimePlayback && !animeContentState.value) animeContentState.value = true
                 PlatformPlayerSurface(
                     sourceUrl = playerSurfaceSourceUrl,
                     sourceAudioUrl = activeSourceAudioUrl,
@@ -331,7 +333,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
                     initialPositionRequestKey = initialPositionRequestKey,
                     resizeMode = if (partyPanelInset > 0.dp) PlayerResizeMode.Fit else resizeMode,
                     playbackEngine = playbackEngineOverride ?: resolvedAutoEngine,
-                    animeContent = isAnimePlayback,
+                    animeContent = animeContentState.value,
                     onInitialPositionHandled = { key, handled ->
                         if (active.value && playbackKey == activePlaybackKey && key == currentInitialPositionRequestKey()) {
                             initialSeekApplied = handled
