@@ -643,13 +643,9 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
                 { showUserRatingSheet = true }
             } else null,
             userRating = userRating,
-            onVideoSettingsClick = if (isIos) {
-                {
-                    showVideoSettingsModal = true
-                    controlsVisible = true
-                }
-            } else {
-                null
+            onVideoSettingsClick = {
+                showVideoSettingsModal = true
+                controlsVisible = true
             },
             onSourcesClick = if (!isLiveTvPlayback && activeVideoId != null) {
                 {
@@ -1078,6 +1074,7 @@ private fun PlayerScreenRuntime.RenderPlayerModals() {
             playerController?.configureIosVideoOutput(PlayerSettingsRepository.uiState.value)
         },
         onVideoSettingsModalDismissed = { showVideoSettingsModal = false },
+        animeEnhancementStatus = playbackSnapshot.animeEnhancement,
         showSourcesPanel = showSourcesPanel,
         sourceStreamsState = sourceStreamsState,
         contentTitle = title,

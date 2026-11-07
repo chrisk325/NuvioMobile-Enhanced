@@ -19,17 +19,22 @@ import kotlin.math.roundToInt
 
 @UnstableApi
 internal class AnimeShaderEffect(
-    private val passes: List<MpvUserShaderPass>,
+    private val sharpenPasses: List<MpvUserShaderPass>,
+    private val upscalePasses: List<MpvUserShaderPass>,
     private val displayLongSide: Int,
     private val displayShortSide: Int,
+    private val statusTracker: AnimeShaderStatusTracker? = null,
 ) : GlEffect {
+    private val passes = sharpenPasses + upscalePasses
 
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
         AnimeShaderProgram(
-            passes = passes,
+            sharpenPasses = sharpenPasses,
+            upscalePasses = upscalePasses,
             displayLongSide = displayLongSide,
             displayShortSide = displayShortSide,
             useHdr = useHdr,
+            statusTracker = statusTracker,
         )
 
     override fun isNoOp(inputWidth: Int, inputHeight: Int): Boolean =
@@ -84,11 +89,14 @@ internal class AnimeShaderEffect(
 
 @UnstableApi
 private class AnimeShaderProgram(
-    private val passes: List<MpvUserShaderPass>,
+    private val sharpenPasses: List<MpvUserShaderPass>,
+    private val upscalePasses: List<MpvUserShaderPass>,
     private val displayLongSide: Int,
     private val displayShortSide: Int,
     private val useHdr: Boolean,
+    private val statusTracker: AnimeShaderStatusTracker?,
 ) : BaseGlShaderProgram(useHdr, 1) {
+    private val passes = sharpenPasses + upscalePasses
 
     private class CompiledPass(
         val program: Int,
@@ -154,6 +162,7 @@ private class AnimeShaderProgram(
                 plan = MpvShaderPlan(emptyList(), inputSize)
             }
         }
+        statusTracker?.publish(this, plan.toAnimeEnhancementStatus(inputSize, sharpenPasses, upscalePasses))
         if (copyPass == null) {
             copyPass = try {
                 compile(COPY_VERTEX_SHADER, RESAMPLE_FRAGMENT_SHADER, listOf(MAIN))
@@ -202,6 +211,7 @@ private class AnimeShaderProgram(
     }
 
     override fun release() {
+        statusTracker?.clear(this)
         super.release()
         try {
             releaseTargets()

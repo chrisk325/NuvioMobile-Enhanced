@@ -1,5 +1,6 @@
 package com.nuvio.app.features.player.anime
 
+import com.nuvio.app.features.player.AnimeEnhancementStatus
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -91,6 +92,36 @@ class MpvUserShaderTest {
         assertTrue(animePassFragmentShader(plan.passes.first()).contains("nuvioFragColor = hook();"))
         assertTrue(animePassFragmentShader(plan.passes.last()).contains("nuvioFragColor = vec4(hook().rgb, 1.0);"))
         assertTrue(animePassFragmentShader(plan.passes.last()).contains("#define MAIN_tex(pos) texture(MAIN_raw, vec2((pos).x, 1.0 - (pos).y))"))
+    }
+
+    @Test
+    fun reportsWhatActuallyRuns() {
+        val both = AnimeShaderEffect.planFor(restore + upscale, 1920, 1080, 2400, 1080)
+            .toAnimeEnhancementStatus(MpvTextureSize(1920, 1080), restore, upscale)
+        assertEquals(AnimeEnhancementStatus(true, true, 1920, 1080, 2560, 1440), both)
+
+        val sharpenOnly = AnimeShaderEffect.planFor(restore + upscale, 2560, 1440, 2400, 1080)
+            .toAnimeEnhancementStatus(MpvTextureSize(2560, 1440), restore, upscale)
+        assertEquals(AnimeEnhancementStatus(true, false, 2560, 1440, 2560, 1440), sharpenOnly)
+
+        val nothing = AnimeShaderEffect.planFor(upscale, 2560, 1440, 2400, 1080)
+            .toAnimeEnhancementStatus(MpvTextureSize(2560, 1440), emptyList(), upscale)
+        assertNull(nothing)
+    }
+
+    @Test
+    fun ignoresStatusClearsFromReplacedPrograms() {
+        val updates = mutableListOf<AnimeEnhancementStatus?>()
+        val tracker = AnimeShaderStatusTracker { updates += it }
+        val oldProgram = Any()
+        val newProgram = Any()
+        val status = AnimeEnhancementStatus(true, false, 1920, 1080, 1920, 1080)
+        tracker.publish(oldProgram, status)
+        tracker.publish(newProgram, status)
+        tracker.clear(oldProgram)
+        assertEquals(listOf<AnimeEnhancementStatus?>(status), updates)
+        tracker.clear(newProgram)
+        assertEquals(listOf(status, null), updates)
     }
 
     @Test
