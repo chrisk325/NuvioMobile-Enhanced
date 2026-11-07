@@ -40,6 +40,7 @@ import org.jetbrains.compose.resources.getString
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
+import androidx.media3.common.Effect
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -89,6 +90,7 @@ import com.nuvio.app.features.autosync.LIBMPV_AUTOSYNC_FILE_PREFIX
 import com.nuvio.app.features.autosync.rememberAutoSyncCoordinator
 import com.nuvio.app.features.player.aiostreams.AiostreamsAss
 import com.nuvio.app.features.player.aiostreams.AiostreamsAssEngine
+import com.nuvio.app.features.player.anime.AnimeShaders
 import com.nuvio.app.features.player.swdecoder.SoftwareVideoRenderer
 import com.nuvio.app.features.autosync.rememberLibmpvAutoSyncCoordinator
 import com.nuvio.app.R
@@ -245,6 +247,8 @@ actual fun PlatformPlayerSurface(
                 videoOutput = playerSettings.androidLibmpvVideoOutput,
                 hardwareDecodingEnabled = playerSettings.androidLibmpvHardwareDecodingEnabled,
                 yuv420pEnabled = playerSettings.androidLibmpvYuv420pEnabled,
+                animeUpscaleEnabled = playerSettings.androidAnimeUpscaleEnabled,
+                animeLineSharpenEnabled = playerSettings.androidAnimeLineSharpenEnabled,
                 preferredSubtitleLanguage = playerSettings.preferredSubtitleLanguage,
                 onControllerReady = surfaceOnControllerReady,
                 onSnapshot = surfaceOnSnapshot,
@@ -573,11 +577,24 @@ private fun ExoPlayerSurface(
 
         val loadControl = playerSettings.buildPlaybackLoadControl(localFileSource = isLocalFileSource)
 
+        val animeVideoEffects = if (playerSettings.tunnelingEnabled) {
+            emptyList()
+        } else {
+            AnimeShaders.exoVideoEffects(
+                context = context,
+                upscaleEnabled = playerSettings.androidAnimeUpscaleEnabled,
+                lineSharpenEnabled = playerSettings.androidAnimeLineSharpenEnabled,
+            )
+        }
+
         InAppLogger.info(
             "ExoPlayer/Android",
             "Initializing ExoPlayer decoderPriority=${effectiveDecoderPriority.decoderPriorityName()} " +
                 "decoderFallback=true tunneling=${playerSettings.tunnelingEnabled} libass=$useLibass " +
-                "libassRenderMode=$libassRenderMode mapDV7ToHevc=${playerSettings.mapDV7ToHevc}",
+                "libassRenderMode=$libassRenderMode mapDV7ToHevc=${playerSettings.mapDV7ToHevc} " +
+                "animeUpscale=${playerSettings.androidAnimeUpscaleEnabled} " +
+                "animeLineSharpen=${playerSettings.androidAnimeLineSharpenEnabled} " +
+                "animeEffects=${animeVideoEffects.isNotEmpty()}",
         )
 
         // Audio focus is handled by PlayerAudioFocus, so a denied request (e.g. during a call)
@@ -608,15 +625,18 @@ private fun ExoPlayerSurface(
                 // On first init videoEffectsNeeded is false. When onTracksChanged
                 // detects a selected ASS track, it flips to true which triggers a
                 // player rebuild via the remember key.
+                var assVideoEffects = emptyList<Effect>()
                 if (videoEffectsNeeded) {
                     val effectiveMode = if (playerSettings.tunnelingEnabled) "OVERLAY" else playerSettings.libassRenderMode
                     if (effectiveMode != "OVERLAY") {
                         builtPlayer.getAssHandlerCompat()?.let { handler ->
-                            builtPlayer.setVideoEffects(
-                                listOf(com.nuvio.tv.libass.media.effect.AssVideoEffectAsync(handler))
-                            )
+                            assVideoEffects = listOf(com.nuvio.tv.libass.media.effect.AssVideoEffectAsync(handler))
                         }
                     }
+                }
+                val videoEffects = animeVideoEffects + assVideoEffects
+                if (videoEffects.isNotEmpty()) {
+                    builtPlayer.setVideoEffects(videoEffects)
                 }
             }
         } else {
@@ -630,6 +650,11 @@ private fun ExoPlayerSurface(
                 .setRenderersFactory(renderersFactory)
                 .setMediaSourceFactory(AudioDelayMediaSourceFactory(mediaSourceFactory, audioDelayUs::get))
                 .build()
+                .also { builtPlayer ->
+                    if (animeVideoEffects.isNotEmpty()) {
+                        builtPlayer.setVideoEffects(animeVideoEffects)
+                    }
+                }
         }
 
         player.applySubtitleTrackPreferences(
@@ -1629,6 +1654,8 @@ private fun LibmpvPlayerSurface(
     videoOutput: AndroidLibmpvVideoOutput,
     hardwareDecodingEnabled: Boolean,
     yuv420pEnabled: Boolean,
+    animeUpscaleEnabled: Boolean,
+    animeLineSharpenEnabled: Boolean,
     preferredSubtitleLanguage: String?,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -1941,6 +1968,11 @@ private fun LibmpvPlayerSurface(
                     videoOutput = videoOutput,
                     hardwareDecodingEnabled = hardwareDecodingEnabled,
                     yuv420pEnabled = yuv420pEnabled,
+                    animeShaderPaths = AnimeShaders.mpvShaderPaths(
+                        context = viewContext,
+                        upscaleEnabled = animeUpscaleEnabled,
+                        lineSharpenEnabled = animeLineSharpenEnabled,
+                    ),
                 ).apply {
                     layoutParams = android.view.ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
                     keepScreenOn = false
@@ -1987,6 +2019,7 @@ private class NuvioLibmpvView(
     private val videoOutput: AndroidLibmpvVideoOutput,
     private val hardwareDecodingEnabled: Boolean,
     private val yuv420pEnabled: Boolean,
+    private val animeShaderPaths: List<String>,
 ) : MpvSurfaceView(context, videoOutput.mpvValue) {
     private var currentSourceUrl: String? = null
     private var currentSourceAudioUrl: String? = null
@@ -2042,7 +2075,8 @@ private class NuvioLibmpvView(
     override fun initOptions() {
         InAppLogger.info(
             "MPV/Android",
-            "Initializing libmpv vo=${videoOutput.mpvValue} hwdec=${if (hardwareDecodingEnabled) "auto" else "no"} yuv420p=$yuv420pEnabled",
+            "Initializing libmpv vo=${videoOutput.mpvValue} hwdec=${if (hardwareDecodingEnabled) "auto" else "no"} yuv420p=$yuv420pEnabled " +
+                "animeShaders=${animeShaderPaths.joinToString(",") { it.substringAfterLast('/') }.ifEmpty { "none" }}",
         )
         mpv.setOptionString("profile", "fast")
         mpv.setOptionString("hwdec", if (hardwareDecodingEnabled) "auto" else "no")
@@ -2058,6 +2092,9 @@ private class NuvioLibmpvView(
         // Room above 100% for the player's amplification (+10 dB is about 316%).
         mpv.setOptionString("volume-max", "$LIBMPV_MAX_VOLUME_PERCENT").logIfMpvError("volume-max")
         mpv.setOptionString("vd-lavc-film-grain", "cpu")
+        if (animeShaderPaths.isNotEmpty()) {
+            mpv.setOptionString("glsl-shaders", animeShaderPaths.joinToString(":")).logIfMpvError("glsl-shaders")
+        }
         mpv.setPropertyBoolean("keep-open", true)
         mpv.setPropertyBoolean("input-default-bindings", true)
         mpv.setPropertyBoolean("audio-fallback-to-null", true)
