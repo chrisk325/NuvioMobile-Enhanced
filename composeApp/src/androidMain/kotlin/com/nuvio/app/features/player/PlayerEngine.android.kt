@@ -659,7 +659,6 @@ private fun ExoPlayerSurface(
                 }
                 exoVideoEffects.update(
                     pipelineConfigured = videoEffects.isNotEmpty(),
-                    assEffects = assVideoEffects,
                     upscaleEnabled = animeUpscaleEnabled,
                     lineSharpenEnabled = animeLineSharpenEnabled,
                 )
@@ -681,7 +680,6 @@ private fun ExoPlayerSurface(
                     }
                     exoVideoEffects.update(
                         pipelineConfigured = animeVideoEffects.isNotEmpty(),
-                        assEffects = emptyList(),
                         upscaleEnabled = animeUpscaleEnabled,
                         lineSharpenEnabled = animeLineSharpenEnabled,
                     )
@@ -866,39 +864,24 @@ private fun ExoPlayerSurface(
         val sharpen = animeContent && liveSettings.androidAnimeLineSharpenEnabled
         if (playerSettings.tunnelingEnabled) return@LaunchedEffect
         if (exoVideoEffects.matches(upscale, sharpen)) return@LaunchedEffect
-        if (exoVideoEffects.pipelineConfigured) {
-            val animeVideoEffects = AnimeShaders.exoVideoEffects(
-                context = context,
-                upscaleEnabled = upscale,
-                lineSharpenEnabled = sharpen,
-                statusTracker = animeStatusTracker,
-            )
-            exoPlayer.setVideoEffects(animeVideoEffects + exoVideoEffects.assEffects)
-            exoVideoEffects.update(
-                pipelineConfigured = true,
-                assEffects = exoVideoEffects.assEffects,
-                upscaleEnabled = upscale,
-                lineSharpenEnabled = sharpen,
-            )
-            InAppLogger.info("ExoPlayer/Android", "anime effects updated live upscale=$upscale lineSharpen=$sharpen")
-        } else if (upscale || sharpen) {
-            InAppLogger.info("ExoPlayer/Android", "anime effects enabled, rebuilding player upscale=$upscale lineSharpen=$sharpen")
-            preserveAudioSelectionForReload("animeEffectsRebuild")
-            val selectedSubtitle = exoPlayer.currentTracks.selectedTextTrackOrdinal()
-            if (selectedSubtitle >= 0) {
-                pendingSubtitleTrackIndex.clear()
-                pendingSubtitleTrackIndex.add(selectedSubtitle)
-            }
-            fallbackStartPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
-            animeRebuildGeneration += 1
-        } else {
+        if (!exoVideoEffects.pipelineConfigured && !upscale && !sharpen) {
             exoVideoEffects.update(
                 pipelineConfigured = false,
-                assEffects = exoVideoEffects.assEffects,
                 upscaleEnabled = false,
                 lineSharpenEnabled = false,
             )
+            return@LaunchedEffect
         }
+        delay(ANIME_EFFECTS_REBUILD_DEBOUNCE_MS)
+        InAppLogger.info("ExoPlayer/Android", "anime effects changed, rebuilding player upscale=$upscale lineSharpen=$sharpen")
+        preserveAudioSelectionForReload("animeEffectsRebuild")
+        val selectedSubtitle = exoPlayer.currentTracks.selectedTextTrackOrdinal()
+        if (selectedSubtitle >= 0) {
+            pendingSubtitleTrackIndex.clear()
+            pendingSubtitleTrackIndex.add(selectedSubtitle)
+        }
+        fallbackStartPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+        animeRebuildGeneration += 1
     }
 
     DisposableEffect(exoPlayer) {
@@ -1085,6 +1068,12 @@ private fun ExoPlayerSurface(
                     videoAspectRatio = (
                         videoSize.width.toFloat() * videoSize.pixelWidthHeightRatio
                     ) / videoSize.height.toFloat()
+                }
+                if (exoVideoEffects.pipelineConfigured) {
+                    val sourceFormat = exoPlayer.videoFormat
+                    if (sourceFormat != null && sourceFormat.width > 0 && sourceFormat.height > 0) {
+                        exoPlayer.getAssHandlerCompat()?.setVideoSize(sourceFormat.width, sourceFormat.height)
+                    }
                 }
                 dispatchExoPlayerSnapshot()
                 playerViewRef?.post {
@@ -3211,12 +3200,11 @@ private fun rememberAnimeToggles(): androidx.compose.runtime.State<AnimeToggles>
     return toggles.collectAsState(initial = PlayerSettingsRepository.uiState.value.animeToggles())
 }
 
+private const val ANIME_EFFECTS_REBUILD_DEBOUNCE_MS = 700L
+
 private class ExoVideoEffectsHolder {
     @Volatile
     var pipelineConfigured = false
-        private set
-    @Volatile
-    var assEffects: List<Effect> = emptyList()
         private set
     @Volatile
     private var upscaleEnabled = false
@@ -3225,12 +3213,10 @@ private class ExoVideoEffectsHolder {
 
     fun update(
         pipelineConfigured: Boolean,
-        assEffects: List<Effect>,
         upscaleEnabled: Boolean,
         lineSharpenEnabled: Boolean,
     ) {
         this.pipelineConfigured = pipelineConfigured
-        this.assEffects = assEffects
         this.upscaleEnabled = upscaleEnabled
         this.lineSharpenEnabled = lineSharpenEnabled
     }
@@ -3605,7 +3591,20 @@ private fun PlayerView.syncLibassOverlay(
         android.widget.FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
     )
     setTag(R.id.libass_overlay_bound_player, player)
+    ensureLibassOverlayLayoutSync()
     post { syncLibassOverlayGeometry() }
+}
+
+private fun PlayerView.ensureLibassOverlayLayoutSync() {
+    if (getTag(R.id.libass_overlay_layout_listener) != null) return
+    val listener = View.OnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+        if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
+            syncLibassOverlayGeometry()
+        }
+    }
+    findViewById<AspectRatioFrameLayout>(androidx.media3.ui.R.id.exo_content_frame)?.addOnLayoutChangeListener(listener)
+    findViewById<android.widget.FrameLayout>(R.id.libass_overlay_container_gl)?.addOnLayoutChangeListener(listener)
+    setTag(R.id.libass_overlay_layout_listener, listener)
 }
 private fun android.widget.FrameLayout.hasAssOverlayChild(): Boolean {
     for (index in 0 until childCount) {
