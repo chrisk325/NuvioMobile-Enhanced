@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.62",
+          "buildVersion": "186",
+          "date": "2026-11-07T03:17:43Z",
+          "localizedDescription": "- 9868c09c2 Update repo @chrisk325  \n- 19e839d4c Delete .github/workflows/discontinue-legacy-main.yml @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.62-beta/nuvio-0.9.62-enhanced-release.ipa",
+          "size": 74916477,
+          "sha256": "a0f5a042f917575af27266f4a3bffcb3bb19706c865558019b66acbb72eda1df",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.6.9",
           "buildVersion": "152",
           "date": "2026-11-06T23:21:17Z",
