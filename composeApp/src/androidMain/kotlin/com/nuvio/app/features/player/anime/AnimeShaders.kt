@@ -15,6 +15,9 @@ internal object AnimeShaders {
     private const val ASSET_DIR = "anime4k"
     private const val LINE_SHARPEN_SHADER = "Anime4K_Restore_CNN_S.glsl"
     private const val UPSCALE_SHADER = "Anime4K_Upscale_CNN_x2_S.glsl"
+    private const val UPSCALE_CONDITION = "//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *"
+    const val MINIMUM_UPSCALE_LONG_SIDE = 2560
+    const val MINIMUM_UPSCALE_SHORT_SIDE = 1440
 
     fun shaderNames(upscaleEnabled: Boolean, lineSharpenEnabled: Boolean): List<String> = buildList {
         if (lineSharpenEnabled) add(LINE_SHARPEN_SHADER)
@@ -27,7 +30,7 @@ internal object AnimeShaders {
         val directory = File(context.filesDir, ASSET_DIR)
         return names.mapNotNull { name ->
             runCatching {
-                val bytes = context.assets.open("$ASSET_DIR/$name").use { it.readBytes() }
+                val bytes = shaderSource(context, name).toByteArray()
                 directory.mkdirs()
                 val file = File(directory, name)
                 if (!file.exists() || !file.readBytes().contentEquals(bytes)) {
@@ -46,8 +49,7 @@ internal object AnimeShaders {
         if (names.isEmpty()) return emptyList()
         return runCatching {
             val passes = names.flatMap { name ->
-                val source = context.assets.open("$ASSET_DIR/$name").bufferedReader().use { it.readText() }
-                MpvUserShaderParser.parse(source)
+                MpvUserShaderParser.parse(shaderSource(context, name))
             }
             val (longSide, shortSide) = displaySize(context)
             listOf<Effect>(
@@ -60,6 +62,20 @@ internal object AnimeShaders {
         }.onFailure { error ->
             Log.w(TAG, "Unable to prepare anime shaders for ExoPlayer", error)
         }.getOrDefault(emptyList())
+    }
+
+    private fun shaderSource(context: Context, name: String): String {
+        val source = context.assets.open("$ASSET_DIR/$name").bufferedReader().use { it.readText() }
+        return if (name == UPSCALE_SHADER) withMinimumUpscaleTarget(source) else source
+    }
+
+    fun withMinimumUpscaleTarget(source: String): String {
+        val long = MINIMUM_UPSCALE_LONG_SIDE
+        val short = MINIMUM_UPSCALE_SHORT_SIDE
+        val condition = "$UPSCALE_CONDITION " +
+            "$long MAIN.w / 1.200 > $short MAIN.h / 1.200 > * + " +
+            "$short MAIN.w / 1.200 > $long MAIN.h / 1.200 > * + 0 >"
+        return source.replace(UPSCALE_CONDITION + "\n", condition + "\n")
     }
 
     private fun displaySize(context: Context): Pair<Int, Int> {

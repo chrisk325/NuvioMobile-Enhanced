@@ -44,11 +44,23 @@ internal class AnimeShaderEffect(
             displayShortSide: Int,
         ): MpvShaderPlan {
             val input = MpvTextureSize(inputWidth, inputHeight)
-            return MpvUserShaderParser.plan(
+            val plan = MpvUserShaderParser.plan(
                 passes = passes,
                 input = input,
                 output = fitToDisplay(input, displayLongSide, displayShortSide),
             )
+            val target = targetSize(input, displayLongSide, displayShortSide)
+            val output = plan.outputSize
+            val upscaledPastTarget = output.width > input.width &&
+                (output.width > target.width || output.height > target.height)
+            if (!upscaledPastTarget) return plan
+            return plan.copy(outputSize = if (target.width >= input.width) target else input)
+        }
+
+        fun targetSize(input: MpvTextureSize, displayLongSide: Int, displayShortSide: Int): MpvTextureSize {
+            val display = fitToDisplay(input, displayLongSide, displayShortSide)
+            val minimum = fitToDisplay(input, AnimeShaders.MINIMUM_UPSCALE_LONG_SIDE, AnimeShaders.MINIMUM_UPSCALE_SHORT_SIDE)
+            return if (minimum.width.toLong() * minimum.height > display.width.toLong() * display.height) minimum else display
         }
 
         fun fitToDisplay(input: MpvTextureSize, displayLongSide: Int, displayShortSide: Int): MpvTextureSize {
@@ -84,6 +96,7 @@ private class AnimeShaderProgram(
         val samplerLocations: List<Int>,
         val sizeLocations: List<Int>,
         val ptLocations: List<Int>,
+        val tapOffsetLocation: Int,
     )
 
     private class Target(val texId: Int, val fboId: Int, val size: MpvTextureSize)
@@ -123,10 +136,13 @@ private class AnimeShaderProgram(
                     }
                 }
                 candidate.passes.forEachIndexed { index, planned ->
-                    targets += if (index == candidate.passes.lastIndex && planned.target == MAIN) {
+                    val writesOutput = index == candidate.passes.lastIndex &&
+                        planned.target == MAIN &&
+                        planned.size == candidate.outputSize
+                    targets += if (writesOutput) {
                         null
                     } else {
-                        val texId = GlUtil.createTexture(planned.size.width, planned.size.height, true)
+                        val texId = GlUtil.createTexture(planned.size.width, planned.size.height, planned.target != MAIN)
                         Target(texId = texId, fboId = GlUtil.createFboForTexture(texId), size = planned.size)
                     }
                 }
@@ -140,7 +156,7 @@ private class AnimeShaderProgram(
         }
         if (copyPass == null) {
             copyPass = try {
-                compile(COPY_VERTEX_SHADER, COPY_FRAGMENT_SHADER, listOf(MAIN))
+                compile(COPY_VERTEX_SHADER, RESAMPLE_FRAGMENT_SHADER, listOf(MAIN))
             } catch (error: IllegalStateException) {
                 throw VideoFrameProcessingException(error)
             }
@@ -170,8 +186,14 @@ private class AnimeShaderProgram(
             }
             if (!mainWrittenToOutput) {
                 val main = textures.getValue(MAIN)
-                GlUtil.focusFramebufferUsingCurrentContext(outputFbo[0], main.second.width, main.second.height)
-                draw(checkNotNull(copyPass), listOf(main))
+                val output = plan.outputSize
+                GlUtil.focusFramebufferUsingCurrentContext(outputFbo[0], output.width, output.height)
+                val tapOffset = if (main.second == output) {
+                    0f to 0f
+                } else {
+                    0.25f / output.width.toFloat() to 0.25f / output.height.toFloat()
+                }
+                draw(checkNotNull(copyPass), listOf(main), tapOffset)
             }
             GlUtil.checkGlError()
         } catch (error: GlUtil.GlException) {
@@ -200,8 +222,15 @@ private class AnimeShaderProgram(
         targets.clear()
     }
 
-    private fun draw(pass: CompiledPass, inputs: List<Pair<Int, MpvTextureSize>>) {
+    private fun draw(
+        pass: CompiledPass,
+        inputs: List<Pair<Int, MpvTextureSize>>,
+        tapOffset: Pair<Float, Float> = 0f to 0f,
+    ) {
         GLES20.glUseProgram(pass.program)
+        if (pass.tapOffsetLocation >= 0) {
+            GLES20.glUniform2f(pass.tapOffsetLocation, tapOffset.first, tapOffset.second)
+        }
         GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, 0)
         inputs.forEachIndexed { unit, (texId, size) ->
             GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + unit)
@@ -244,6 +273,7 @@ private class AnimeShaderProgram(
             samplerLocations = binds.map { GLES20.glGetUniformLocation(program, "${it}_raw") },
             sizeLocations = binds.map { GLES20.glGetUniformLocation(program, "${it}_size") },
             ptLocations = binds.map { GLES20.glGetUniformLocation(program, "${it}_pt") },
+            tapOffsetLocation = GLES20.glGetUniformLocation(program, "uTapOffset"),
         )
     }
 
@@ -290,15 +320,20 @@ private class AnimeShaderProgram(
             "    gl_Position = vec4(aPosition, 0.0, 1.0);\n" +
             "}\n"
 
-        const val COPY_FRAGMENT_SHADER = "#ifdef GL_FRAGMENT_PRECISION_HIGH\n" +
+        const val RESAMPLE_FRAGMENT_SHADER = "#ifdef GL_FRAGMENT_PRECISION_HIGH\n" +
             "precision highp float;\n" +
             "#else\n" +
             "precision mediump float;\n" +
             "#endif\n" +
             "varying vec2 vTexCoord;\n" +
             "uniform sampler2D MAIN_raw;\n" +
+            "uniform vec2 uTapOffset;\n" +
             "void main() {\n" +
-            "    gl_FragColor = texture2D(MAIN_raw, vTexCoord);\n" +
+            "    gl_FragColor = 0.25 * (\n" +
+            "        texture2D(MAIN_raw, vTexCoord + vec2(-uTapOffset.x, -uTapOffset.y)) +\n" +
+            "        texture2D(MAIN_raw, vTexCoord + vec2(uTapOffset.x, -uTapOffset.y)) +\n" +
+            "        texture2D(MAIN_raw, vTexCoord + vec2(-uTapOffset.x, uTapOffset.y)) +\n" +
+            "        texture2D(MAIN_raw, vTexCoord + vec2(uTapOffset.x, uTapOffset.y)));\n" +
             "}\n"
     }
 }
