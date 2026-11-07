@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.63",
+          "buildVersion": "189",
+          "date": "2026-11-07T16:24:19Z",
+          "localizedDescription": "- [feat(player): add Anime4K 2x upscaler and line sharpener for ExoPlaye… (#47)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/47) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.63-beta/nuvio-0.9.63-enhanced-release.ipa",
+          "size": 74948587,
+          "sha256": "6c4341f81e28c09bec5a5bd080a6256e49da3dd40db9dc5233f1fe9a2f3289e5",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.9.62",
           "buildVersion": "186",
           "date": "2026-11-07T03:17:43Z",
