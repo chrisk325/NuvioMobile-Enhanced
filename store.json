@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.68",
+          "buildVersion": "193",
+          "date": "2026-11-10T09:12:25Z",
+          "localizedDescription": "- 170fa4f34 update repo @chrisk325  \n- [migrate simkl oauth v1 to v2 (#49)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/49) @chrisk325  \n- c27e0c4b6 Delete .github/workflows/discontinue-legacy-main.yml @chrisk325  \n- [feature/subtitle shadow outline blur (#356)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/356) @3l-franco  \n- 1b60c0a94 perf(ios): free more app memory before playback on iPhones @luqmanfadlli  \n- b147e233a perf(ios): lighter mpv setup under the iPhone jetsam limit @luqmanfadlli  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.68-beta/nuvio-0.9.68-enhanced-release.ipa",
+          "size": 75403621,
+          "sha256": "f8a53d9fc3bc9d9aa6e14868437290dc4069fa98ac1ed015804af1f8d47deb1c",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.6.10",
           "buildVersion": "153",
           "date": "2026-11-09T07:10:24Z",
