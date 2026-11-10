@@ -166,7 +166,10 @@ jobs:
             fi
             echo "Release notes start after the given commit ${notes_from}."
           else
-            notes_from="$(git log "${notes_to}" -n 1 --format=%H --grep='^chore(store): publish ')"
+            # --first-parent: only this branch's own publish commits count. Upstream merges bring in
+            # upstream's publish commits, which would otherwise pull every fork-only commit since
+            # the branches diverged into the notes (and one slow GitHub API lookup per commit).
+            notes_from="$(git log --first-parent "${notes_to}" -n 1 --format=%H --grep='^chore(store): publish ')"
             if [[ -n "${notes_from}" ]]; then
               echo "Release notes start after the last store publish commit ${notes_from}."
             else
