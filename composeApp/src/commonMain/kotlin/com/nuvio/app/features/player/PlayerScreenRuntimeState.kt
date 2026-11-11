@@ -118,8 +118,7 @@ internal class PlayerScreenRuntime(
     var showRemainingTime by mutableStateOf(false)
     var playerControlsLocked by mutableStateOf(false)
     private val shouldResolveInitialPlayerQuality: Boolean
-        get() = !isLiveTvPlayback &&
-            torrentInfoHash == null &&
+        get() = torrentInfoHash == null &&
             sourceAudioUrl == null &&
             sourceUrl.contains(".m3u8", ignoreCase = true)
 
