@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.72",
+          "buildVersion": "197",
+          "date": "2026-11-11T06:16:03Z",
+          "localizedDescription": "- [fix live tv showing a black screen and buffering endlessly (#61)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/61) @chrisk325  \n- [Revert \"fix some live tv channels not playing or playing only audio (\" (#60)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/60) @chrisk325  \n- [revert (#59)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/59) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.72-beta/nuvio-0.9.72-enhanced-release.ipa",
+          "size": 75453592,
+          "sha256": "2d0d2d1d56a6d3185973b6f5b7f0c70a44b433676400a003be6ecd89e1375d02",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.9.71",
           "buildVersion": "196",
           "date": "2026-11-11T04:06:29Z",
