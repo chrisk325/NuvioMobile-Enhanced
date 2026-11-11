@@ -65,7 +65,6 @@ actual fun PlatformPlayerSurface(
     animeContent: Boolean,
     useNativeController: Boolean,
     discPlaybackEnabled: Boolean,
-    liveStream: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,

@@ -125,7 +125,6 @@ expect fun PlatformPlayerSurface(
     animeContent: Boolean = false,
     useNativeController: Boolean = false,
     discPlaybackEnabled: Boolean = false,
-    liveStream: Boolean = false,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit = { _, _ -> },
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
