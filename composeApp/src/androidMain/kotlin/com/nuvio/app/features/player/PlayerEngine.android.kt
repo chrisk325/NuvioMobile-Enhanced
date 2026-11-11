@@ -159,7 +159,6 @@ actual fun PlatformPlayerSurface(
     animeContent: Boolean,
     useNativeController: Boolean,
     discPlaybackEnabled: Boolean,
-    liveStream: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -204,7 +203,7 @@ actual fun PlatformPlayerSurface(
     }
 
     val requestedEngine = playbackEngine ?: playerSettings.androidPlaybackEngine
-    var activeEngine by remember(playerSourceKey, requestedEngine) {
+    val activeEngine by remember(playerSourceKey, requestedEngine) {
         mutableStateOf(requestedEngine.initialAndroidEngine())
     }
 
@@ -234,15 +233,6 @@ actual fun PlatformPlayerSurface(
             useNativeController = useNativeController,
             animeContent = animeContent,
             discPlaybackEnabled = discPlaybackEnabled,
-            liveStream = liveStream,
-            onLiveFallback = if (liveStream) {
-                {
-                    activeEngine = ResolvedAndroidPlaybackEngine.Libmpv
-                    surfaceOnError(null)
-                }
-            } else {
-                null
-            },
             onInitialPositionHandled = onInitialPositionHandled,
             onControllerReady = surfaceOnControllerReady,
             onSnapshot = surfaceOnSnapshot,
@@ -310,8 +300,6 @@ private fun ExoPlayerSurface(
     useNativeController: Boolean,
     animeContent: Boolean,
     discPlaybackEnabled: Boolean,
-    liveStream: Boolean,
-    onLiveFallback: (() -> Unit)?,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -434,12 +422,9 @@ private fun ExoPlayerSurface(
         resolvedMediaItem.isLocalFileSource()
     }
 
-    val extractorsFactory = remember(sourceUrl, liveStream) {
+    val extractorsFactory = remember(sourceUrl) {
         DefaultExtractorsFactory()
-            .setTsExtractorFlags(
-                DefaultTsPayloadReaderFactory.FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS or
-                    (if (liveStream) LIVE_TS_PAYLOAD_READER_FLAGS else 0),
-            )
+            .setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS)
             .setTsExtractorTimestampSearchBytes(1500 * TsExtractor.TS_PACKET_SIZE)
             .let { factory -> // AutoSync hook: no observation while disabled.
                 AutoSyncPreferencesRepository.ensureLoaded()
@@ -458,7 +443,6 @@ private fun ExoPlayerSurface(
         sanitizedSourceResponseHeaders,
         useYoutubeChunkedPlayback,
         externalSubtitles,
-        liveStream,
     ) {
         val loopbackSource = isLoopbackPlaybackSource(sourceUrl)
         PlatformPlaybackDataSourceFactory.create(
@@ -471,7 +455,7 @@ private fun ExoPlayerSurface(
         ).withPlaybackBuffering(
             context = context,
             settings = playerSettings,
-            bufferedUrls = if (liveStream || useYoutubeChunkedPlayback || isLoopbackPlaybackSource(sourceUrl)) {
+            bufferedUrls = if (useYoutubeChunkedPlayback || isLoopbackPlaybackSource(sourceUrl)) {
                 emptySet()
             } else {
                 listOfNotNull(sourceUrl, sourceAudioUrl?.takeIf { it.isNotBlank() })
@@ -536,13 +520,6 @@ private fun ExoPlayerSurface(
             } else {
                 setMediaSource(mergedSource)
             }
-        } else if (liveStream) {
-            setMediaSource(
-                AudioDelayMediaSource(
-                    createLiveTvMediaSource(dataSourceFactory, extractorsFactory, videoMediaItem),
-                    audioDelayUs::get,
-                ),
-            )
         } else if (startPositionMs != null) {
             setMediaItem(videoMediaItem, startPositionMs.coerceAtLeast(0L))
         } else {
@@ -774,9 +751,6 @@ private fun ExoPlayerSurface(
     }
 
     val exoMediaInfoCache = remember(exoPlayer) { ExoMediaInfoCache() }
-    val liveRecovery = remember(exoPlayer) {
-        if (liveStream) LivePlaybackRecovery(exoPlayer, coroutineScope, onLiveFallback) else null
-    }
 
     fun dispatchExoPlayerSnapshot() {
         val snapshot = exoPlayer.snapshot(
@@ -1023,10 +997,6 @@ private fun ExoPlayerSurface(
                 latestOnError.value(null)
                 return
             }
-            if (liveRecovery?.fallback("playback error ${error.errorCodeName}") == true) {
-                latestOnError.value(null)
-                return
-            }
             InAppLogger.error(
                 "ExoPlayer/Android",
                 "Playback error code=${error.errorCodeName} message=${error.localizedMessage ?: error.message ?: "unknown"} " +
@@ -1055,11 +1025,6 @@ private fun ExoPlayerSurface(
                         "causeChain=${diagnosticThrowableChain(error)}",
                     error,
                 )
-
-                if (liveRecovery?.onError(error) == true) {
-                    latestOnError.value(null)
-                    return
-                }
 
                 if (bluraySession?.isExtraPlaying == true) {
                     InAppLogger.warn(
@@ -1100,8 +1065,7 @@ private fun ExoPlayerSurface(
 
                 val isSourceError = error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW ||
                         error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
-                        error.cause?.toString()?.contains("UnrecognizedInputFormatException") == true ||
-                        (liveStream && error.errorCode in LIVE_PROBE_ERROR_CODES)
+                        error.cause?.toString()?.contains("UnrecognizedInputFormatException") == true
 
                 val discSession = bluraySession
                 val isContainerError = error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
@@ -1135,7 +1099,7 @@ private fun ExoPlayerSurface(
                         val probedMime = withContext(Dispatchers.IO) {
                             probeMimeType(sourceUrl, sanitizedSourceHeaders)
                         }
-                        if (probedMime != null && probedMime != resolvedMediaItem.localConfiguration?.mimeType) {
+                        if (probedMime != null) {
                             Log.d(TAG, "Playback failed with source error. Probed MIME type: $probedMime. Retrying...")
                             InAppLogger.warn(
                                 "ExoPlayer/Android",
@@ -1181,10 +1145,6 @@ private fun ExoPlayerSurface(
                     syncPlayerViewKeepScreenOn()
                     return
                 }
-                if (playbackState == Player.STATE_ENDED && liveRecovery?.onEnded() == true) {
-                    syncPlayerViewKeepScreenOn()
-                    return
-                }
                 if (playbackState == Player.STATE_READY) {
                     fallbackStartPositionMs = null
                     stallSession.onReady()
@@ -1202,7 +1162,6 @@ private fun ExoPlayerSurface(
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 InAppLogger.debug("ExoPlayer/Android", "isPlaying=$isPlaying")
-                liveRecovery?.onPlayingChanged(isPlaying)
                 Log.i(
                     PLAYER_DIAGNOSTIC_TAG,
                     "isPlaying=$isPlaying attempt=${playbackDiagnostics.attempt} " +
@@ -1214,7 +1173,6 @@ private fun ExoPlayerSurface(
             }
 
             override fun onRenderedFirstFrame() {
-                liveRecovery?.onFirstFrameRendered()
                 InAppLogger.info(
                     "ExoPlayer/Android",
                     "firstFrame attempt=${playbackDiagnostics.attempt} " +
@@ -1263,7 +1221,6 @@ private fun ExoPlayerSurface(
                 InAppLogger.info("ExoPlayer/Android", "tracksChanged groups=${tracks.groups.size}")
                 exoPlayer.logCurrentTracks("onTracksChanged")
                 exoPlayer.logSelectedPlaybackDetails("onTracksChanged")
-                liveRecovery?.onTracksChanged(tracks)
                 pendingAudioTrackSelection.firstOrNull()?.let { selection ->
                     if (tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO }) {
                         pendingAudioTrackSelection.clear()
@@ -1391,7 +1348,6 @@ private fun ExoPlayerSurface(
         exoPlayer.addAnalyticsListener(analyticsListener)
         onDispose {
             PlayerPictureInPictureManager.registerPausePlaybackCallback(null)
-            liveRecovery?.release()
             exoPlayer.removeListener(listener)
             exoPlayer.removeAnalyticsListener(analyticsListener)
             playerViewRef?.keepScreenOn = false
@@ -3754,13 +3710,6 @@ private fun ExoPlayer.restoreTrackSelection(selection: TrackSelectionSnapshot): 
 
     return selectTrackByIndex(selection.trackType, selection.index)
 }
-
-private val LIVE_PROBE_ERROR_CODES = setOf(
-    PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
-    PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
-    PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
-    PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
-)
 
 private fun PlaybackException.isDecoderFailure(): Boolean =
     errorCode in setOf(
