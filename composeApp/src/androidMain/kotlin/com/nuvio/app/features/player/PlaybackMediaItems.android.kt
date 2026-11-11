@@ -305,7 +305,7 @@ internal fun probeMimeType(url: String, headers: Map<String, String>): String? {
             mimeProbeHttpClient.newCall(request).execute().use { response ->
                 if (response.code !in 200..299) return@use null
                 normalizeMimeType(response.header("Content-Type"))
-                    ?: if (method == "GET") response.body?.byteStream()?.use { mimeTypeFromRemoteHeader(it.readHeaderBytes()) } else null
+                    ?: if (method == "GET") response.body.byteStream().use { mimeTypeFromRemoteHeader(it.readHeaderBytes()) } else null
             }
         }.getOrNull()?.let { return it }
     }
