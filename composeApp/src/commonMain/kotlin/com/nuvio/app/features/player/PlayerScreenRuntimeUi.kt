@@ -172,9 +172,13 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
         val resolvingTorrentInfoHash = activeTorrentInfoHash
 
         selectedPlayerQualityId = null
-        val shouldInspectHls = !isLiveTvPlayback &&
-            activeTorrentInfoHash == null &&
+        // A live channel plays its master playlist as it is, as Nuvio TV plays it: a single pinned
+        // variant (the highest by default) cannot drop quality when the connection is slower, so it
+        // buffers without end, and only the player resolves variant links against the playlist's
+        // address after a redirect.
+        val shouldInspectHls = activeTorrentInfoHash == null &&
             activeSourceAudioUrl == null &&
+            !isLiveTvPlayback &&
             activeSourceUrl.contains(".m3u8", ignoreCase = true)
         activePlaybackSourceUrl = if (shouldInspectHls) null else activeSourceUrl
         playerQualityState = PlayerQualitySelectionState(

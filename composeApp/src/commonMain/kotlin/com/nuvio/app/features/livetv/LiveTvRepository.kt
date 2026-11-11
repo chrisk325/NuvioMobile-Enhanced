@@ -736,7 +736,8 @@ internal fun parseM3uPlaylist(
                         group = info?.group?.takeIf(String::isNotBlank),
                         playlistId = playlist?.id,
                         playlistName = playlist?.name,
-                        headers = pendingHeaders.toMap(),
+                        // The playlist's own headers win; otherwise the channel opens as VLC does.
+                        headers = defaultLiveTvStreamHeaders(streamUrl) + pendingHeaders,
                         streamType = pendingStreamType,
                         epgId = info?.epgId?.takeIf(String::isNotBlank),
                     )

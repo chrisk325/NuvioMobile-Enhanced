@@ -367,6 +367,7 @@ private fun PlayerScreenRuntime.switchToPreparedLiveChannel(channel: LiveTvChann
     }
     stopActiveP2pStream()
     activeSourceUrl = channel.streamUrl
+    // Live channels are never inspected for HLS variants (see PlayerScreenRuntimeUi).
     activePlaybackSourceUrl = channel.streamUrl
     activeSourceAudioUrl = null
     activeSourceHeaders = sanitizePlaybackHeaders(channel.headers)
