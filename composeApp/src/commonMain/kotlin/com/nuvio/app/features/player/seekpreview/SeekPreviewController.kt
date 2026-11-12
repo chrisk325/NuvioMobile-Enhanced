@@ -41,7 +41,6 @@ private const val WarmUpDelayMs = 1_200L
 private const val IdleReleaseMs = 30_000L
 
 private const val ThumbnailAskMs = 80L
-private const val ThumbnailIndexMs = 5_000L
 private const val ThumbnailFallbackMs = 15_000L
 
 private const val LogTag = "Player/SeekPreview"
@@ -80,6 +79,7 @@ internal class SeekPreviewController(
     private var feedAskJob: Job? = null
     private var feedDurationMs = 0L
     private var feedFallbackJob: Job? = null
+    private var feedWarming = false
     private var disposed = false
 
     var frame by mutableStateOf<SeekPreviewFrame?>(null)
@@ -114,10 +114,12 @@ internal class SeekPreviewController(
     fun warmUp(positionMs: Long, durationMs: Long) {
         if (isUnavailable || durationMs <= 0L || scrubbing) return
         if (openFeed() != null) {
-            if (warmJob?.isActive == true) return
+            warmJob?.cancel()
             warmJob = scope.launch {
-                delay(ThumbnailIndexMs)
-                feed?.prepare()
+                if (!hasSucceeded) delay(WarmUpDelayMs)
+                if (scrubbing) return@launch
+                feedWarming = true
+                feed?.want(positionMs.coerceIn(0L, durationMs), frame?.positionMs)
             }
             return
         }
@@ -206,7 +208,8 @@ internal class SeekPreviewController(
         }
         hasSucceeded = true
         feedFallbackJob?.cancel()
-        if (feedWanted == null) return
+        if (feedWanted == null && !feedWarming) return
+        feedWarming = false
         frame = SeekPreviewFrame(positionMs, bitmap)
     }
 
