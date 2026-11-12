@@ -35,6 +35,11 @@ on:
         description: Optional commit to start the release notes after (default - the last "chore(store) publish" commit on this branch)
         required: false
         type: string
+      allow_no_changes:
+        description: Release even when no commits since the last release need notes (a rebuild with no app changes)
+        required: false
+        type: boolean
+        default: false
       ios_disable_phases:
         description: "iOS Release: Kotlin/Native phases to skip."
         required: false
@@ -145,6 +150,7 @@ jobs:
           PREVIOUS_BUMP: ${{ steps.release.outputs.previous_bump }}
           EXCLUDE_COMMITS: ${{ inputs.exclude_commits }}
           NOTES_FROM: ${{ inputs.notes_from }}
+          ALLOW_NO_CHANGES: ${{ inputs.allow_no_changes }}
           UPSTREAM_URL: https://github.com/NuvioMedia/NuvioMobile.git
           UPSTREAM_BRANCH: cmp-rewrite
         run: |
@@ -186,8 +192,13 @@ jobs:
             > release-notes.md
 
           if [[ ! -s release-notes.md ]]; then
-            echo "No release-note commits were found." >&2
-            exit 1
+            if [[ "${ALLOW_NO_CHANGES}" != "true" ]]; then
+              echo "No release-note commits were found since ${notes_from}." >&2
+              echo "Nothing new would ship in this release. Merge a change first, or re-run with 'allow_no_changes' checked to publish a rebuild." >&2
+              exit 1
+            fi
+            echo "::warning::No release-note commits were found since ${notes_from}; publishing a rebuild with no app changes."
+            printf -- '- Rebuild with no app changes since the previous release.  \n' > release-notes.md
           fi
 
           {

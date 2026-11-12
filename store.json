@@ -20,6 +20,26 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.72",
+          "buildVersion": "197",
+          "date": "2026-11-11T06:16:03Z",
+          "localizedDescription": "- [fix live tv showing a black screen and buffering endlessly (#61)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/61) @chrisk325  \n- [Revert \"fix some live tv channels not playing or playing only audio (\" (#60)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/60) @chrisk325  \n- [revert (#59)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/59) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.72-beta/nuvio-0.9.72-enhanced-release.ipa",
+          "size": 75453592,
+          "sha256": "2d0d2d1d56a6d3185973b6f5b7f0c70a44b433676400a003be6ecd89e1375d02",
+          "minOSVersion": "16.1"
+        },
+        {
+          "version": "0.9.71",
+          "buildVersion": "196",
+          "date": "2026-11-11T04:06:29Z",
+          "localizedDescription": "- [fix some live tv channels not playing or playing only audio (#56)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/56) @chrisk325  \n- [Revert \"Fix Live TV playback: source errors and black screen with audio\" (#55)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/55) @chrisk325  \n- b60a9beb6 Update repo @chrisk325  \n- [Fix Live TV playback: source errors and black screen with audio (#54)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/54) @chrisk325  \n- eede2d39f Delete .github/workflows/discontinue-legacy-main.yml @chrisk325  \n- [raw bluray files compatibility for exoplayer (#52)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/52) @chrisk325  \n- [migrate simkl oauth v1 to v2 (#359)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/359) @chrisk325  \n- [migrate simkl oauth v1 to v2 (#48)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/48) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.71-beta/nuvio-0.9.71-enhanced-release.ipa",
+          "size": 75452508,
+          "sha256": "cd2094dfd59f146aa322db06485d0f29e47175f241408fdd9ac1d456fe4df5a6",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.6.11",
           "buildVersion": "154",
           "date": "2026-11-10T08:54:47Z",
