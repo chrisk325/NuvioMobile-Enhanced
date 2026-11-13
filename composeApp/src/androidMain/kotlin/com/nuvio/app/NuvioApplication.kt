@@ -19,6 +19,7 @@ import com.nuvio.app.core.poster.CustomPosterFallbackInterceptor
 import com.nuvio.app.core.cache.AppImageLoaderComponents
 import com.nuvio.app.core.cache.CacheSettingsStorage
 import com.nuvio.app.core.cache.ContentCacheStrategy
+import com.nuvio.app.features.servers.plex.PlexArtworkInterceptor
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 
@@ -53,6 +54,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
 
     private fun ComponentRegistry.Builder.addAppImageComponents() {
         add(CustomPosterFallbackInterceptor())
+        add(PlexArtworkInterceptor())
         add(SvgDecoder.Factory())
         add(imageNetworkFetcherFactory)
         if (Build.VERSION.SDK_INT >= 28) {
