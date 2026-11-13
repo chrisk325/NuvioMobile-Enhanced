@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.78",
+          "buildVersion": "203",
+          "date": "2026-11-13T03:18:11Z",
+          "localizedDescription": "- d7f7b663e upstream @chrisk325  \n- [fix seekbar thumbnails taking a lot pf time to load (#380)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/380) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.78-beta/nuvio-0.9.78-enhanced-release.ipa",
+          "size": 75550659,
+          "sha256": "6728e1400073fe9548a624376f8df2054a8e05376941984f84794821fae91bc9",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.6.12",
           "buildVersion": "155",
           "date": "2026-11-13T01:28:27Z",
