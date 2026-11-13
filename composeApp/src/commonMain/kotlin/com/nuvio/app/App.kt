@@ -18,6 +18,7 @@ import com.nuvio.app.core.ui.NuvioTheme
 import com.nuvio.app.core.ui.configurePlatformImageLoader
 import com.nuvio.app.core.ui.platformProvidesImageLoader
 import com.nuvio.app.features.servers.plex.PlexArtworkInterceptor
+import com.nuvio.app.features.servers.silo.SiloArtworkInterceptor
 import com.nuvio.app.features.settings.ThemeSettingsRepository
 import com.nuvio.app.navigation.AppRoute
 import com.nuvio.app.navigation.TabsRoute
@@ -92,6 +93,7 @@ internal fun AppEnvironment(
             val addAppImageComponents: coil3.ComponentRegistry.Builder.() -> Unit = {
                 add(CustomPosterFallbackInterceptor())
                 add(PlexArtworkInterceptor())
+                add(SiloArtworkInterceptor())
                 add(SvgDecoder.Factory())
                 add(networkFetcherFactory)
             }
