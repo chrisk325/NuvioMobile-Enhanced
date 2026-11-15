@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.80",
+          "buildVersion": "205",
+          "date": "2026-11-15T07:18:27Z",
+          "localizedDescription": "- [fix(streams): blend episode header artwork smoothly into background (#71)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/71) @chrisk325  \n- dcf4c5a49 upstream @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.80-beta/nuvio-0.9.80-enhanced-release.ipa",
+          "size": 75643908,
+          "sha256": "1b3501c6508975e03d046591861ecd983f7ef8d9f503311ba48cab347f0528cc",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.6.13",
           "buildVersion": "156",
           "date": "2026-11-15T02:58:11Z",
