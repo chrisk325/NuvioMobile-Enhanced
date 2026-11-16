@@ -871,6 +871,7 @@ internal fun settingsSearchEntries(
         PlaybackSearchRow("background-cache", stringResource(Res.string.settings_background_cache_enabled), stringResource(Res.string.settings_background_cache_description)),
         PlaybackSearchRow("metadata-cache", stringResource(Res.string.settings_metadata_cache_enabled), stringResource(Res.string.settings_metadata_cache_description)),
         PlaybackSearchRow("cache-refresh", stringResource(Res.string.settings_cache_refresh), stringResource(Res.string.settings_cache_refresh_hint)),
+        PlaybackSearchRow("cache-max-storage", stringResource(Res.string.settings_cache_max_storage), stringResource(Res.string.settings_cache_max_storage_hint)),
         PlaybackSearchRow("cache-clear-all", stringResource(Res.string.settings_cache_clear_all)),
     ).forEach { row ->
         addRow(

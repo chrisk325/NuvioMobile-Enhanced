@@ -67,6 +67,7 @@ import com.nuvio.app.core.ui.CardDepthStyleUiState
 import com.nuvio.app.core.poster.CustomPosterUrlRepository
 import com.nuvio.app.core.cache.CacheSettingsRepository
 import com.nuvio.app.core.cache.CacheType
+import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.cache.ImageCache
 import com.nuvio.app.core.cache.MetadataCache
 import coil3.PlatformContext
@@ -174,6 +175,8 @@ import nuvio.composeapp.generated.resources.settings_cache_refresh
 import nuvio.composeapp.generated.resources.settings_cache_refresh_hint
 import nuvio.composeapp.generated.resources.settings_cache_refresh_hours
 import nuvio.composeapp.generated.resources.settings_cache_size
+import nuvio.composeapp.generated.resources.settings_cache_max_storage
+import nuvio.composeapp.generated.resources.settings_cache_max_storage_hint
 import nuvio.composeapp.generated.resources.settings_cache_size_calculating
 import nuvio.composeapp.generated.resources.settings_content_cache_description
 import nuvio.composeapp.generated.resources.settings_content_cache_title
@@ -412,6 +415,7 @@ private fun ContentCacheSettingsSection(isTablet: Boolean) {
                     sizeRefreshKey = sizeRefreshKey,
                     onCleared = { sizeRefreshKey += 1 },
                 )
+                MaxCacheStorageControls()
                 if (postersEnabled || backgroundsEnabled || metadataEnabled) {
                     PosterStyleOptionRow(
                         title = stringResource(Res.string.settings_cache_refresh),
@@ -447,6 +451,79 @@ private fun ContentCacheSettingsSection(isTablet: Boolean) {
     }
 }
 
+/** Formats a storage size given in MB as e.g. "512 MB", "1.25 GB" or "5 GB". */
+private fun formatStorageMb(mb: Int): String {
+    if (mb < 1024) return "$mb ${localizedByteUnit("MB")}"
+    val hundredths = mb * 100 / 1024
+    val whole = hundredths / 100
+    val fraction = hundredths % 100
+    val number = when {
+        fraction == 0 -> "$whole"
+        fraction % 10 == 0 -> "$whole.${fraction / 10}"
+        else -> "$whole.${fraction.toString().padStart(2, '0')}"
+    }
+    return "$number ${localizedByteUnit("GB")}"
+}
+
+@Composable
+private fun MaxCacheStorageControls() {
+    val maxStorageMb by remember {
+        CacheSettingsRepository.ensureLoaded()
+        CacheSettingsRepository.maxStorageMb
+    }.collectAsState()
+    // Follows the finger while dragging; the limit is only applied when the drag ends, because
+    // applying it reopens the image caches.
+    var draftMb by remember(maxStorageMb) { mutableFloatStateOf(maxStorageMb.toFloat()) }
+    val minMb = CacheSettingsRepository.MIN_MAX_STORAGE_MB
+    val maxMb = CacheSettingsRepository.MAX_MAX_STORAGE_MB
+    val stepMb = CacheSettingsRepository.MAX_STORAGE_STEP_MB
+    val shownMb = CacheSettingsRepository.normalizeMaxStorageMb(draftMb.roundToInt())
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = stringResource(
+                Res.string.settings_poster_option_with_value,
+                stringResource(Res.string.settings_cache_max_storage),
+                formatStorageMb(shownMb),
+            ),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Slider(
+            value = draftMb,
+            onValueChange = { draftMb = it },
+            valueRange = minMb.toFloat()..maxMb.toFloat(),
+            // One stop every 256 MB from 256 MB to 5 GB.
+            steps = (maxMb - minMb) / stepMb - 1,
+            onValueChangeFinished = {
+                CacheSettingsRepository.setMaxStorageMb(draftMb.roundToInt())
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = formatStorageMb(minMb),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = formatStorageMb(maxMb),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = stringResource(Res.string.settings_cache_max_storage_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Composable
 private fun ContentCacheTypeControls(
     type: CacheType,
@@ -461,6 +538,8 @@ private fun ContentCacheTypeControls(
     var cacheSizeBytes by remember(type) { mutableStateOf<Long?>(null) }
     var isClearing by remember(type) { mutableStateOf(false) }
     val clearedMessage = stringResource(Res.string.settings_cache_cleared)
+    val maxStorageMb by CacheSettingsRepository.maxStorageMb.collectAsState()
+    val limitBytes = remember(type, maxStorageMb) { CacheSettingsRepository.maxSizeBytes(type) }
 
     LaunchedEffect(type, sizeRefreshKey, enabled) {
         cacheSizeBytes = null
@@ -489,7 +568,7 @@ private fun ContentCacheTypeControls(
         ) {
             Text(
                 text = cacheSizeBytes?.let { bytes ->
-                    stringResource(Res.string.settings_cache_size, formatFileSize(bytes))
+                    stringResource(Res.string.settings_cache_size, formatFileSize(bytes), formatFileSize(limitBytes))
                 } ?: stringResource(Res.string.settings_cache_size_calculating),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
