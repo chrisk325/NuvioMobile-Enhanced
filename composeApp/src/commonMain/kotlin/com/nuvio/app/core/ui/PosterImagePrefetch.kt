@@ -13,6 +13,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.size.Size
 import com.nuvio.app.core.poster.CustomPosterFallbackInterceptor
+import com.nuvio.app.core.poster.rememberPosterImageLoader
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlin.math.min
@@ -51,14 +52,19 @@ internal data class PosterPrefetchTarget(
 internal fun PosterRowImagePrefetchEffect(
     state: LazyListState,
     targets: List<PosterPrefetchTarget?>,
+    usePosterCache: Boolean = false,
 ) {
     if (targets.isEmpty()) return
     val platformContext = LocalPlatformContext.current
     val density = LocalDensity.current
     val basePosterWidthDp = rememberPosterCardStyleUiState().widthDp
+    val imageLoader = if (usePosterCache) {
+        rememberPosterImageLoader()
+    } else {
+        SingletonImageLoader.get(platformContext)
+    }
 
-    LaunchedEffect(state, platformContext, density, basePosterWidthDp, targets) {
-        val imageLoader = SingletonImageLoader.get(platformContext)
+    LaunchedEffect(state, platformContext, density, basePosterWidthDp, targets, imageLoader) {
         val enqueued = HashSet<Int>()
         snapshotFlow { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .filter { it >= 0 }

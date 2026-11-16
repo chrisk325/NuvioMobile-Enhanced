@@ -28,6 +28,7 @@ fun HomeCatalogRowSection(
     onViewAllClick: (() -> Unit)? = null,
     onPosterClick: ((MetaPreview) -> Unit)? = null,
     onPosterLongClick: ((MetaPreview) -> Unit)? = null,
+    usePosterCache: Boolean = false,
 ) {
     if (sectionPadding != null) {
         HomeCatalogRowSectionContent(
@@ -40,6 +41,7 @@ fun HomeCatalogRowSection(
             onViewAllClick = onViewAllClick,
             onPosterClick = onPosterClick,
             onPosterLongClick = onPosterLongClick,
+            usePosterCache = usePosterCache,
         )
     } else {
         BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
@@ -53,6 +55,7 @@ fun HomeCatalogRowSection(
                 onViewAllClick = onViewAllClick,
                 onPosterClick = onPosterClick,
                 onPosterLongClick = onPosterLongClick,
+                usePosterCache = usePosterCache,
             )
         }
     }
@@ -69,6 +72,7 @@ private fun HomeCatalogRowSectionContent(
     onViewAllClick: (() -> Unit)?,
     onPosterClick: ((MetaPreview) -> Unit)?,
     onPosterLongClick: ((MetaPreview) -> Unit)?,
+    usePosterCache: Boolean,
 ) {
     val posterCardStyle = rememberPosterCardStyleUiState()
     val rowState = rememberLazyListState()
@@ -78,7 +82,7 @@ private fun HomeCatalogRowSectionContent(
                 .toPrefetchTarget()
         }
     }
-    PosterRowImagePrefetchEffect(state = rowState, targets = prefetchTargets)
+    PosterRowImagePrefetchEffect(state = rowState, targets = prefetchTargets, usePosterCache = usePosterCache)
 
     NuvioShelfSection(
         title = section.title,
@@ -101,6 +105,7 @@ private fun HomeCatalogRowSectionContent(
             ),
             onClick = onPosterClick?.let { { it(item) } },
             onLongClick = onPosterLongClick?.let { { it(item) } },
+            usePosterCache = usePosterCache,
         )
     }
 }

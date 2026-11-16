@@ -73,6 +73,9 @@ import com.nuvio.app.features.home.components.HomeEmptyStateCard
 import com.nuvio.app.features.home.components.homeSectionHorizontalPaddingForWidth
 import com.nuvio.app.features.home.components.HomeSkeletonRow
 import com.nuvio.app.features.home.components.rememberPosterGridColumnCount
+import com.nuvio.app.features.home.components.toPosterCacheTargets
+import com.nuvio.app.core.poster.PosterCachePrefetchEffect
+import com.nuvio.app.core.poster.PosterCacheTarget
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.watched.WatchedRepository
 import kotlinx.coroutines.delay
@@ -247,8 +250,25 @@ fun SearchScreen(
     BoxWithConstraints(
         modifier = modifier.fillMaxSize(),
     ) {
-        val discoverPosterSize = rememberPosterCardStyleUiState().discoverPosterSize
+        val posterCardStyle = rememberPosterCardStyleUiState()
+        val discoverPosterSize = posterCardStyle.discoverPosterSize
         val discoverColumns = discoverPosterSize.columnsFor(rememberPosterGridColumnCount(maxWidth))
+        // Poster cache: download every poster listed in search results and Discover, not just
+        // the visible ones (no-op while the poster cache is disabled).
+        val searchPosterCacheTargets = remember(uiState.sections, posterCardStyle) {
+            uiState.sections.flatMap { section -> section.items }.toPosterCacheTargets(posterCardStyle)
+        }
+        PosterCachePrefetchEffect(searchPosterCacheTargets)
+        val discoverPosterCacheTargets = remember(discoverUiState.items) {
+            discoverUiState.items.mapNotNull { item ->
+                val poster = item.poster?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                PosterCacheTarget(
+                    imageUrl = poster,
+                    fallbackImageUrl = item.rawPosterUrl?.takeIf { it.isNotBlank() && it != poster },
+                )
+            }
+        }
+        PosterCachePrefetchEffect(discoverPosterCacheTargets)
         val homeSectionPadding = remember(maxWidth) {
             homeSectionHorizontalPaddingForWidth(maxWidth.value)
         }
@@ -439,6 +459,7 @@ fun SearchScreen(
                                     fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
                                     onPosterClick = onPosterClick,
                                     onPosterLongClick = onPosterLongClick,
+                                    usePosterCache = true,
                                 )
                             }
                             if (uiState.isLoading) {

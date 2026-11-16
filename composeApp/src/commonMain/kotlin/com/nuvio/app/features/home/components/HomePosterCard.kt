@@ -3,6 +3,7 @@ package com.nuvio.app.features.home.components
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
+import com.nuvio.app.core.poster.PosterCacheTarget
 import com.nuvio.app.core.ui.NuvioPosterCard
 import com.nuvio.app.core.ui.NuvioPosterShape
 import com.nuvio.app.core.ui.PosterCardStyleUiState
@@ -20,6 +21,7 @@ fun HomePosterCard(
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     showLandscapeOverlay: Boolean = true,
+    usePosterCache: Boolean = false,
 ) {
     val posterCardStyle = rememberPosterCardStyleUiState()
     val isLandscapeMode = useLandscapeBackdropMode || posterCardStyle.catalogLandscapeModeEnabled
@@ -39,6 +41,7 @@ fun HomePosterCard(
         isWatched = isWatched,
         onClick = onClick,
         onLongClick = onLongClick,
+        usePosterCache = usePosterCache,
     )
 }
 
@@ -69,6 +72,19 @@ internal fun MetaPreview.homePosterImages(
         shape = if (isLandscapeMode) NuvioPosterShape.Landscape else posterShape.toNuvioPosterShape(),
     )
 }
+
+internal fun HomePosterImages.toPosterCacheTarget(): PosterCacheTarget? {
+    val url = imageUrl?.takeIf { it.isNotBlank() } ?: return null
+    val fallback = fallbackImageUrl?.takeIf { it.isNotBlank() && it != url }
+    return PosterCacheTarget(imageUrl = url, fallbackImageUrl = fallback)
+}
+
+/** Poster cache targets for every poster these items show as Home/Search poster cards. */
+internal fun List<MetaPreview>.toPosterCacheTargets(
+    posterCardStyle: PosterCardStyleUiState,
+    useLandscapeBackdropMode: Boolean = posterCardStyle.catalogLandscapeModeEnabled,
+): List<PosterCacheTarget> =
+    mapNotNull { item -> item.homePosterImages(posterCardStyle, useLandscapeBackdropMode).toPosterCacheTarget() }
 
 internal fun HomePosterImages.toPrefetchTarget(): PosterPrefetchTarget? {
     val url = imageUrl?.takeIf { it.isNotBlank() } ?: return null

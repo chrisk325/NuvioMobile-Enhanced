@@ -865,6 +865,22 @@ internal fun settingsSearchEntries(
         )
     }
 
+    val posterCacheSection = stringResource(Res.string.settings_poster_cache_title)
+    listOf(
+        PlaybackSearchRow("poster-cache", stringResource(Res.string.settings_poster_cache_enabled), stringResource(Res.string.settings_poster_cache_description)),
+        PlaybackSearchRow("poster-cache-refresh", stringResource(Res.string.settings_poster_cache_refresh), stringResource(Res.string.settings_poster_cache_refresh_hint)),
+        PlaybackSearchRow("poster-cache-clear", stringResource(Res.string.settings_poster_cache_clear)),
+    ).forEach { row ->
+        addRow(
+            page = SettingsPage.PosterCustomization,
+            key = "poster-${row.key}",
+            title = row.title,
+            description = row.description,
+            pageLabel = posterStylePage,
+            section = posterCacheSection,
+        )
+    }
+
     val cardDepthSection = stringResource(Res.string.settings_card_depth_title)
     listOf(
         PlaybackSearchRow("card-depth-effect", cardDepthSection, stringResource(Res.string.settings_card_depth_description)),

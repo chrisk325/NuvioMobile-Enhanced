@@ -33,11 +33,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -60,6 +64,14 @@ import com.nuvio.app.core.ui.Slider
 import com.nuvio.app.core.ui.CardDepthStyleRepository
 import com.nuvio.app.core.ui.CardDepthStyleUiState
 import com.nuvio.app.core.poster.CustomPosterUrlRepository
+import com.nuvio.app.core.poster.PosterCache
+import com.nuvio.app.core.poster.PosterCacheSettingsRepository
+import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.features.updater.formatFileSize
+import coil3.compose.LocalPlatformContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.nuvio.app.core.ui.DefaultCardDepthEdgeCoverage
 import com.nuvio.app.core.ui.DefaultCardDepthEdgeStrength
 import com.nuvio.app.core.ui.DefaultCardDepthSheenStrength
@@ -147,6 +159,16 @@ import nuvio.composeapp.generated.resources.settings_custom_poster_screen_collec
 import nuvio.composeapp.generated.resources.settings_custom_poster_screen_library
 import nuvio.composeapp.generated.resources.settings_custom_poster_screen_search
 import nuvio.composeapp.generated.resources.settings_custom_poster_screen_details
+import nuvio.composeapp.generated.resources.settings_poster_cache_clear
+import nuvio.composeapp.generated.resources.settings_poster_cache_cleared
+import nuvio.composeapp.generated.resources.settings_poster_cache_description
+import nuvio.composeapp.generated.resources.settings_poster_cache_enabled
+import nuvio.composeapp.generated.resources.settings_poster_cache_refresh
+import nuvio.composeapp.generated.resources.settings_poster_cache_refresh_hint
+import nuvio.composeapp.generated.resources.settings_poster_cache_refresh_hours
+import nuvio.composeapp.generated.resources.settings_poster_cache_size
+import nuvio.composeapp.generated.resources.settings_poster_cache_size_calculating
+import nuvio.composeapp.generated.resources.settings_poster_cache_title
 import org.jetbrains.compose.resources.stringResource
 
 internal fun LazyListScope.posterCustomizationSettingsContent(
@@ -279,6 +301,9 @@ internal fun LazyListScope.posterCustomizationSettingsContent(
         }
     }
     item {
+        PosterCacheSettingsSection(isTablet = isTablet)
+    }
+    item {
         CardDepthStyleRepository.ensureLoaded()
         val cardDepthState by CardDepthStyleRepository.uiState.collectAsState()
         SettingsSection(
@@ -296,6 +321,92 @@ internal fun LazyListScope.posterCustomizationSettingsContent(
                     isTablet = isTablet,
                     uiState = cardDepthState,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PosterCacheSettingsSection(isTablet: Boolean) {
+    val enabled by remember {
+        PosterCacheSettingsRepository.ensureLoaded()
+        PosterCacheSettingsRepository.enabled
+    }.collectAsState()
+    val refreshIntervalHours by PosterCacheSettingsRepository.refreshIntervalHours.collectAsState()
+    val platformContext = LocalPlatformContext.current
+    val scope = rememberCoroutineScope()
+    var sizeRefreshKey by remember { mutableIntStateOf(0) }
+    var cacheSizeBytes by remember { mutableStateOf<Long?>(null) }
+    var isClearing by remember { mutableStateOf(false) }
+    val clearedMessage = stringResource(Res.string.settings_poster_cache_cleared)
+
+    LaunchedEffect(sizeRefreshKey, enabled) {
+        cacheSizeBytes = null
+        cacheSizeBytes = withContext(Dispatchers.Default) { PosterCache.sizeBytes() }
+    }
+
+    val refreshOptions = PosterCacheSettingsRepository.refreshIntervalOptions.map { hours ->
+        PresetOption(stringResource(Res.string.settings_poster_cache_refresh_hours, hours), hours)
+    }
+
+    SettingsSection(
+        title = stringResource(Res.string.settings_poster_cache_title),
+        isTablet = isTablet,
+    ) {
+        SettingsGroup(isTablet = isTablet) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = if (isTablet) 18.dp else 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.settings_poster_cache_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                PosterToggleRow(
+                    title = stringResource(Res.string.settings_poster_cache_enabled),
+                    checked = enabled,
+                    onCheckedChange = PosterCacheSettingsRepository::setEnabled,
+                )
+                if (enabled) {
+                    PosterStyleOptionRow(
+                        title = stringResource(Res.string.settings_poster_cache_refresh),
+                        selectedValue = refreshIntervalHours,
+                        options = refreshOptions,
+                        onSelected = PosterCacheSettingsRepository::setRefreshIntervalHours,
+                    )
+                    Text(
+                        text = stringResource(Res.string.settings_poster_cache_refresh_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = cacheSizeBytes?.let { bytes ->
+                        stringResource(Res.string.settings_poster_cache_size, formatFileSize(bytes))
+                    } ?: stringResource(Res.string.settings_poster_cache_size_calculating),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                OutlinedButton(
+                    onClick = {
+                        isClearing = true
+                        scope.launch {
+                            try {
+                                PosterCache.clear(platformContext)
+                                NuvioToastController.show(clearedMessage)
+                            } finally {
+                                isClearing = false
+                                sizeRefreshKey += 1
+                            }
+                        }
+                    },
+                    enabled = !isClearing && (cacheSizeBytes ?: 1L) > 0L,
+                ) {
+                    Text(text = stringResource(Res.string.settings_poster_cache_clear))
+                }
             }
         }
     }

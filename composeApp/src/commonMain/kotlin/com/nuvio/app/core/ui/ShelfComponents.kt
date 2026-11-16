@@ -136,6 +136,7 @@ fun NuvioPosterCard(
     isWatched: Boolean = false,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    usePosterCache: Boolean = false,
 ) {
     val posterCardStyle = rememberPosterCardStyleUiState()
     val tokens = MaterialTheme.nuvio
@@ -179,9 +180,15 @@ fun NuvioPosterCard(
                         fallbackImageUrl = fallbackImageUrl.takeIf { hasFallback },
                     )
                 }
+                val imageLoader = if (usePosterCache) {
+                    com.nuvio.app.core.poster.rememberPosterImageLoader()
+                } else {
+                    coil3.SingletonImageLoader.get(platformContext)
+                }
                 AsyncImage(
                     model = imageModel,
                     contentDescription = title,
+                    imageLoader = imageLoader,
                     modifier = Modifier.matchParentSize(),
                     contentScale = ContentScale.Crop,
                 )
