@@ -2,6 +2,7 @@ package com.nuvio.app
 
 import android.app.Application
 import android.os.Build
+import coil3.ComponentRegistry
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.gif.AnimatedImageDecoder
@@ -15,6 +16,7 @@ import com.nuvio.app.core.network.DnsPlatform
 import com.nuvio.app.core.network.SharedOkHttpClient
 import com.nuvio.app.core.network.NetworkErrorInterceptor
 import com.nuvio.app.core.poster.CustomPosterFallbackInterceptor
+import com.nuvio.app.core.cache.AppImageLoaderComponents
 import com.nuvio.app.core.cache.CacheSettingsStorage
 import com.nuvio.app.core.cache.ContentCacheStrategy
 import io.ktor.client.HttpClient
@@ -34,33 +36,39 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         CacheSettingsStorage.initialize(this)
     }
 
+    /** One network fetcher (and HTTP client) shared by the app loader and the cache loaders. */
+    private val imageNetworkFetcherFactory by lazy {
+        KtorNetworkFetcherFactory(
+            httpClient = {
+                HttpClient(OkHttp) {
+                    engine {
+                        preconfigured = SharedOkHttpClient.base
+                        addInterceptor(NetworkErrorInterceptor())
+                    }
+                }
+            },
+            cacheStrategy = { ContentCacheStrategy(CacheControlCacheStrategy()) },
+        )
+    }
+
+    private fun ComponentRegistry.Builder.addAppImageComponents() {
+        add(CustomPosterFallbackInterceptor())
+        add(SvgDecoder.Factory())
+        add(imageNetworkFetcherFactory)
+        if (Build.VERSION.SDK_INT >= 28) {
+            add(AnimatedImageDecoder.Factory())
+        } else {
+            add(GifDecoder.Factory())
+        }
+    }
+
     override fun newImageLoader(context: android.content.Context): ImageLoader {
+        AppImageLoaderComponents.register { addAppImageComponents() }
         return ImageLoader.Builder(context)
             .crossfade(true)
             .diskCachePolicy(CachePolicy.ENABLED)
             .memoryCachePolicy(CachePolicy.ENABLED)
-            .components {
-                add(CustomPosterFallbackInterceptor())
-                add(SvgDecoder.Factory())
-                add(
-                    KtorNetworkFetcherFactory(
-                        httpClient = {
-                            HttpClient(OkHttp) {
-                                engine {
-                                    preconfigured = SharedOkHttpClient.base
-                                    addInterceptor(NetworkErrorInterceptor())
-                                }
-                            }
-                        },
-                        cacheStrategy = { ContentCacheStrategy(CacheControlCacheStrategy()) },
-                    ),
-                )
-                if (Build.VERSION.SDK_INT >= 28) {
-                    add(AnimatedImageDecoder.Factory())
-                } else {
-                    add(GifDecoder.Factory())
-                }
-            }
+            .components { addAppImageComponents() }
             .build()
     }
 }

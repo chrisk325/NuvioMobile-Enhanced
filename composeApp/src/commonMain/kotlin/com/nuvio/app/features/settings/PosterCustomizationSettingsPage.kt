@@ -74,6 +74,7 @@ import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.features.updater.formatFileSize
 import coil3.compose.LocalPlatformContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.nuvio.app.core.ui.DefaultCardDepthEdgeCoverage
@@ -337,6 +338,8 @@ internal fun LazyListScope.posterCustomizationSettingsContent(
     }
 }
 
+private const val CacheSizeRefreshMillis = 3_000L
+
 private suspend fun contentCacheSizeBytes(type: CacheType): Long =
     when (type) {
         CacheType.Metadata -> MetadataCache.sizeBytes()
@@ -461,7 +464,11 @@ private fun ContentCacheTypeControls(
 
     LaunchedEffect(type, sizeRefreshKey, enabled) {
         cacheSizeBytes = null
-        cacheSizeBytes = contentCacheSizeBytes(type)
+        // Keep the size live while the page is open: prefetches keep filling the cache.
+        while (true) {
+            cacheSizeBytes = contentCacheSizeBytes(type)
+            delay(CacheSizeRefreshMillis)
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
