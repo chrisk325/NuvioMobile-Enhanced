@@ -216,6 +216,23 @@ object MetaDetailsRepository {
         return cachedMeta.withUnreleasedFilter()
     }
 
+    suspend fun withPreferredMoreLikeThis(
+        meta: MetaDetails,
+        fallbackItemId: String,
+        fallbackItemType: String,
+    ): MetaDetails {
+        if (meta.moreLikeThisSource == MoreLikeThisSource.SIMKL || meta.moreLikeThisSource == MoreLikeThisSource.TRAKT) {
+            return meta
+        }
+        return withContext(Dispatchers.Default) {
+            applyMoreLikeThisSource(
+                meta = meta,
+                fallbackItemId = fallbackItemId,
+                fallbackItemType = fallbackItemType,
+            )
+        }.withUnreleasedFilter()
+    }
+
     fun clearCachedMetadata() {
         cachedMetaByRequestKey.clear()
     }
@@ -660,6 +677,10 @@ object MetaDetailsRepository {
         val isTraktAuthenticated = TraktAuthRepository.uiState.value.mode == TraktConnectionMode.CONNECTED
         val tmdbSettings = TmdbSettingsRepository.snapshot()
 
+        log.d {
+            "More like this source=${trackingSettings.moreLikeThisSource} simkl=${shouldUseSimklMoreLikeThis(trackingSettings.moreLikeThisSource)} " +
+                "type=${meta.type} fallbackType=$fallbackItemType id=${meta.id}"
+        }
         // Simkl source
         if (shouldUseSimklMoreLikeThis(trackingSettings.moreLikeThisSource) &&
             supportsMoreLikeThis(meta, fallbackItemType)
@@ -673,11 +694,15 @@ object MetaDetailsRepository {
             }.onFailure { error ->
                 log.w { "Failed to load Simkl related titles for ${meta.id}: ${error.message}" }
             }.getOrDefault(emptyList())
+            InAppLogger.info("Metadata/Simkl", "Related titles id=${meta.id} count=${items.size}")
 
-            return meta.copy(
-                moreLikeThis = items,
-                moreLikeThisSource = MoreLikeThisSource.SIMKL.takeIf { items.isNotEmpty() },
-            )
+            if (items.isNotEmpty()) {
+                return meta.copy(
+                    moreLikeThis = items,
+                    moreLikeThisSource = MoreLikeThisSource.SIMKL,
+                    moreLikeThisHasMore = false,
+                )
+            }
         }
 
         // Trakt source
