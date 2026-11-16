@@ -923,7 +923,9 @@
     <string name="settings_cache_refresh">Refresh caches every</string>
     <string name="settings_cache_refresh_hours">%1$d hours</string>
     <string name="settings_cache_refresh_hint">Cached items older than this are downloaded again the next time they are needed.</string>
-    <string name="settings_cache_size">Size: %1$s</string>
+    <string name="settings_cache_size">Size: %1$s of %2$s</string>
+    <string name="settings_cache_max_storage">Maximum cache storage</string>
+    <string name="settings_cache_max_storage_hint">Shared by posters (35%), background artwork (55%) and metadata (10%). When a cache is full, the least recently used items are removed.</string>
     <string name="settings_cache_size_calculating">Size: calculating…</string>
     <string name="settings_cache_clear">Clear</string>
     <string name="settings_cache_cleared">Cache cleared</string>

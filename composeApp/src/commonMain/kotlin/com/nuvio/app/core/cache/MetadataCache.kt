@@ -1,7 +1,10 @@
 package com.nuvio.app.core.cache
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -24,6 +27,7 @@ object MetadataCache {
     private const val TRIM_EVERY_WRITES = 25
 
     private val writeMutex = Mutex()
+    private val trimScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var writesSinceTrim = 0
 
     private val directory: Path
@@ -54,6 +58,13 @@ object MetadataCache {
         }
         if (payload.isNotBlank()) write(url, payload)
         return payload
+    }
+
+    /** Trims the cache to its (new) share of the storage limit in the background. */
+    internal fun onStorageLimitChanged() {
+        trimScope.launch {
+            writeMutex.withLock { runCatching { trimToMaxSize() } }
+        }
     }
 
     /** Size of the metadata cache on disk, in bytes. */
@@ -127,7 +138,7 @@ object MetadataCache {
             Triple(path, metadata.size ?: 0L, metadata.lastModifiedAtMillis ?: 0L)
         }
         var total = entries.sumOf { it.second }
-        val maxBytes = CacheType.Metadata.maxSizeBytes
+        val maxBytes = CacheSettingsRepository.maxSizeBytes(CacheType.Metadata)
         if (total <= maxBytes) return
         val targetBytes = maxBytes * 9 / 10
         for ((path, size, _) in entries.sortedBy { it.third }) {

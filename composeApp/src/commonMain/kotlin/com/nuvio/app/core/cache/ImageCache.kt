@@ -36,6 +36,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
 /** An image that should be kept in one of the image caches. */
@@ -74,6 +77,16 @@ object ImageCache {
     @Volatile
     private var loaders: Map<CacheType, ImageLoader> = emptyMap()
 
+    private val _generation = MutableStateFlow(0)
+
+    /**
+     * Bumped whenever the image caches are rebuilt (e.g. a new storage limit). Loaders handed out
+     * before a rebuild use a closed disk cache, so callers must fetch a new one when it changes.
+     */
+    val generation: StateFlow<Int> = _generation.asStateFlow()
+
+    private const val TRIM_TRIGGER_KEY = "nuvio-cache-trim-trigger"
+
     private val prefetchScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val prefetchPermits = Semaphore(PREFETCH_PARALLELISM)
     private val prefetchLock = SynchronizedObject()
@@ -90,7 +103,7 @@ object ImageCache {
             diskCaches[type]?.let { return it }
             val cache = DiskCache.Builder()
                 .directory(cacheBaseDirectory() / type.directoryName)
-                .maxSizeBytes(type.maxSizeBytes)
+                .maxSizeBytes(CacheSettingsRepository.maxSizeBytes(type))
                 .build()
             diskCaches = diskCaches + (type to cache)
             return cache
@@ -120,6 +133,31 @@ object ImageCache {
                 .build()
             loaders = loaders + (type to loader)
             return loader
+        }
+    }
+
+    /**
+     * Applies a new storage limit. A Coil disk cache's maximum size is fixed when it is created,
+     * so the open caches are closed and recreated with their new share, then trimmed straight
+     * away (Coil otherwise only trims after its next write).
+     */
+    internal fun onStorageLimitChanged() {
+        val closed = synchronized(lock) {
+            val previous = diskCaches
+            diskCaches = emptyMap()
+            loaders = emptyMap()
+            _generation.value += 1
+            previous
+        }
+        prefetchScope.launch {
+            closed.values.forEach { cache -> runCatching { cache.shutdown() } }
+            closed.keys.forEach { type ->
+                runCatching {
+                    // Aborting an edit makes the cache check its size and evict the least
+                    // recently used entries until it fits its new maximum.
+                    diskCache(type).openEditor(TRIM_TRIGGER_KEY)?.abort()
+                }
+            }
         }
     }
 
@@ -311,7 +349,8 @@ private object EmptyImage : Image {
 fun rememberCachedImageLoader(type: CacheType): ImageLoader {
     val context = LocalPlatformContext.current
     val enabled by remember(type) { CacheSettingsRepository.enabled(type) }.collectAsState()
-    return remember(context, type, enabled) {
+    val generation by ImageCache.generation.collectAsState()
+    return remember(context, type, enabled, generation) {
         if (enabled) ImageCache.imageLoader(type, context) else SingletonImageLoader.get(context)
     }
 }
