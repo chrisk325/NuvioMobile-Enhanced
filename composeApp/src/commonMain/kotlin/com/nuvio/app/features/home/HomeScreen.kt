@@ -95,6 +95,9 @@ import com.nuvio.app.features.watchprogress.toContinueWatchingItem
 import com.nuvio.app.features.watchprogress.toUpNextContinueWatchingItem
 import com.nuvio.app.core.ui.DisintegrationRequest
 import com.nuvio.app.core.poster.withCustomPosterUrls
+import com.nuvio.app.core.cache.CacheType
+import com.nuvio.app.core.cache.ImageCachePrefetchEffect
+import com.nuvio.app.features.home.components.toPosterCacheTargets
 import com.nuvio.app.features.watching.application.WatchingState
 import com.nuvio.app.features.watching.domain.WatchingContentRef
 import com.nuvio.app.features.watching.domain.isReleasedBy
@@ -974,6 +977,15 @@ fun HomeScreen(
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val homeSectionPadding = homeSectionHorizontalPaddingForWidth(maxWidth.value)
         val posterCardStyle = rememberPosterCardStyleUiState()
+        // Poster cache: download every poster of every enabled Home row, including rows that
+        // are not composed yet (no-op while the poster cache is disabled).
+        val homePosterCacheTargets = remember(enabledHomeItems, sectionsMap, posterCardStyle) {
+            enabledHomeItems
+                .mapNotNull { settingsItem -> sectionsMap[settingsItem.key] }
+                .flatMap { section -> section.items.take(HOME_CATALOG_PREVIEW_LIMIT) }
+                .toPosterCacheTargets(posterCardStyle)
+        }
+        ImageCachePrefetchEffect(CacheType.Posters, homePosterCacheTargets)
         val continueWatchingLayout = rememberContinueWatchingLayout(maxWidth.value, posterCardStyle)
         val nativeBottomNavigationOverlayHeight =
             if (LocalNuvioBottomNavigationOverlayPadding.current > 0.dp) {
@@ -1235,6 +1247,7 @@ fun HomeScreen(
                                             fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
                                             onPosterClick = onPosterClick,
                                             onPosterLongClick = onPosterLongClick,
+                                            usePosterCache = true,
                                         )
                                     }
                                 }

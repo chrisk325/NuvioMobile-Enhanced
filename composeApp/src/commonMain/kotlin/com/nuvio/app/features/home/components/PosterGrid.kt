@@ -71,6 +71,7 @@ internal fun PosterGridRow(
     fullyWatchedSeriesKeys: Set<String> = emptySet(),
     onPosterClick: ((MetaPreview) -> Unit)? = null,
     onPosterLongClick: ((MetaPreview) -> Unit)? = null,
+    usePosterCache: Boolean = false,
 ) {
     val posterCardStyle = rememberPosterCardStyleUiState()
 
@@ -92,6 +93,7 @@ internal fun PosterGridRow(
                 ),
                 onClick = onPosterClick?.let { { it(item) } },
                 onLongClick = onPosterLongClick?.let { { it(item) } },
+                usePosterCache = usePosterCache,
             )
         }
         repeat(columns - items.size) {
@@ -131,6 +133,7 @@ private fun PosterGridTile(
     isWatched: Boolean = false,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    usePosterCache: Boolean = false,
 ) {
     Column(
         modifier = modifier,
@@ -168,9 +171,15 @@ private fun PosterGridTile(
                         item.poster
                     }
                 }
+                val imageLoader = if (usePosterCache) {
+                    com.nuvio.app.core.cache.rememberPosterImageLoader()
+                } else {
+                    coil3.SingletonImageLoader.get(platformContext)
+                }
                 AsyncImage(
                     model = imageModel,
                     contentDescription = item.name,
+                    imageLoader = imageLoader,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )

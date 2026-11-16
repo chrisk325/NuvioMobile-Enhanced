@@ -134,6 +134,7 @@ fun DetailHero(
                         AsyncImage(
                             model = imageUrl,
                             contentDescription = meta.name,
+                            imageLoader = com.nuvio.app.core.cache.rememberBackgroundImageLoader(),
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .fillMaxWidth()

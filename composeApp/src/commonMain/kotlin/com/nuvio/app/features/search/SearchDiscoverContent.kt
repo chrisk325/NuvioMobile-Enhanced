@@ -97,6 +97,7 @@ internal fun LazyListScope.discoverContent(
                     fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
                     onPosterClick = onPosterClick,
                     onPosterLongClick = onPosterLongClick,
+                    usePosterCache = true,
                 )
             }
             if (state.isLoading) {

@@ -1277,7 +1277,7 @@ object TmdbMetadataService {
         val apiKey = TmdbSettingsRepository.effectiveApiKey().takeIf(String::isNotBlank) ?: return null
         val url = buildTmdbUrl(endpoint = endpoint, apiKey = apiKey, query = query)
         return runCatching {
-            json.decodeFromString<T>(httpGetText(url))
+            json.decodeFromString<T>(com.nuvio.app.core.cache.MetadataCache.fetch(url) { httpGetText(url) })
         }.onFailure { error ->
             log.w { "TMDB request failed for $endpoint: ${error.message}" }
         }.getOrNull()

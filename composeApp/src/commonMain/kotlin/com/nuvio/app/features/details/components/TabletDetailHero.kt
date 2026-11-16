@@ -179,6 +179,7 @@ private fun BackdropArtwork(
             AsyncImage(
                 model = imageUrl,
                 contentDescription = meta.name,
+                imageLoader = com.nuvio.app.core.cache.rememberBackgroundImageLoader(),
                 modifier = artworkModifier,
                 alignment = BiasAlignment(0f, BackdropVerticalBias),
                 contentScale = ContentScale.Crop,

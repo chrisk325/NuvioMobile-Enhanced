@@ -466,7 +466,7 @@ object MetaDetailsRepository {
         return try {
             log.d { "Fetching meta from: $url" }
             InAppLogger.info("Metadata/AddonFetch", "Fetching meta type=$type id=$id url=${InAppLogger.redactUrl(url)}")
-            val payload = fetchAddonResponseText(url)
+            val payload = com.nuvio.app.core.cache.MetadataCache.fetch(url) { fetchAddonResponseText(url) }
             log.d { "Raw payload length=${payload.length}, first 500 chars: ${payload.take(500)}" }
             InAppLogger.debug("Metadata/AddonFetch", "Meta payload length=${payload.length} type=$type id=$id")
             withContext(Dispatchers.Default) { MetaDetailsParser.parse(payload) }

@@ -1,5 +1,6 @@
 package com.nuvio.app.features.catalog
 
+import com.nuvio.app.core.cache.MetadataCache
 import com.nuvio.app.features.addons.AddonCatalog
 import com.nuvio.app.features.addons.buildAddonResourceUrl
 import com.nuvio.app.features.addons.fetchAddonResponseText
@@ -46,10 +47,12 @@ private suspend fun deduplicatedHttpGetText(
             inflightRequestScope.launch {
                 try {
                     created.complete(
-                        fetchAddonResponseText(
-                            url = url,
-                            forceRefresh = forceRefresh,
-                        ),
+                        MetadataCache.fetch(url = url, forceRefresh = forceRefresh) {
+                            fetchAddonResponseText(
+                                url = url,
+                                forceRefresh = forceRefresh,
+                            )
+                        },
                     )
                 } catch (error: Throwable) {
                     created.completeExceptionally(error)

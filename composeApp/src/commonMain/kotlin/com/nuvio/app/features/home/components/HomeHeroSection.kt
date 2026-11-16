@@ -350,9 +350,23 @@ internal fun HomeHeroSection(
                 }
                 PrefetchArtworkDominantColors(heroArtworkUrls)
             }
+            // Background cache: download the artwork of every hero item, not just the neighbours
+            // (no-op while the background artwork cache is disabled).
+            val heroBackgroundCacheTargets = remember(items, effectiveArtworkSource) {
+                items.mapNotNull { item ->
+                    heroArtworkUrl(item, effectiveArtworkSource)?.let { url ->
+                        com.nuvio.app.core.cache.ImageCacheTarget(imageUrl = url)
+                    }
+                }
+            }
+            com.nuvio.app.core.cache.ImageCachePrefetchEffect(
+                type = com.nuvio.app.core.cache.CacheType.Backgrounds,
+                targets = heroBackgroundCacheTargets,
+            )
+            val heroArtworkImageLoader = com.nuvio.app.core.cache.rememberBackgroundImageLoader()
 
             val platformContext = LocalPlatformContext.current
-            LaunchedEffect(pagerState.settledPage, items, effectiveArtworkSource) {
+            LaunchedEffect(pagerState.settledPage, items, effectiveArtworkSource, heroArtworkImageLoader) {
                 val settled = pagerState.settledPage
                 val neighbours = listOf(settled + 1, settled - 1)
                     .filter { page -> page >= 0 && items.size > 1 }
@@ -360,10 +374,12 @@ internal fun HomeHeroSection(
                     .distinct()
                 val imageLoader = SingletonImageLoader.get(platformContext)
                 neighbours.forEach { item ->
-                    listOfNotNull(heroArtworkUrl(item, effectiveArtworkSource), item.logo?.takeIf { it.isNotBlank() })
-                        .forEach { url ->
-                            imageLoader.enqueue(ImageRequest.Builder(platformContext).data(url).build())
-                        }
+                    heroArtworkUrl(item, effectiveArtworkSource)?.let { url ->
+                        heroArtworkImageLoader.enqueue(ImageRequest.Builder(platformContext).data(url).build())
+                    }
+                    item.logo?.takeIf { it.isNotBlank() }?.let { url ->
+                        imageLoader.enqueue(ImageRequest.Builder(platformContext).data(url).build())
+                    }
                 }
                 neighbours.forEach { item ->
                     if (MetaDetailsRepository.peek(item.type, item.id) == null) {
@@ -462,6 +478,7 @@ internal fun HomeHeroSection(
                                 AsyncImage(
                                     model = artworkUrl,
                                     contentDescription = item.name,
+                                    imageLoader = heroArtworkImageLoader,
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .graphicsLayer {

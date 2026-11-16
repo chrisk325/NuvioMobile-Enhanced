@@ -118,7 +118,11 @@ private suspend fun sampleArtworkDominantColor(
         .data(url)
         .size(PALETTE_SAMPLE_PX, PALETTE_SAMPLE_PX)
         .build()
-    val result = SingletonImageLoader.get(platformContext).execute(request) as? SuccessResult ?: return null
+    // Backdrop artwork: read it through the background cache (when enabled) so it is only
+    // downloaded once for both display and colour sampling.
+    val result = com.nuvio.app.core.cache.ImageCache
+        .loaderFor(com.nuvio.app.core.cache.CacheType.Backgrounds, platformContext)
+        .execute(request) as? SuccessResult ?: return null
     val bitmap = loadedBackdropImageBitmap(result)
     val extracted = runCatching {
         if (bitmap != null) {

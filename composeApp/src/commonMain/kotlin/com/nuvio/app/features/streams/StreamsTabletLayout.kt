@@ -115,6 +115,7 @@ internal fun TabletStreamsLayout(
                 AsyncImage(
                     model = tabletBackdrop,
                     contentDescription = null,
+                    imageLoader = com.nuvio.app.core.cache.rememberBackgroundImageLoader(),
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
