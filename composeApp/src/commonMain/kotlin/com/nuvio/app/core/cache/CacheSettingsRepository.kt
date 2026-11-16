@@ -32,7 +32,7 @@ object CacheSettingsRepository {
 
     /** Maximum storage (all caches together) the user can pick, in MB, and the slider step. */
     const val MIN_MAX_STORAGE_MB = 256
-    const val MAX_MAX_STORAGE_MB = 5 * 1024
+    const val MAX_MAX_STORAGE_MB = 10 * 1024
     const val MAX_STORAGE_STEP_MB = 256
     const val DEFAULT_MAX_STORAGE_MB = 2 * 1024
     private const val MAX_STORAGE_KEY = "cache_max_storage_mb"

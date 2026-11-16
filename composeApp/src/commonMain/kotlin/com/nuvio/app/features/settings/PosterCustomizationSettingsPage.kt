@@ -451,7 +451,7 @@ private fun ContentCacheSettingsSection(isTablet: Boolean) {
     }
 }
 
-/** Formats a storage size given in MB as e.g. "512 MB", "1.25 GB" or "5 GB". */
+/** Formats a storage size given in MB as e.g. "512 MB", "1.25 GB" or "10 GB". */
 private fun formatStorageMb(mb: Int): String {
     if (mb < 1024) return "$mb ${localizedByteUnit("MB")}"
     val hundredths = mb * 100 / 1024
@@ -494,7 +494,7 @@ private fun MaxCacheStorageControls() {
             value = draftMb,
             onValueChange = { draftMb = it },
             valueRange = minMb.toFloat()..maxMb.toFloat(),
-            // One stop every 256 MB from 256 MB to 5 GB.
+            // One stop every 256 MB from 256 MB to 10 GB.
             steps = (maxMb - minMb) / stepMb - 1,
             onValueChangeFinished = {
                 CacheSettingsRepository.setMaxStorageMb(draftMb.roundToInt())
