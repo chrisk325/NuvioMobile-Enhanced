@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.83",
+          "buildVersion": "208",
+          "date": "2026-11-16T09:00:45Z",
+          "localizedDescription": "- [Port Simkl More Like This fixes and iOS fixes from luqmanfadlli fork (#74)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/74) @chrisk325  \n- [upstream (#73)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/73) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.83-beta/nuvio-0.9.83-enhanced-release.ipa",
+          "size": 76194501,
+          "sha256": "38de4dd865886cfe598b1cae2ce1ee7626915c7d154463dfcb73adcc42a817a9",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.9.80",
           "buildVersion": "205",
           "date": "2026-11-15T07:18:27Z",
