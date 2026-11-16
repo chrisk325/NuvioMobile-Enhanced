@@ -20,10 +20,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
@@ -36,16 +38,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.sqrt
 
+private const val TOP_SUBTITLE_INSET_FRACTION = 0.08f
+private const val SIDE_SUBTITLE_INSET_FRACTION = 0.05f
+
 @Composable
 internal fun StyledSubtitleOverlay(
-    text: String,
+    cues: StyledSubtitleCues,
     style: SubtitleStyleState,
     modifier: Modifier = Modifier,
     videoAspectRatio: Float = 0f,
     videoResizeMode: PlayerResizeMode = PlayerResizeMode.Fit,
 ) {
     val fontFamily = rememberSubtitleFontFamily(style.appearance.fontId)
-    if (text.isBlank()) return
+    if (cues.isEmpty) return
     val density = LocalDensity.current
     BoxWithConstraints(modifier.fillMaxSize()) {
         val containerWidthPx = with(density) { maxWidth.toPx() }
@@ -56,23 +61,50 @@ internal fun StyledSubtitleOverlay(
             videoAspectRatio = videoAspectRatio,
             resizeMode = videoResizeMode,
         )
-        val layoutScale = (maxHeight / 360.dp).coerceAtMost(1f)
-        Box(
-            Modifier.fillMaxSize().padding(
-                horizontal = 16.dp * layoutScale,
-                vertical = maxHeight * (0.0533f + style.bottomOffset.coerceIn(0, 200) / 1000f),
-            ),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            StyledSubtitleText(
-                text = text,
-                style = style,
-                scale = layoutScale,
-                videoWidthPx = fittedVideoBounds.width,
-                videoHeightPx = fittedVideoBounds.height,
-                fontFamily = fontFamily,
-            )
+        val scale = (maxHeight / 360.dp).coerceAtMost(1f)
+        val bottomInset = maxHeight * (0.0533f + style.bottomOffset.coerceIn(0, 200) / 1000f)
+        val topInset = maxHeight * TOP_SUBTITLE_INSET_FRACTION
+        val sideInset = maxWidth * SIDE_SUBTITLE_INSET_FRACTION
+        cues.blocks.forEach { block ->
+            val horizontalInset = 16.dp * scale + if (block.horizontal == SubtitleHorizontalPosition.CENTER) 0.dp else sideInset
+            Box(
+                Modifier.fillMaxSize().padding(
+                    start = horizontalInset,
+                    end = horizontalInset,
+                    top = if (block.vertical == SubtitleVerticalPosition.TOP) topInset else 0.dp,
+                    bottom = if (block.vertical == SubtitleVerticalPosition.BOTTOM) bottomInset else 0.dp,
+                ),
+                contentAlignment = block.alignment(),
+            ) {
+                StyledSubtitleText(
+                    text = block.text,
+                    style = style,
+                    scale = scale,
+                    videoWidthPx = fittedVideoBounds.width,
+                    videoHeightPx = fittedVideoBounds.height,
+                    fontFamily = fontFamily,
+                    horizontal = block.horizontal,
+                )
+            }
         }
+    }
+}
+
+private fun StyledSubtitleBlock.alignment(): Alignment = when (vertical) {
+    SubtitleVerticalPosition.TOP -> when (horizontal) {
+        SubtitleHorizontalPosition.START -> Alignment.TopStart
+        SubtitleHorizontalPosition.CENTER -> Alignment.TopCenter
+        SubtitleHorizontalPosition.END -> Alignment.TopEnd
+    }
+    SubtitleVerticalPosition.MIDDLE -> when (horizontal) {
+        SubtitleHorizontalPosition.START -> Alignment.CenterStart
+        SubtitleHorizontalPosition.CENTER -> Alignment.Center
+        SubtitleHorizontalPosition.END -> Alignment.CenterEnd
+    }
+    SubtitleVerticalPosition.BOTTOM -> when (horizontal) {
+        SubtitleHorizontalPosition.START -> Alignment.BottomStart
+        SubtitleHorizontalPosition.CENTER -> Alignment.BottomCenter
+        SubtitleHorizontalPosition.END -> Alignment.BottomEnd
     }
 }
 
@@ -85,6 +117,28 @@ internal fun StyledSubtitleText(
     videoWidthPx: Float = SUBTITLE_BLUR_REFERENCE_WIDTH_PX,
     videoHeightPx: Float = SUBTITLE_BLUR_REFERENCE_HEIGHT_PX,
     fontFamily: FontFamily = rememberSubtitleFontFamily(style.appearance.fontId),
+) {
+    StyledSubtitleText(
+        text = AnnotatedString(text),
+        style = style,
+        modifier = modifier,
+        scale = scale,
+        videoWidthPx = videoWidthPx,
+        videoHeightPx = videoHeightPx,
+        fontFamily = fontFamily,
+    )
+}
+
+@Composable
+internal fun StyledSubtitleText(
+    text: AnnotatedString,
+    style: SubtitleStyleState,
+    modifier: Modifier = Modifier,
+    scale: Float = 1f,
+    videoWidthPx: Float = SUBTITLE_BLUR_REFERENCE_WIDTH_PX,
+    videoHeightPx: Float = SUBTITLE_BLUR_REFERENCE_HEIGHT_PX,
+    fontFamily: FontFamily = rememberSubtitleFontFamily(style.appearance.fontId),
+    horizontal: SubtitleHorizontalPosition = SubtitleHorizontalPosition.CENTER,
 ) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
@@ -114,24 +168,49 @@ internal fun StyledSubtitleText(
         val edgePadding = with(density) { edgePaddingPx.toDp() }
 
         val availableTextWidth = (availableWidth - paddingX * 2).coerceAtLeast(1f).toInt()
-        val layout = measurer.measure(
-            text = AnnotatedString(text),
-            style = TextStyle(
-                fontFamily = fontFamily,
-                fontSize = (style.fontSizeSp * scale).sp,
-                fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
-                textAlign = TextAlign.Center,
-                textDirection = TextDirection.ContentOrLtr,
-            ),
-            constraints = Constraints(maxWidth = availableTextWidth),
+        val textStyle = TextStyle(
+            fontFamily = fontFamily,
+            fontSize = (style.fontSizeSp * scale).sp,
+            fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
+            textAlign = when (horizontal) {
+                SubtitleHorizontalPosition.START -> TextAlign.Left
+                SubtitleHorizontalPosition.CENTER -> TextAlign.Center
+                SubtitleHorizontalPosition.END -> TextAlign.Right
+            },
+            textDirection = TextDirection.ContentOrLtr,
         )
+        val textConstraints = Constraints(maxWidth = availableTextWidth)
+        val textAlpha = style.textColor.alpha
+        val fillText = text.mapColors { subtitleFileColor(it, textAlpha) }
+        val layout = measurer.measure(text = fillText, style = textStyle, constraints = textConstraints)
+        // Outline and shadow passes must ignore per-span file colours so they take the pass colour.
+        val outlineLayout = if (text.spanStyles.any { it.item.color.isSpecified }) {
+            measurer.measure(text = text.mapColors { Color.Unspecified }, style = textStyle, constraints = textConstraints)
+        } else {
+            layout
+        }
+        val lineLeft = (0 until layout.lineCount).minOfOrNull { layout.getLineLeft(it) } ?: 0f
+        val lineRight = (0 until layout.lineCount).maxOfOrNull { layout.getLineRight(it) } ?: 0f
         val contentHeight = with(density) { (layout.size.height + paddingY * 2).toDp() }
-        val contentWidth = layout.size.width.toFloat() + paddingX * 2
+        val contentWidth = when (horizontal) {
+            SubtitleHorizontalPosition.CENTER -> layout.size.width.toFloat() + paddingX * 2
+            else -> lineRight - lineLeft + paddingX * 2
+        }
+        val textOffsetX = when (horizontal) {
+            SubtitleHorizontalPosition.CENTER -> paddingX
+            SubtitleHorizontalPosition.START -> paddingX - lineLeft
+            SubtitleHorizontalPosition.END -> contentWidth - paddingX - lineRight
+        }
         val boxWidthPx = contentWidth + edgePaddingPx * 2
         val boxWidth = with(density) { boxWidthPx.toDp() }
-        val left = with(density) { ((availableWidth - boxWidthPx) / 2f).toDp() }
+        val leftPx = when (horizontal) {
+            SubtitleHorizontalPosition.CENTER -> (availableWidth - boxWidthPx) / 2f
+            SubtitleHorizontalPosition.START -> -edgePaddingPx
+            SubtitleHorizontalPosition.END -> availableWidth - contentWidth - edgePaddingPx
+        }
+        val left = with(density) { leftPx.toDp() }
         val origin = Offset(
-            edgePaddingPx + paddingX,
+            edgePaddingPx + textOffsetX,
             paddingY + edgePaddingPx,
         )
         val radius = with(density) { (style.appearance.backgroundRadius.dp * scale).toPx() }
@@ -142,7 +221,7 @@ internal fun StyledSubtitleText(
             Modifier.requiredWidth(boxWidth)
                 .height(contentHeight + edgePadding * 2)
                 .offset(x = left, y = edgePadding)
-                .semantics { this.text = AnnotatedString(text) },
+                .semantics { this.text = text },
         ) {
             Canvas(Modifier.fillMaxSize()) {
                 drawRoundRect(
@@ -160,7 +239,7 @@ internal fun StyledSubtitleText(
                 Canvas(Modifier.fillMaxSize()) {
                     // Tight, dense shadow gives the opacity control real visual weight.
                     drawText(
-                        layout,
+                        outlineLayout,
                         color = Color.Transparent,
                         topLeft = origin,
                         drawStyle = Fill,
@@ -172,7 +251,7 @@ internal fun StyledSubtitleText(
                     )
                     // A wider, lighter pass keeps the shadow soft without washing out its core.
                     drawText(
-                        layout,
+                        outlineLayout,
                         color = Color.Transparent,
                         topLeft = origin,
                         drawStyle = Fill,
@@ -200,7 +279,7 @@ internal fun StyledSubtitleText(
                             ),
                         ) {
                             drawText(
-                                layout,
+                                outlineLayout,
                                 color = outlineColor,
                                 topLeft = origin,
                                 drawStyle = Stroke(outline * 2f),
@@ -213,7 +292,7 @@ internal fun StyledSubtitleText(
                         )
                         Canvas(Modifier.fillMaxSize()) {
                             drawText(
-                                layout,
+                                outlineLayout,
                                 color = Color.Transparent,
                                 topLeft = origin,
                                 drawStyle = Stroke(outline * 2f),
@@ -228,7 +307,7 @@ internal fun StyledSubtitleText(
                 } else {
                     Canvas(Modifier.fillMaxSize()) {
                         drawText(
-                            layout,
+                            outlineLayout,
                             color = outlineColor,
                             topLeft = origin,
                             drawStyle = Stroke(outline * 2f),
@@ -248,5 +327,20 @@ internal fun StyledSubtitleText(
                 )
             }
         }
+    }
+}
+
+internal fun subtitleFileColor(color: Color, textAlpha: Float): Color =
+    color.copy(alpha = color.alpha * textAlpha)
+
+private fun AnnotatedString.mapColors(transform: (Color) -> Color): AnnotatedString = buildAnnotatedString {
+    append(this@mapColors.text)
+    this@mapColors.spanStyles.forEach { range ->
+        val color = range.item.color
+        addStyle(
+            if (color.isSpecified) range.item.copy(color = transform(color)) else range.item,
+            range.start,
+            range.end,
+        )
     }
 }
