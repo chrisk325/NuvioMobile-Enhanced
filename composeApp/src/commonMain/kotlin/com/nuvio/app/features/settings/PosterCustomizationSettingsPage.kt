@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -64,8 +65,11 @@ import com.nuvio.app.core.ui.Slider
 import com.nuvio.app.core.ui.CardDepthStyleRepository
 import com.nuvio.app.core.ui.CardDepthStyleUiState
 import com.nuvio.app.core.poster.CustomPosterUrlRepository
-import com.nuvio.app.core.poster.PosterCache
-import com.nuvio.app.core.poster.PosterCacheSettingsRepository
+import com.nuvio.app.core.cache.CacheSettingsRepository
+import com.nuvio.app.core.cache.CacheType
+import com.nuvio.app.core.cache.ImageCache
+import com.nuvio.app.core.cache.MetadataCache
+import coil3.PlatformContext
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.features.updater.formatFileSize
 import coil3.compose.LocalPlatformContext
@@ -159,16 +163,23 @@ import nuvio.composeapp.generated.resources.settings_custom_poster_screen_collec
 import nuvio.composeapp.generated.resources.settings_custom_poster_screen_library
 import nuvio.composeapp.generated.resources.settings_custom_poster_screen_search
 import nuvio.composeapp.generated.resources.settings_custom_poster_screen_details
-import nuvio.composeapp.generated.resources.settings_poster_cache_clear
-import nuvio.composeapp.generated.resources.settings_poster_cache_cleared
+import nuvio.composeapp.generated.resources.settings_background_cache_description
+import nuvio.composeapp.generated.resources.settings_background_cache_enabled
+import nuvio.composeapp.generated.resources.settings_cache_clear
+import nuvio.composeapp.generated.resources.settings_cache_clear_all
+import nuvio.composeapp.generated.resources.settings_cache_cleared
+import nuvio.composeapp.generated.resources.settings_cache_cleared_all
+import nuvio.composeapp.generated.resources.settings_cache_refresh
+import nuvio.composeapp.generated.resources.settings_cache_refresh_hint
+import nuvio.composeapp.generated.resources.settings_cache_refresh_hours
+import nuvio.composeapp.generated.resources.settings_cache_size
+import nuvio.composeapp.generated.resources.settings_cache_size_calculating
+import nuvio.composeapp.generated.resources.settings_content_cache_description
+import nuvio.composeapp.generated.resources.settings_content_cache_title
+import nuvio.composeapp.generated.resources.settings_metadata_cache_description
+import nuvio.composeapp.generated.resources.settings_metadata_cache_enabled
 import nuvio.composeapp.generated.resources.settings_poster_cache_description
 import nuvio.composeapp.generated.resources.settings_poster_cache_enabled
-import nuvio.composeapp.generated.resources.settings_poster_cache_refresh
-import nuvio.composeapp.generated.resources.settings_poster_cache_refresh_hint
-import nuvio.composeapp.generated.resources.settings_poster_cache_refresh_hours
-import nuvio.composeapp.generated.resources.settings_poster_cache_size
-import nuvio.composeapp.generated.resources.settings_poster_cache_size_calculating
-import nuvio.composeapp.generated.resources.settings_poster_cache_title
 import org.jetbrains.compose.resources.stringResource
 
 internal fun LazyListScope.posterCustomizationSettingsContent(
@@ -301,7 +312,7 @@ internal fun LazyListScope.posterCustomizationSettingsContent(
         }
     }
     item {
-        PosterCacheSettingsSection(isTablet = isTablet)
+        ContentCacheSettingsSection(isTablet = isTablet)
     }
     item {
         CardDepthStyleRepository.ensureLoaded()
@@ -326,31 +337,40 @@ internal fun LazyListScope.posterCustomizationSettingsContent(
     }
 }
 
+private suspend fun contentCacheSizeBytes(type: CacheType): Long =
+    when (type) {
+        CacheType.Metadata -> MetadataCache.sizeBytes()
+        else -> withContext(Dispatchers.Default) { ImageCache.sizeBytes(type) }
+    }
+
+private suspend fun clearContentCache(type: CacheType, context: PlatformContext) {
+    when (type) {
+        CacheType.Metadata -> MetadataCache.clear()
+        else -> ImageCache.clear(type, context)
+    }
+}
+
 @Composable
-private fun PosterCacheSettingsSection(isTablet: Boolean) {
-    val enabled by remember {
-        PosterCacheSettingsRepository.ensureLoaded()
-        PosterCacheSettingsRepository.enabled
+private fun ContentCacheSettingsSection(isTablet: Boolean) {
+    val refreshIntervalHours by remember {
+        CacheSettingsRepository.ensureLoaded()
+        CacheSettingsRepository.refreshIntervalHours
     }.collectAsState()
-    val refreshIntervalHours by PosterCacheSettingsRepository.refreshIntervalHours.collectAsState()
+    val postersEnabled by remember { CacheSettingsRepository.enabled(CacheType.Posters) }.collectAsState()
+    val backgroundsEnabled by remember { CacheSettingsRepository.enabled(CacheType.Backgrounds) }.collectAsState()
+    val metadataEnabled by remember { CacheSettingsRepository.enabled(CacheType.Metadata) }.collectAsState()
     val platformContext = LocalPlatformContext.current
     val scope = rememberCoroutineScope()
     var sizeRefreshKey by remember { mutableIntStateOf(0) }
-    var cacheSizeBytes by remember { mutableStateOf<Long?>(null) }
-    var isClearing by remember { mutableStateOf(false) }
-    val clearedMessage = stringResource(Res.string.settings_poster_cache_cleared)
+    var clearingAll by remember { mutableStateOf(false) }
+    val clearedAllMessage = stringResource(Res.string.settings_cache_cleared_all)
 
-    LaunchedEffect(sizeRefreshKey, enabled) {
-        cacheSizeBytes = null
-        cacheSizeBytes = withContext(Dispatchers.Default) { PosterCache.sizeBytes() }
-    }
-
-    val refreshOptions = PosterCacheSettingsRepository.refreshIntervalOptions.map { hours ->
-        PresetOption(stringResource(Res.string.settings_poster_cache_refresh_hours, hours), hours)
+    val refreshOptions = CacheSettingsRepository.refreshIntervalOptions.map { hours ->
+        PresetOption(stringResource(Res.string.settings_cache_refresh_hours, hours), hours)
     }
 
     SettingsSection(
-        title = stringResource(Res.string.settings_poster_cache_title),
+        title = stringResource(Res.string.settings_content_cache_title),
         isTablet = isTablet,
     ) {
         SettingsGroup(isTablet = isTablet) {
@@ -361,52 +381,128 @@ private fun PosterCacheSettingsSection(isTablet: Boolean) {
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Text(
-                    text = stringResource(Res.string.settings_poster_cache_description),
+                    text = stringResource(Res.string.settings_content_cache_description),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                PosterToggleRow(
+                ContentCacheTypeControls(
+                    type = CacheType.Posters,
                     title = stringResource(Res.string.settings_poster_cache_enabled),
-                    checked = enabled,
-                    onCheckedChange = PosterCacheSettingsRepository::setEnabled,
+                    description = stringResource(Res.string.settings_poster_cache_description),
+                    enabled = postersEnabled,
+                    sizeRefreshKey = sizeRefreshKey,
+                    onCleared = { sizeRefreshKey += 1 },
                 )
-                if (enabled) {
+                ContentCacheTypeControls(
+                    type = CacheType.Backgrounds,
+                    title = stringResource(Res.string.settings_background_cache_enabled),
+                    description = stringResource(Res.string.settings_background_cache_description),
+                    enabled = backgroundsEnabled,
+                    sizeRefreshKey = sizeRefreshKey,
+                    onCleared = { sizeRefreshKey += 1 },
+                )
+                ContentCacheTypeControls(
+                    type = CacheType.Metadata,
+                    title = stringResource(Res.string.settings_metadata_cache_enabled),
+                    description = stringResource(Res.string.settings_metadata_cache_description),
+                    enabled = metadataEnabled,
+                    sizeRefreshKey = sizeRefreshKey,
+                    onCleared = { sizeRefreshKey += 1 },
+                )
+                if (postersEnabled || backgroundsEnabled || metadataEnabled) {
                     PosterStyleOptionRow(
-                        title = stringResource(Res.string.settings_poster_cache_refresh),
+                        title = stringResource(Res.string.settings_cache_refresh),
                         selectedValue = refreshIntervalHours,
                         options = refreshOptions,
-                        onSelected = PosterCacheSettingsRepository::setRefreshIntervalHours,
+                        onSelected = CacheSettingsRepository::setRefreshIntervalHours,
                     )
                     Text(
-                        text = stringResource(Res.string.settings_poster_cache_refresh_hint),
+                        text = stringResource(Res.string.settings_cache_refresh_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text(
-                    text = cacheSizeBytes?.let { bytes ->
-                        stringResource(Res.string.settings_poster_cache_size, formatFileSize(bytes))
-                    } ?: stringResource(Res.string.settings_poster_cache_size_calculating),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
                 OutlinedButton(
                     onClick = {
-                        isClearing = true
+                        clearingAll = true
                         scope.launch {
                             try {
-                                PosterCache.clear(platformContext)
-                                NuvioToastController.show(clearedMessage)
+                                CacheType.entries.forEach { type -> clearContentCache(type, platformContext) }
+                                NuvioToastController.show(clearedAllMessage)
                             } finally {
-                                isClearing = false
+                                clearingAll = false
                                 sizeRefreshKey += 1
                             }
                         }
                     },
-                    enabled = !isClearing && (cacheSizeBytes ?: 1L) > 0L,
+                    enabled = !clearingAll,
                 ) {
-                    Text(text = stringResource(Res.string.settings_poster_cache_clear))
+                    Text(text = stringResource(Res.string.settings_cache_clear_all))
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContentCacheTypeControls(
+    type: CacheType,
+    title: String,
+    description: String,
+    enabled: Boolean,
+    sizeRefreshKey: Int,
+    onCleared: () -> Unit,
+) {
+    val platformContext = LocalPlatformContext.current
+    val scope = rememberCoroutineScope()
+    var cacheSizeBytes by remember(type) { mutableStateOf<Long?>(null) }
+    var isClearing by remember(type) { mutableStateOf(false) }
+    val clearedMessage = stringResource(Res.string.settings_cache_cleared)
+
+    LaunchedEffect(type, sizeRefreshKey, enabled) {
+        cacheSizeBytes = null
+        cacheSizeBytes = contentCacheSizeBytes(type)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        PosterToggleRow(
+            title = title,
+            checked = enabled,
+            onCheckedChange = { checked -> CacheSettingsRepository.setEnabled(type, checked) },
+        )
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = cacheSizeBytes?.let { bytes ->
+                    stringResource(Res.string.settings_cache_size, formatFileSize(bytes))
+                } ?: stringResource(Res.string.settings_cache_size_calculating),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            TextButton(
+                onClick = {
+                    isClearing = true
+                    scope.launch {
+                        try {
+                            clearContentCache(type, platformContext)
+                            NuvioToastController.show(clearedMessage)
+                        } finally {
+                            isClearing = false
+                            onCleared()
+                        }
+                    }
+                },
+                enabled = !isClearing && (cacheSizeBytes ?: 1L) > 0L,
+            ) {
+                Text(text = stringResource(Res.string.settings_cache_clear))
             }
         }
     }

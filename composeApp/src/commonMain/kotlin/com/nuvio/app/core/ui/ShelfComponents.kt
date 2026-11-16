@@ -181,7 +181,7 @@ fun NuvioPosterCard(
                     )
                 }
                 val imageLoader = if (usePosterCache) {
-                    com.nuvio.app.core.poster.rememberPosterImageLoader()
+                    com.nuvio.app.core.cache.rememberPosterImageLoader()
                 } else {
                     coil3.SingletonImageLoader.get(platformContext)
                 }

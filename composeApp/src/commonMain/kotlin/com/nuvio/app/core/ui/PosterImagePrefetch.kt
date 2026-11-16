@@ -13,7 +13,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.size.Size
 import com.nuvio.app.core.poster.CustomPosterFallbackInterceptor
-import com.nuvio.app.core.poster.rememberPosterImageLoader
+import com.nuvio.app.core.cache.rememberPosterImageLoader
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlin.math.min

@@ -74,8 +74,9 @@ import com.nuvio.app.features.home.components.homeSectionHorizontalPaddingForWid
 import com.nuvio.app.features.home.components.HomeSkeletonRow
 import com.nuvio.app.features.home.components.rememberPosterGridColumnCount
 import com.nuvio.app.features.home.components.toPosterCacheTargets
-import com.nuvio.app.core.poster.PosterCachePrefetchEffect
-import com.nuvio.app.core.poster.PosterCacheTarget
+import com.nuvio.app.core.cache.CacheType
+import com.nuvio.app.core.cache.ImageCachePrefetchEffect
+import com.nuvio.app.core.cache.ImageCacheTarget
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.watched.WatchedRepository
 import kotlinx.coroutines.delay
@@ -258,17 +259,17 @@ fun SearchScreen(
         val searchPosterCacheTargets = remember(uiState.sections, posterCardStyle) {
             uiState.sections.flatMap { section -> section.items }.toPosterCacheTargets(posterCardStyle)
         }
-        PosterCachePrefetchEffect(searchPosterCacheTargets)
+        ImageCachePrefetchEffect(CacheType.Posters, searchPosterCacheTargets)
         val discoverPosterCacheTargets = remember(discoverUiState.items) {
             discoverUiState.items.mapNotNull { item ->
                 val poster = item.poster?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                PosterCacheTarget(
+                ImageCacheTarget(
                     imageUrl = poster,
                     fallbackImageUrl = item.rawPosterUrl?.takeIf { it.isNotBlank() && it != poster },
                 )
             }
         }
-        PosterCachePrefetchEffect(discoverPosterCacheTargets)
+        ImageCachePrefetchEffect(CacheType.Posters, discoverPosterCacheTargets)
         val homeSectionPadding = remember(maxWidth) {
             homeSectionHorizontalPaddingForWidth(maxWidth.value)
         }

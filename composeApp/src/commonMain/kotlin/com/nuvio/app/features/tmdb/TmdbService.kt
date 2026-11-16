@@ -120,7 +120,7 @@ object TmdbService {
         val url = buildTmdbUrl(endpoint = endpoint, apiKey = apiKey, query = query)
         InAppLogger.info("Metadata/TMDB", "GET endpoint=$endpoint url=${InAppLogger.redactUrl(url)}")
         return runCatching {
-            val payload = httpGetText(url)
+            val payload = com.nuvio.app.core.cache.MetadataCache.fetch(url) { httpGetText(url) }
             InAppLogger.info("Metadata/TMDB", "GET endpoint=$endpoint ok chars=${payload.length}")
             json.decodeFromString<T>(payload)
         }.onFailure { error ->

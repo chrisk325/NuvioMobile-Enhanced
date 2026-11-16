@@ -865,11 +865,13 @@ internal fun settingsSearchEntries(
         )
     }
 
-    val posterCacheSection = stringResource(Res.string.settings_poster_cache_title)
+    val contentCacheSection = stringResource(Res.string.settings_content_cache_title)
     listOf(
         PlaybackSearchRow("poster-cache", stringResource(Res.string.settings_poster_cache_enabled), stringResource(Res.string.settings_poster_cache_description)),
-        PlaybackSearchRow("poster-cache-refresh", stringResource(Res.string.settings_poster_cache_refresh), stringResource(Res.string.settings_poster_cache_refresh_hint)),
-        PlaybackSearchRow("poster-cache-clear", stringResource(Res.string.settings_poster_cache_clear)),
+        PlaybackSearchRow("background-cache", stringResource(Res.string.settings_background_cache_enabled), stringResource(Res.string.settings_background_cache_description)),
+        PlaybackSearchRow("metadata-cache", stringResource(Res.string.settings_metadata_cache_enabled), stringResource(Res.string.settings_metadata_cache_description)),
+        PlaybackSearchRow("cache-refresh", stringResource(Res.string.settings_cache_refresh), stringResource(Res.string.settings_cache_refresh_hint)),
+        PlaybackSearchRow("cache-clear-all", stringResource(Res.string.settings_cache_clear_all)),
     ).forEach { row ->
         addRow(
             page = SettingsPage.PosterCustomization,
@@ -877,7 +879,7 @@ internal fun settingsSearchEntries(
             title = row.title,
             description = row.description,
             pageLabel = posterStylePage,
-            section = posterCacheSection,
+            section = contentCacheSection,
         )
     }
 

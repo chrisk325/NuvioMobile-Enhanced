@@ -15,8 +15,8 @@ import com.nuvio.app.core.network.DnsPlatform
 import com.nuvio.app.core.network.SharedOkHttpClient
 import com.nuvio.app.core.network.NetworkErrorInterceptor
 import com.nuvio.app.core.poster.CustomPosterFallbackInterceptor
-import com.nuvio.app.core.poster.PosterCacheSettingsStorage
-import com.nuvio.app.core.poster.PosterCacheStrategy
+import com.nuvio.app.core.cache.CacheSettingsStorage
+import com.nuvio.app.core.cache.ContentCacheStrategy
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 
@@ -31,7 +31,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         DnsPlatform.initialize(this)
-        PosterCacheSettingsStorage.initialize(this)
+        CacheSettingsStorage.initialize(this)
     }
 
     override fun newImageLoader(context: android.content.Context): ImageLoader {
@@ -52,7 +52,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
                                 }
                             }
                         },
-                        cacheStrategy = { PosterCacheStrategy(CacheControlCacheStrategy()) },
+                        cacheStrategy = { ContentCacheStrategy(CacheControlCacheStrategy()) },
                     ),
                 )
                 if (Build.VERSION.SDK_INT >= 28) {

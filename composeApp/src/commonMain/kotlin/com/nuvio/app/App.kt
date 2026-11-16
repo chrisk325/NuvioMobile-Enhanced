@@ -90,7 +90,7 @@ internal fun AppEnvironment(
                     add(
                         coil3.network.ktor3.KtorNetworkFetcherFactory(
                             cacheStrategy = {
-                                com.nuvio.app.core.poster.PosterCacheStrategy(
+                                com.nuvio.app.core.cache.ContentCacheStrategy(
                                     coil3.network.cachecontrol.CacheControlCacheStrategy(),
                                 )
                             },

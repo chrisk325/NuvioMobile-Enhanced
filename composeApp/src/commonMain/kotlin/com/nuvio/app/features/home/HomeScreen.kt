@@ -95,7 +95,8 @@ import com.nuvio.app.features.watchprogress.toContinueWatchingItem
 import com.nuvio.app.features.watchprogress.toUpNextContinueWatchingItem
 import com.nuvio.app.core.ui.DisintegrationRequest
 import com.nuvio.app.core.poster.withCustomPosterUrls
-import com.nuvio.app.core.poster.PosterCachePrefetchEffect
+import com.nuvio.app.core.cache.CacheType
+import com.nuvio.app.core.cache.ImageCachePrefetchEffect
 import com.nuvio.app.features.home.components.toPosterCacheTargets
 import com.nuvio.app.features.watching.application.WatchingState
 import com.nuvio.app.features.watching.domain.WatchingContentRef
@@ -984,7 +985,7 @@ fun HomeScreen(
                 .flatMap { section -> section.items.take(HOME_CATALOG_PREVIEW_LIMIT) }
                 .toPosterCacheTargets(posterCardStyle)
         }
-        PosterCachePrefetchEffect(homePosterCacheTargets)
+        ImageCachePrefetchEffect(CacheType.Posters, homePosterCacheTargets)
         val continueWatchingLayout = rememberContinueWatchingLayout(maxWidth.value, posterCardStyle)
         val nativeBottomNavigationOverlayHeight =
             if (LocalNuvioBottomNavigationOverlayPadding.current > 0.dp) {
