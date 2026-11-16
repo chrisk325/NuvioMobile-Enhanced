@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.87",
+          "buildVersion": "212",
+          "date": "2026-11-16T19:06:33Z",
+          "localizedDescription": "- [Feature/cache size limit (#78)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/78) @chrisk325  \n- [Fix poster and background caches always staying empty (#77)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/77) @chrisk325  \n- [add cached posters metadata and backdrop (#76)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/76) @chrisk325  \n- [Add Larger/Extra Large poster widths and Discover poster size setting (#75)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/75) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.87-beta/nuvio-0.9.87-enhanced-release.ipa",
+          "size": 76296954,
+          "sha256": "6332815bf4fd7fadd12f0221cdcd97da7f656741ada1b7d8744997272b7cbd87",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.9.83",
           "buildVersion": "208",
           "date": "2026-11-16T09:00:45Z",
