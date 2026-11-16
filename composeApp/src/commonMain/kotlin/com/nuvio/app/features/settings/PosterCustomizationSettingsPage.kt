@@ -66,6 +66,7 @@ import com.nuvio.app.core.ui.DefaultCardDepthSheenStrength
 import com.nuvio.app.core.ui.NuvioActionLabel
 import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioModalBottomSheet
+import com.nuvio.app.core.ui.DiscoverPosterSize
 import com.nuvio.app.core.ui.PosterCardStyleRepository
 import com.nuvio.app.core.ui.PosterCardStyleUiState
 import com.nuvio.app.core.ui.cardDepthVisual
@@ -125,6 +126,13 @@ import nuvio.composeapp.generated.resources.settings_poster_width_comfort
 import nuvio.composeapp.generated.resources.settings_poster_width_compact
 import nuvio.composeapp.generated.resources.settings_poster_width_dense
 import nuvio.composeapp.generated.resources.settings_poster_width_large
+import nuvio.composeapp.generated.resources.settings_poster_width_larger
+import nuvio.composeapp.generated.resources.settings_poster_width_extra_large
+import nuvio.composeapp.generated.resources.settings_poster_discover_size
+import nuvio.composeapp.generated.resources.settings_poster_discover_size_small
+import nuvio.composeapp.generated.resources.settings_poster_discover_size_default
+import nuvio.composeapp.generated.resources.settings_poster_discover_size_large
+import nuvio.composeapp.generated.resources.settings_poster_discover_size_extra_large
 import nuvio.composeapp.generated.resources.settings_poster_width_standard
 import nuvio.composeapp.generated.resources.settings_custom_poster_title
 import nuvio.composeapp.generated.resources.settings_custom_poster_description
@@ -164,11 +172,13 @@ internal fun LazyListScope.posterCustomizationSettingsContent(
                     catalogLandscapeModeEnabled = uiState.catalogLandscapeModeEnabled,
                     hideLabelsEnabled = uiState.hideLabelsEnabled,
                     alwaysShowLandscapeClearlogo = uiState.alwaysShowLandscapeClearlogo,
+                    discoverPosterSize = uiState.discoverPosterSize,
                     onWidthSelected = PosterCardStyleRepository::setWidthDp,
                     onCornerRadiusSelected = PosterCardStyleRepository::setCornerRadiusDp,
                     onCatalogLandscapeModeChange = PosterCardStyleRepository::setCatalogLandscapeModeEnabled,
                     onHideLabelsChange = PosterCardStyleRepository::setHideLabelsEnabled,
                     onAlwaysShowLandscapeClearlogoChange = PosterCardStyleRepository::setAlwaysShowLandscapeClearlogo,
+                    onDiscoverPosterSizeSelected = PosterCardStyleRepository::setDiscoverPosterSize,
                 )
             }
         }
@@ -721,11 +731,13 @@ private fun PosterCardStyleControls(
     catalogLandscapeModeEnabled: Boolean,
     hideLabelsEnabled: Boolean,
     alwaysShowLandscapeClearlogo: Boolean,
+    discoverPosterSize: DiscoverPosterSize,
     onWidthSelected: (Int) -> Unit,
     onCornerRadiusSelected: (Int) -> Unit,
     onCatalogLandscapeModeChange: (Boolean) -> Unit,
     onHideLabelsChange: (Boolean) -> Unit,
     onAlwaysShowLandscapeClearlogoChange: (Boolean) -> Unit,
+    onDiscoverPosterSizeSelected: (DiscoverPosterSize) -> Unit,
 ) {
     val widthOptions = listOf(
         PresetOption(stringResource(Res.string.settings_poster_width_compact), 104),
@@ -734,7 +746,20 @@ private fun PosterCardStyleControls(
         PresetOption(stringResource(Res.string.settings_poster_width_balanced), 126),
         PresetOption(stringResource(Res.string.settings_poster_width_comfort), 134),
         PresetOption(stringResource(Res.string.settings_poster_width_large), 140),
+        PresetOption(stringResource(Res.string.settings_poster_width_larger), 170),
+        PresetOption(stringResource(Res.string.settings_poster_width_extra_large), 210),
     )
+    val discoverSizeOptions = DiscoverPosterSize.entries.map { size ->
+        PresetOption(
+            label = when (size) {
+                DiscoverPosterSize.Small -> stringResource(Res.string.settings_poster_discover_size_small)
+                DiscoverPosterSize.Default -> stringResource(Res.string.settings_poster_discover_size_default)
+                DiscoverPosterSize.Large -> stringResource(Res.string.settings_poster_discover_size_large)
+                DiscoverPosterSize.ExtraLarge -> stringResource(Res.string.settings_poster_discover_size_extra_large)
+            },
+            value = size.ordinal,
+        )
+    }
     val radiusOptions = listOf(
         PresetOption(stringResource(Res.string.settings_poster_radius_sharp), 0),
         PresetOption(stringResource(Res.string.settings_poster_radius_subtle), 4),
@@ -769,6 +794,12 @@ private fun PosterCardStyleControls(
             selectedValue = cornerRadiusDp,
             options = radiusOptions,
             onSelected = onCornerRadiusSelected,
+        )
+        PosterStyleOptionRow(
+            title = stringResource(Res.string.settings_poster_discover_size),
+            selectedValue = discoverPosterSize.ordinal,
+            options = discoverSizeOptions,
+            onSelected = { ordinal -> onDiscoverPosterSizeSelected(DiscoverPosterSize.entries[ordinal]) },
         )
         PosterLandscapeModeToggleRow(
             checked = catalogLandscapeModeEnabled,
@@ -836,8 +867,9 @@ private fun PosterCardLivePreview(
     cornerRadiusDp: Int,
 ) {
     val targetHeightDp = (widthDp * 3) / 2
-    val previewFrameWidthDp = 140
-    val previewFrameHeightDp = 210
+    // The frame keeps the layout stable for small widths and grows with the larger presets.
+    val previewFrameMinWidth = 140.dp
+    val previewFrameMinHeight = 210.dp
     val animatedWidth = animateDpAsState(
         targetValue = widthDp.dp,
         animationSpec = tween(durationMillis = 280),
@@ -872,8 +904,8 @@ private fun PosterCardLivePreview(
         ) {
             Box(
                 modifier = Modifier
-                    .width(previewFrameWidthDp.dp)
-                    .height(previewFrameHeightDp.dp),
+                    .width(maxOf(previewFrameMinWidth, animatedWidth.value))
+                    .height(maxOf(previewFrameMinHeight, animatedHeight.value)),
             ) {
                 Box(
                     modifier = Modifier
@@ -890,6 +922,7 @@ private fun PosterCardLivePreview(
             }
 
             Column(
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(

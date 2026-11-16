@@ -888,6 +888,13 @@
     <string name="settings_poster_width_compact">Compact</string>
     <string name="settings_poster_width_dense">Dense</string>
     <string name="settings_poster_width_large">Large</string>
+    <string name="settings_poster_width_larger">Larger</string>
+    <string name="settings_poster_width_extra_large">Extra Large</string>
+    <string name="settings_poster_discover_size">Discover Poster Size</string>
+    <string name="settings_poster_discover_size_small">Small</string>
+    <string name="settings_poster_discover_size_default">Default</string>
+    <string name="settings_poster_discover_size_large">Large</string>
+    <string name="settings_poster_discover_size_extra_large">Extra Large</string>
     <string name="settings_poster_width_standard">Standard</string>
     <!-- Custom Poster URL -->
     <string name="settings_custom_poster_title">CUSTOM POSTER SOURCE</string>
