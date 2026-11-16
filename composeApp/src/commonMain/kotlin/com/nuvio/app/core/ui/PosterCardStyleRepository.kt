@@ -7,10 +7,31 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.math.roundToInt
 
 internal const val DefaultPosterCardWidthDp = 126
 internal const val DefaultPosterCardHeightDp = 189
 internal const val DefaultPosterCardCornerRadiusDp = 12
+
+/**
+ * Poster size for the Discover grid. Discover posters stretch to fill the row, so their
+ * size is controlled by scaling the number of columns: bigger sizes mean fewer columns.
+ */
+enum class DiscoverPosterSize(val columnScale: Float) {
+    Small(0.75f),
+    Default(1f),
+    Large(1.5f),
+    ExtraLarge(2.5f),
+    ;
+
+    fun columnsFor(baseColumns: Int): Int =
+        (baseColumns / columnScale).roundToInt().coerceAtLeast(1)
+
+    companion object {
+        fun fromKey(key: String?): DiscoverPosterSize =
+            entries.firstOrNull { it.name == key } ?: Default
+    }
+}
 
 @Serializable
 private data class StoredPosterCardStylePreferences(
@@ -20,6 +41,7 @@ private data class StoredPosterCardStylePreferences(
     val catalogLandscapeModeEnabled: Boolean = false,
     val hideLabelsEnabled: Boolean = false,
     val alwaysShowLandscapeClearlogo: Boolean = false,
+    val discoverPosterSize: String = DiscoverPosterSize.Default.name,
 )
 
 data class PosterCardStyleUiState(
@@ -29,6 +51,7 @@ data class PosterCardStyleUiState(
     val catalogLandscapeModeEnabled: Boolean = false,
     val hideLabelsEnabled: Boolean = false,
     val alwaysShowLandscapeClearlogo: Boolean = false,
+    val discoverPosterSize: DiscoverPosterSize = DiscoverPosterSize.Default,
 )
 
 object PosterCardStyleRepository {
@@ -96,6 +119,13 @@ object PosterCardStyleRepository {
         persist()
     }
 
+    fun setDiscoverPosterSize(size: DiscoverPosterSize) {
+        ensureLoaded()
+        if (_uiState.value.discoverPosterSize == size) return
+        _uiState.value = _uiState.value.copy(discoverPosterSize = size)
+        persist()
+    }
+
     fun resetToDefaults() {
         ensureLoaded()
         if (_uiState.value == PosterCardStyleUiState()) return
@@ -127,6 +157,7 @@ object PosterCardStyleRepository {
                 catalogLandscapeModeEnabled = stored.catalogLandscapeModeEnabled,
                 hideLabelsEnabled = stored.hideLabelsEnabled,
                 alwaysShowLandscapeClearlogo = stored.alwaysShowLandscapeClearlogo,
+                discoverPosterSize = DiscoverPosterSize.fromKey(stored.discoverPosterSize),
             )
         } else {
             PosterCardStyleUiState()
@@ -143,6 +174,7 @@ object PosterCardStyleRepository {
                     catalogLandscapeModeEnabled = _uiState.value.catalogLandscapeModeEnabled,
                     hideLabelsEnabled = _uiState.value.hideLabelsEnabled,
                     alwaysShowLandscapeClearlogo = _uiState.value.alwaysShowLandscapeClearlogo,
+                    discoverPosterSize = _uiState.value.discoverPosterSize.name,
                 ),
             ),
         )
