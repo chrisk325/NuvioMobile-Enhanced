@@ -1929,7 +1929,8 @@ final class MPVPlayerViewController: UIViewController {
         }
         let cueText = getString("sub-text") ?? ""
         pictureInPictureController?.setSubtitleText(cueText, bold: lastSubtitleStyle?.bold ?? false)
-        let text = styled ? cueText : ""
+        // The styled Compose overlay parses ASS positioning/colour tags, so hand it the ASS form.
+        let text = styled ? (getString("sub-text/ass") ?? cueText) : ""
         if text != lastSubtitleText {
             lastSubtitleText = text
             subtitleTextHandler?.onTextChanged(text: text)
