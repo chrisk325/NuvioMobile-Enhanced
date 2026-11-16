@@ -80,23 +80,25 @@ internal fun AppEnvironment(
 ) {
     if (!platformProvidesImageLoader) {
         setSingletonImageLoaderFactory { context ->
+            // One network fetcher (and HTTP client) shared by the app loader and the cache loaders.
+            val networkFetcherFactory = coil3.network.ktor3.KtorNetworkFetcherFactory(
+                cacheStrategy = {
+                    com.nuvio.app.core.cache.ContentCacheStrategy(
+                        coil3.network.cachecontrol.CacheControlCacheStrategy(),
+                    )
+                },
+            )
+            val addAppImageComponents: coil3.ComponentRegistry.Builder.() -> Unit = {
+                add(CustomPosterFallbackInterceptor())
+                add(SvgDecoder.Factory())
+                add(networkFetcherFactory)
+            }
+            com.nuvio.app.core.cache.AppImageLoaderComponents.register(addAppImageComponents)
             ImageLoader.Builder(context)
                 .crossfade(true)
                 .diskCachePolicy(CachePolicy.ENABLED)
                 .memoryCachePolicy(CachePolicy.ENABLED)
-                .components {
-                    add(CustomPosterFallbackInterceptor())
-                    add(SvgDecoder.Factory())
-                    add(
-                        coil3.network.ktor3.KtorNetworkFetcherFactory(
-                            cacheStrategy = {
-                                com.nuvio.app.core.cache.ContentCacheStrategy(
-                                    coil3.network.cachecontrol.CacheControlCacheStrategy(),
-                                )
-                            },
-                        ),
-                    )
-                }
+                .components(addAppImageComponents)
                 .configurePlatformImageLoader()
                 .build()
         }

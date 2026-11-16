@@ -107,14 +107,16 @@ object ImageCache {
         loaders[type]?.let { return it }
         synchronized(lock) {
             loaders[type]?.let { return it }
-            val base = SingletonImageLoader.get(context)
-            val loader = base.newBuilder()
+            // newBuilder() keeps the app loader's defaults and shared memory cache. The components
+            // are rebuilt from the app's registered set (see AppImageLoaderComponents) so requests
+            // run through this loader's own engine and disk cache.
+            val loader = SingletonImageLoader.get(context).newBuilder()
                 .diskCache { diskCache(type) }
-                .components(
-                    base.components.newBuilder()
-                        .add(CacheTypeTagInterceptor(type))
-                        .build(),
-                )
+                .components {
+                    // First, so the custom-poster fallback retry is tagged too.
+                    add(CacheTypeTagInterceptor(type))
+                    AppImageLoaderComponents.addTo(this)
+                }
                 .build()
             loaders = loaders + (type to loader)
             return loader
