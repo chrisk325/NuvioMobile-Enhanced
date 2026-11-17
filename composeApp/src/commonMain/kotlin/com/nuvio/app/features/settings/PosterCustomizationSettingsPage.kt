@@ -70,6 +70,7 @@ import com.nuvio.app.core.cache.CacheType
 import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.cache.ImageCache
 import com.nuvio.app.core.cache.MetadataCache
+import com.nuvio.app.core.cache.SharedCaches
 import coil3.PlatformContext
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.features.updater.formatFileSize
@@ -175,6 +176,9 @@ import nuvio.composeapp.generated.resources.settings_cache_refresh
 import nuvio.composeapp.generated.resources.settings_cache_refresh_hint
 import nuvio.composeapp.generated.resources.settings_cache_refresh_hours
 import nuvio.composeapp.generated.resources.settings_cache_size
+import nuvio.composeapp.generated.resources.settings_cache_shared_hint
+import nuvio.composeapp.generated.resources.settings_cache_shared_size
+import nuvio.composeapp.generated.resources.settings_cache_shared_size_calculating
 import nuvio.composeapp.generated.resources.settings_cache_max_storage
 import nuvio.composeapp.generated.resources.settings_cache_max_storage_hint
 import nuvio.composeapp.generated.resources.settings_cache_size_calculating
@@ -349,10 +353,48 @@ private suspend fun contentCacheSizeBytes(type: CacheType): Long =
         else -> withContext(Dispatchers.Default) { ImageCache.sizeBytes(type) }
     }
 
+/**
+ * Clears [type]'s cache and the shared app cache that holds the same kind of data (see
+ * [SharedCaches]), so the space is actually freed in the system's storage settings.
+ */
 private suspend fun clearContentCache(type: CacheType, context: PlatformContext) {
     when (type) {
-        CacheType.Metadata -> MetadataCache.clear()
-        else -> ImageCache.clear(type, context)
+        CacheType.Metadata -> {
+            MetadataCache.clear()
+            SharedCaches.clearNetworkCache()
+        }
+        else -> {
+            ImageCache.clear(type, context)
+            SharedCaches.clearImageCache(context)
+        }
+    }
+}
+
+@Composable
+private fun SharedCacheSizeRow(sizeRefreshKey: Int) {
+    val platformContext = LocalPlatformContext.current
+    var sharedSizeBytes by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(platformContext, sizeRefreshKey) {
+        sharedSizeBytes = null
+        while (true) {
+            sharedSizeBytes = SharedCaches.imageCacheSizeBytes(platformContext) +
+                SharedCaches.networkCacheSizeBytes()
+            delay(CacheSizeRefreshMillis)
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = sharedSizeBytes?.let { bytes ->
+                stringResource(Res.string.settings_cache_shared_size, formatFileSize(bytes))
+            } ?: stringResource(Res.string.settings_cache_shared_size_calculating),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(Res.string.settings_cache_shared_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -429,6 +471,7 @@ private fun ContentCacheSettingsSection(isTablet: Boolean) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                SharedCacheSizeRow(sizeRefreshKey = sizeRefreshKey)
                 OutlinedButton(
                     onClick = {
                         clearingAll = true
@@ -586,7 +629,8 @@ private fun ContentCacheTypeControls(
                         }
                     }
                 },
-                enabled = !isClearing && (cacheSizeBytes ?: 1L) > 0L,
+                // Always available: even at 0 B this also clears the shared app cache.
+                enabled = !isClearing,
             ) {
                 Text(text = stringResource(Res.string.settings_cache_clear))
             }
