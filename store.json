@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.89",
+          "buildVersion": "214",
+          "date": "2026-11-17T09:59:48Z",
+          "localizedDescription": "- [fix(details): fall back to the series artwork when an episode still (#80)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/80) @chrisk325  \n- [fix(ratings): match external episode ratings to the addon's episode (#79)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/79) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.89-beta/nuvio-0.9.89-enhanced-release.ipa",
+          "size": 76318595,
+          "sha256": "601450db9dae26048dc2ad2c5bb9e61edae74d0f65511ce4bffc1fb364b37027",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.9.87",
           "buildVersion": "212",
           "date": "2026-11-16T19:06:33Z",
