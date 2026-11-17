@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.90",
+          "buildVersion": "215",
+          "date": "2026-11-17T16:01:06Z",
+          "localizedDescription": "- [Make cache Clear free the space shown in system storage settings (#81)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/81) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.90-beta/nuvio-0.9.90-enhanced-release.ipa",
+          "size": 76333851,
+          "sha256": "ac27d771ce4f2c2892ef4b33531c4d686fe232f39b9a86c935f9bbace1c0086e",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.9.89",
           "buildVersion": "214",
           "date": "2026-11-17T09:59:48Z",
