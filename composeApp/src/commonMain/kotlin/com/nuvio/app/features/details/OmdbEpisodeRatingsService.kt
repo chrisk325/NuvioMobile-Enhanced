@@ -30,6 +30,7 @@ internal object OmdbEpisodeRatingsService {
     private const val AnimeMappingTimeoutMs = 15_000L
     private const val MaxAnimeMappingsPerMeta = 6
     private const val TvdbLookupTimeoutMs = 10_000L
+    private const val MaxAlignedSeasons = 40
     private val tvdbIdRegex = Regex("(?i)tvdb[:_](\\d+)")
     private val tvdbImdbCache = mutableMapOf<String, String?>()
     private val animeIdSources = setOf("kitsu", "mal", "anilist", "anidb")
@@ -38,6 +39,17 @@ internal object OmdbEpisodeRatingsService {
         val imdbId: String,
         val season: Int,
         val episode: Int,
+    )
+
+    private data class ResolvedTarget(
+        val target: EpisodeTarget,
+        val fromAddonNumbers: Boolean,
+    )
+
+    private data class SeasonData(
+        val ratings: Map<Int, Double>,
+        val airDates: Map<Int, String> = emptyMap(),
+        val totalSeasons: Int? = null,
     )
 
     private data class AnimeVideoRef(
@@ -76,9 +88,10 @@ internal object OmdbEpisodeRatingsService {
         val defaultImdbId = extractImdbId(meta.imdbId, meta.id, fallbackItemId)
             ?: resolveImdbFromTvdb(meta, fallbackItemId)
         val animeMappings = resolveAnimeMappings(meta)
-        val targets = meta.videos.map { video ->
+        val resolvedTargets = meta.videos.map { video ->
             targetFor(video = video, defaultImdbId = defaultImdbId, animeMappings = animeMappings)
         }
+        val targets = resolvedTargets.map { it?.target }
         if (targets.all { it == null }) return meta
 
         val nowIso = Clock.System.now().toString()
@@ -90,8 +103,9 @@ internal object OmdbEpisodeRatingsService {
             .mapNotNull { index -> targets[index] }
 
         val ratings = mutableMapOf<EpisodeTarget, Double>()
+        val seasonDataByImdb = mutableMapOf<String, Map<Int, SeasonData>>()
         targets.filterNotNull().groupBy { it.imdbId }.forEach { (imdbId, imdbTargets) ->
-            val seasonRatings = fetchRatings(
+            val seasonData = fetchSeasonData(
                 imdbId = imdbId,
                 seasonNumbers = imdbTargets.map { it.season }.distinct(),
                 airedEpisodesBySeason = airedTargets
@@ -99,15 +113,81 @@ internal object OmdbEpisodeRatingsService {
                     .groupBy({ it.season }, { it.episode })
                     .mapValues { (_, episodes) -> episodes.toSet() },
             )
-            seasonRatings.forEach { (key, rating) ->
-                ratings[EpisodeTarget(imdbId = imdbId, season = key.first, episode = key.second)] = rating
+            seasonDataByImdb[imdbId] = seasonData
+            seasonData.forEach { (season, data) ->
+                data.ratings.forEach { (episode, rating) ->
+                    ratings[EpisodeTarget(imdbId = imdbId, season = season, episode = episode)] = rating
+                }
             }
         }
-        if (ratings.isEmpty()) return meta
+
+        // Episodes that only have the addon's own numbering may be split into different
+        // seasons than IMDb uses (e.g. anime: 2 addon seasons vs 5 on IMDb). Re-pair them.
+        val addonNumberedIndices = resolvedTargets.indices.filter { resolvedTargets[it]?.fromAddonNumbers == true }
+        val alignedRatings = defaultImdbId
+            ?.takeIf { addonNumberedIndices.isNotEmpty() }
+            ?.let { imdbId ->
+                alignAddonNumberedRatings(
+                    imdbId = imdbId,
+                    addonVideos = addonNumberedIndices.map { meta.videos[it] },
+                    fetched = seasonDataByImdb[imdbId].orEmpty(),
+                )
+            }
+
+        if (ratings.isEmpty() && alignedRatings.isNullOrEmpty()) return meta
         return meta.copy(
             videos = meta.videos.mapIndexed { index, video ->
-                targets[index]?.let(ratings::get)?.let { video.copy(imdbRating = it) } ?: video
+                val resolved = resolvedTargets[index]
+                val rating = if (alignedRatings != null && resolved?.fromAddonNumbers == true) {
+                    val season = video.season
+                    val episode = video.episode
+                    if (season != null && episode != null) alignedRatings[season to episode] else null
+                } else {
+                    resolved?.target?.let(ratings::get)
+                }
+                rating?.let { video.copy(imdbRating = it) } ?: video
             },
+        )
+    }
+
+    /**
+     * Returns ratings keyed by the addon's season/episode numbers when the addon's seasons
+     * differ from IMDb's, or null when the plain number lookup already lines up.
+     */
+    private suspend fun alignAddonNumberedRatings(
+        imdbId: String,
+        addonVideos: List<MetaVideo>,
+        fetched: Map<Int, SeasonData>,
+    ): Map<Pair<Int, Int>, Double>? {
+        val totalSeasons = fetched.values.firstNotNullOfOrNull { it.totalSeasons }
+            ?.takeIf { it in 1..MaxAlignedSeasons }
+            ?: return null
+        val addonSeasons = addonVideos.mapNotNull { video -> video.season?.takeIf { it > 0 } }.toSet()
+        val imdbSeasons = (1..totalSeasons).toSet()
+        if (addonSeasons.isEmpty() || addonSeasons == imdbSeasons) return null
+
+        val missingSeasons = (imdbSeasons - fetched.keys).toList()
+        val allSeasons = fetched + if (missingSeasons.isEmpty()) {
+            emptyMap()
+        } else {
+            fetchSeasonData(imdbId = imdbId, seasonNumbers = missingSeasons)
+        }
+        val externalEpisodes = allSeasons
+            .filterKeys { it == 0 || it in imdbSeasons }
+            .flatMap { (season, data) ->
+                (data.airDates.keys + data.ratings.keys).map { episode ->
+                    ExternalEpisodeRating(
+                        season = season,
+                        episode = episode,
+                        airDate = data.airDates[episode],
+                        rating = data.ratings[episode],
+                    )
+                }
+            }
+        if (externalEpisodes.isEmpty()) return null
+        return alignEpisodeRatings(
+            addonEpisodes = addonVideos.map { AddonEpisodeAirDate(it.season, it.episode, it.released) },
+            externalEpisodes = externalEpisodes,
         )
     }
 
@@ -115,13 +195,13 @@ internal object OmdbEpisodeRatingsService {
         video: MetaVideo,
         defaultImdbId: String?,
         animeMappings: Map<Pair<String, Long>, TrackingAnimeIdMapper.AnimeImdbMapping>,
-    ): EpisodeTarget? {
+    ): ResolvedTarget? {
         val mappedSeason = video.imdbSeason
         val mappedEpisode = video.imdbEpisode?.takeIf { it > 0 }
         if (mappedSeason != null && mappedSeason >= 0 && mappedEpisode != null) {
             val imdbId = extractImdbId(video.imdbId) ?: defaultImdbId
             if (imdbId != null) {
-                return EpisodeTarget(imdbId = imdbId, season = mappedSeason, episode = mappedEpisode)
+                return ResolvedTarget(EpisodeTarget(imdbId = imdbId, season = mappedSeason, episode = mappedEpisode), false)
             }
         }
         val animeRef = animeVideoRef(video.id)
@@ -129,13 +209,13 @@ internal object OmdbEpisodeRatingsService {
             val mapping = animeMappings[animeRef.source to animeRef.id]
             if (mapping != null) {
                 val (season, episode) = mapping.imdbEpisodeFor(animeRef.episode) ?: return null
-                return EpisodeTarget(imdbId = mapping.imdb, season = season, episode = episode)
+                return ResolvedTarget(EpisodeTarget(imdbId = mapping.imdb, season = season, episode = episode), false)
             }
         }
         val season = video.season ?: return null
         val episode = video.episode ?: return null
         val imdbId = defaultImdbId ?: return null
-        return EpisodeTarget(imdbId = imdbId, season = season, episode = episode)
+        return ResolvedTarget(EpisodeTarget(imdbId = imdbId, season = season, episode = episode), true)
     }
 
     private fun extractTvdbId(meta: MetaDetails, fallbackItemId: String): String? {
@@ -204,7 +284,18 @@ internal object OmdbEpisodeRatingsService {
         imdbId: String,
         seasonNumbers: List<Int>,
         airedEpisodesBySeason: Map<Int, Set<Int>> = emptyMap(),
-    ): Map<Pair<Int, Int>, Double> = withContext(Dispatchers.Default) {
+    ): Map<Pair<Int, Int>, Double> =
+        fetchSeasonData(imdbId, seasonNumbers, airedEpisodesBySeason)
+            .flatMap { (season, data) ->
+                data.ratings.map { (episode, rating) -> (season to episode) to rating }
+            }
+            .toMap()
+
+    private suspend fun fetchSeasonData(
+        imdbId: String,
+        seasonNumbers: List<Int>,
+        airedEpisodesBySeason: Map<Int, Set<Int>> = emptyMap(),
+    ): Map<Int, SeasonData> = withContext(Dispatchers.Default) {
         val apiKey = OmdbSettingsRepository.effectiveApiKey()
         if (apiKey.isBlank()) return@withContext emptyMap()
 
@@ -226,9 +317,7 @@ internal object OmdbEpisodeRatingsService {
             }.awaitAll()
         }
 
-        perSeason.flatMap { (season, episodeRatings) ->
-            episodeRatings.map { (episode, rating) -> (season to episode) to rating }
-        }.toMap()
+        perSeason.toMap()
     }
 
     private fun nowEpochMs(): Long = Clock.System.now().toEpochMilliseconds()
@@ -265,13 +354,15 @@ internal object OmdbEpisodeRatingsService {
         season: Int,
         apiKey: String,
         airedEpisodes: Set<Int>,
-    ): Map<Int, Double> {
+    ): SeasonData {
         val cacheKey = "$imdbId:$season"
         val cached = cacheLock.withLock { seasonCache[cacheKey] }
+        val cachedData = cached?.toSeasonData() ?: SeasonData(ratings = emptyMap())
         val now = nowEpochMs()
-        if (cached != null && cached.isFresh(now)) {
+        // Entries cached before air dates were stored lack totalSeasons; refresh those once.
+        if (cached != null && cached.isFresh(now) && cached.totalSeasons != null) {
             val newlyAired = airedEpisodes - cached.ratings.keys - cached.missing.toSet()
-            if (newlyAired.isEmpty()) return cached.ratings
+            if (newlyAired.isEmpty()) return cachedData
         }
 
         val url = "https://www.omdbapi.com/?i=$imdbId&Season=$season&apikey=$apiKey"
@@ -280,11 +371,11 @@ internal object OmdbEpisodeRatingsService {
         }.onFailure { error ->
             if (error is CancellationException) throw error
             log.w { "OMDb season request failed for $imdbId season $season: ${error.message}" }
-        }.getOrNull() ?: return cached?.ratings.orEmpty()
+        }.getOrNull() ?: return cachedData
 
         if (!response.response.equals("True", ignoreCase = true)) {
             log.w { "OMDb returned no season data for $imdbId season $season: ${response.error}" }
-            return cached?.ratings.orEmpty()
+            return cachedData
         }
 
         val listedEpisodes = response.episodes.orEmpty()
@@ -295,6 +386,14 @@ internal object OmdbEpisodeRatingsService {
                 parseRating(episode.imdbRating)?.let { episodeNumber to it }
             }
             .toMap()
+        val airDates = listedEpisodes
+            .mapNotNull { (episodeNumber, episode) ->
+                episode.released?.trim()
+                    ?.takeIf { it.isNotEmpty() && !it.equals("N/A", ignoreCase = true) }
+                    ?.let { episodeNumber to it }
+            }
+            .toMap()
+        val totalSeasons = response.totalSeasons?.trim()?.toIntOrNull()?.takeIf { it > 0 }
 
         val knownEpisodes = (airedEpisodes + listedEpisodes.keys).sorted()
         val unrated = knownEpisodes.filter { it !in seasonRatings }
@@ -316,6 +415,8 @@ internal object OmdbEpisodeRatingsService {
                 ratings = merged,
                 missing = missing,
                 fetchedAt = now,
+                airDates = cached?.airDates.orEmpty() + airDates,
+                totalSeasons = totalSeasons ?: cached?.totalSeasons,
             )
             while (seasonCache.size > MaxCachedSeasons) {
                 val oldestKey = seasonCache.keys.firstOrNull() ?: break
@@ -323,8 +424,15 @@ internal object OmdbEpisodeRatingsService {
             }
             persistToDisk()
         }
-        return merged
+        return SeasonData(
+            ratings = merged,
+            airDates = cached?.airDates.orEmpty() + airDates,
+            totalSeasons = totalSeasons ?: cached?.totalSeasons,
+        )
     }
+
+    private fun CachedOmdbSeason.toSeasonData(): SeasonData =
+        SeasonData(ratings = ratings, airDates = airDates, totalSeasons = totalSeasons)
 
     private suspend fun lookupEpisodeRatings(
         imdbId: String,
@@ -375,18 +483,22 @@ internal data class CachedOmdbSeason(
     val ratings: Map<Int, Double> = emptyMap(),
     val missing: List<Int> = emptyList(),
     @SerialName("fetched_at") val fetchedAt: Long = 0L,
+    @SerialName("air_dates") val airDates: Map<Int, String> = emptyMap(),
+    @SerialName("total_seasons") val totalSeasons: Int? = null,
 )
 
 @Serializable
 private data class OmdbSeasonResponse(
     @SerialName("Response") val response: String? = null,
     @SerialName("Error") val error: String? = null,
+    @SerialName("totalSeasons") val totalSeasons: String? = null,
     @SerialName("Episodes") val episodes: List<OmdbEpisodeEntry>? = null,
 )
 
 @Serializable
 private data class OmdbEpisodeEntry(
     @SerialName("Episode") val episode: String? = null,
+    @SerialName("Released") val released: String? = null,
     @SerialName("imdbRating") val imdbRating: String? = null,
     @SerialName("imdbID") val imdbId: String? = null,
 )
