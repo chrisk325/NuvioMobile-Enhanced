@@ -1198,6 +1198,32 @@ object WatchProgressRepository {
     }
 
     /**
+     * Entries another source keeps for itself (a media server's continue-watching list), shown in Continue watching
+     * alongside the app's own. They are never stored, synced or sent to a tracker, so a sync can't wipe them.
+     */
+    @Volatile
+    private var externalEntries: List<WatchProgressEntry> = emptyList()
+
+    /** Told when Continue watching removes some of the external entries, so their source can leave them out. */
+    internal var onExternalEntriesRemoved: (List<WatchProgressEntry>) -> Unit = {}
+
+    fun setExternalEntries(entries: List<WatchProgressEntry>) {
+        if (entries == externalEntries) return
+        ensureLoaded()
+        externalEntries = entries
+        publish()
+    }
+
+    /** Takes the external entries matching [match] out of Continue watching; true when any were. */
+    private fun dismissExternalEntries(match: (WatchProgressEntry) -> Boolean): Boolean {
+        val removed = externalEntries.filter(match)
+        if (removed.isEmpty()) return false
+        externalEntries = externalEntries - removed.toSet()
+        onExternalEntriesRemoved(removed)
+        return true
+    }
+
+    /**
      * Drops the app's own entries that an outside source added and no longer lists. Only this device's entries
      * change; nothing is removed from a tracker.
      */
@@ -1221,6 +1247,9 @@ object WatchProgressRepository {
     ) {
         ensureLoaded()
         if (videoIds.isEmpty()) return
+        val dismissed = dismissExternalEntries { entry ->
+            entry.videoId in videoIds && (parentMetaId == null || entry.parentMetaId == parentMetaId)
+        }
 
         activeProgressProvider()?.let { provider ->
             val entriesToRemove = currentEntries().filter { entry ->
@@ -1247,6 +1276,8 @@ object WatchProgressRepository {
             publish()
             persist()
             pushDeleteToServer(removedEntries)
+        } else if (dismissed) {
+            publish()
         }
     }
 
@@ -1258,6 +1289,11 @@ object WatchProgressRepository {
         ensureLoaded()
         val normalizedContentId = contentId.trim()
         if (normalizedContentId.isBlank()) return
+        val dismissed = dismissExternalEntries { entry ->
+            entry.parentMetaId == normalizedContentId &&
+                (seasonNumber == null || episodeNumber == null ||
+                    (entry.seasonNumber == seasonNumber && entry.episodeNumber == episodeNumber))
+        }
 
         val entriesToRemove = currentEntries().filter { entry ->
             if (entry.parentMetaId != normalizedContentId) {
@@ -1268,7 +1304,10 @@ object WatchProgressRepository {
                 true
             }
         }
-        if (entriesToRemove.isEmpty()) return
+        if (entriesToRemove.isEmpty()) {
+            if (dismissed) publish()
+            return
+        }
 
         activeProgressProvider()?.let { provider ->
             val locallyRemovedEntries = removeStoredLocalEntries(entriesToRemove)
@@ -1705,7 +1744,11 @@ object WatchProgressRepository {
             providerMetadataOverlay.project(source = activeSource, entries = projectedEntries)
         }
 
-        return entries.filterNot { it.isLiveTvEntry() }
+        return mergeExternalProgressEntries(
+            entries = entries,
+            external = externalEntries,
+            trackedParentIds = providerEntries.mapTo(mutableSetOf()) { it.parentMetaId },
+        ).filterNot { it.isLiveTvEntry() }
     }
 
     private fun localEntriesSnapshot(): List<WatchProgressEntry> =

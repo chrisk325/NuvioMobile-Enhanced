@@ -3,23 +3,16 @@ package com.nuvio.app.features.servers
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.watched.WatchedItem
 import com.nuvio.app.features.watched.WatchedRepository
-import com.nuvio.app.features.watchprogress.MEDIA_SERVER_PROVIDER_PREFIX
-import com.nuvio.app.features.watchprogress.WatchProgressEntry
-import com.nuvio.app.features.watchprogress.WatchProgressRepository
 
 internal object ServerUserStateProjection {
     fun apply(details: ServerItemDetails) {
         val meta = details.meta
         val ref = ServerItemRef.parse(meta.id) ?: return
         val connection = ServerRepository.connection(ref.connectionId)?.takeIf { it.importWatchState } ?: return
-        val label = ServerRepository.sourceLabel(connection)
         val isSeries = meta.type == ServerMediaKind.SERIES.contentType
 
-        WatchProgressRepository.applyExternalProgress(
-            details.userStates
-                .filter { !it.played && it.positionMs > 0L && it.durationMs > 0L && it.lastPlayedEpochMs != null }
-                .map { state -> state.toEntry(meta, isSeries, label, connection.id) },
-        )
+        // Progress comes from the server's continue-watching list, kept apart from the app's synced progress.
+        if (details.userStates.any { !it.played && it.positionMs > 0L }) ServerResumeImport.refreshSoon(connection.id)
 
         val (played, unplayed) = details.userStates
             .filter { !isSeries || (it.season != null && it.episode != null) }
@@ -44,29 +37,5 @@ internal object ServerUserStateProjection {
         episode = episode.takeIf { isSeries },
         videoId = videoId.takeIf { isSeries },
         markedAtEpochMs = lastPlayedEpochMs ?: 0L,
-    )
-
-    private fun ServerUserState.toEntry(
-        meta: MetaDetails,
-        isSeries: Boolean,
-        label: String,
-        connectionId: String,
-    ): WatchProgressEntry = WatchProgressEntry(
-        contentType = meta.type,
-        parentMetaId = meta.id,
-        parentMetaType = meta.type,
-        videoId = videoId,
-        title = meta.name,
-        logo = meta.logo,
-        poster = meta.poster,
-        background = meta.background,
-        seasonNumber = season.takeIf { isSeries },
-        episodeNumber = episode.takeIf { isSeries },
-        episodeTitle = title.takeIf { isSeries },
-        lastPositionMs = positionMs,
-        durationMs = durationMs,
-        lastUpdatedEpochMs = lastPlayedEpochMs ?: 0L,
-        providerName = label,
-        providerAddonId = "$MEDIA_SERVER_PROVIDER_PREFIX$connectionId",
     )
 }
