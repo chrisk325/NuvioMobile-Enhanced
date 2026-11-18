@@ -216,7 +216,8 @@ internal object ServerResumeImport {
         runCatching { ServerStorage.write(cacheKey(connectionId), json.encodeToString(ServerResumeCache.serializer(), cache)) }
     }
 
-    private fun cacheKey(connectionId: String) = "resume.$connectionId"
+    // "resume2": the list earlier versions kept under "resume" held no entries to show.
+    private fun cacheKey(connectionId: String) = "resume2.$connectionId"
 
     /** Forgets a server's kept list and takes it out of Continue watching; its next import brings everything in. */
     fun forget(connectionId: String) {
