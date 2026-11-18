@@ -12,6 +12,7 @@ enum class ServerCapability {
     USER_STATE_READ,
     USER_STATE_WRITE,
     TRANSCODING,
+    FAVORITES,
 }
 
 interface ServerProvider {
@@ -78,12 +79,20 @@ interface ServerProvider {
 
     suspend fun setPlayed(session: ServerSession, itemId: String, played: Boolean): Unit = unsupported()
 
+    /** The movies and shows the signed-in user marked as favourites on the server. */
+    suspend fun favoritesPage(session: ServerSession, start: Int, limit: Int): ServerPage<ServerTitle> = unsupported()
+
+    suspend fun setFavorite(session: ServerSession, itemId: String, favorite: Boolean): Unit = unsupported()
+
     suspend fun externalIdIndex(
         session: ServerSession,
         library: ServerLibrary,
         start: Int,
         limit: Int,
     ): ServerPage<ServerIndexEntry> = unsupported()
+
+    /** Libraries [lookupTitle] answers alike share a scope, so a title is looked up once per scope. */
+    suspend fun titleLookupScope(session: ServerSession, library: ServerLibrary): String = library.id
 
     suspend fun lookupTitle(
         session: ServerSession,

@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.media_movies
 import nuvio.composeapp.generated.resources.media_series
+import nuvio.composeapp.generated.resources.servers_favorites_row
 import nuvio.composeapp.generated.resources.servers_resume_row
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
@@ -59,6 +60,14 @@ internal object ServerCatalog {
         ServerRepository.enabledConnections().flatMap { connection ->
             connection.selectedLibraries.map { ServerLibraryRef(connection, it) }
         }
+
+    /** One "Favorites" shelf per server that keeps favourites, shown ahead of the server's own libraries. */
+    fun favoriteLibraries(): List<ServerLibraryRef> {
+        val connections = ServerFavorites.connections().filter { it.selectedLibraries.isNotEmpty() }
+        if (connections.isEmpty()) return emptyList()
+        val name = runBlocking { getString(Res.string.servers_favorites_row) }
+        return connections.map { ServerLibraryRef(it, ServerLibrary(FAVORITES_ID, name, ServerMediaKind.MIXED)) }
+    }
 
     fun titleLibraries(): List<ServerLibraryRef> =
         libraries().filter { it.library.kind != ServerMediaKind.COLLECTION }
@@ -135,6 +144,14 @@ internal object ServerCatalog {
             return pageOf(connection, skip, limit) {
                 ServerRepository.call(target.connectionId) { provider, session ->
                     provider.collectionPage(session, collectionId, skip, limit)
+                }
+            }
+        }
+        if (target.libraryId == FAVORITES_ID) {
+            return pageOf(connection, skip, limit) {
+                ServerRepository.call(target.connectionId) { provider, session ->
+                    if (!provider.supports(ServerCapability.FAVORITES)) throw ServerException(ServerFailure.UNSUPPORTED)
+                    provider.favoritesPage(session, skip, limit)
                 }
             }
         }
@@ -215,6 +232,7 @@ internal object ServerCatalog {
 
     private const val HOME_KEY_PREFIX = "server:"
     private const val RESUME_ID = "resume"
+    internal const val FAVORITES_ID = "favorites"
     private const val SEARCH_PREFIX = "search."
     private val SEARCH_KINDS = listOf(ServerMediaKind.MOVIE, ServerMediaKind.SERIES)
 }

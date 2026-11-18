@@ -32,7 +32,7 @@ internal data class LibraryServerShelf(
 )
 
 internal suspend fun loadServerShelves(): List<LibraryServerShelf> = coroutineScope {
-    ServerCatalog.libraries().map { ref ->
+    (ServerCatalog.favoriteLibraries() + ServerCatalog.libraries()).map { ref ->
         async {
             try {
                 LibraryServerShelf(ref, section = ServerCatalog.librarySection(ref, SERVER_SHELF_LIMIT))

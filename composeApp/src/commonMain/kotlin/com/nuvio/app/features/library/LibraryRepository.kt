@@ -14,6 +14,7 @@ import com.nuvio.app.features.library.sync.libraryDeltaPageSize
 import com.nuvio.app.features.library.sync.librarySnapshotPageSize
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.core.poster.CustomPosterUrlRepository
+import com.nuvio.app.features.servers.ServerFavorites
 import com.nuvio.app.features.servers.ServerItemRef
 import com.nuvio.app.features.tracking.TrackingLibraryProvider
 import com.nuvio.app.features.tracking.TrackingLibraryTab
@@ -370,11 +371,14 @@ object LibraryRepository {
 
     fun remove(id: String) {
         ensureLoaded()
-        val removedType = if (AddonEventDispatcher.hasEnabledAddonFor(ADDON_LIBRARY_RESOURCE)) savedItem(id)?.type else null
+        val removedType = savedItem(id)?.type
         val result = localState.removeById(id)
         if (result.affectedCount > 0) {
             removedType?.let { type ->
-                AddonEventDispatcher.library(type = type, id = id, action = AddonLibraryAction.LIBRARY_REMOVE)
+                if (AddonEventDispatcher.hasEnabledAddonFor(ADDON_LIBRARY_RESOURCE)) {
+                    AddonEventDispatcher.library(type = type, id = id, action = AddonLibraryAction.LIBRARY_REMOVE)
+                }
+                ServerFavorites.mirror(id, type, favorite = false)
             }
             log.i {
                 "Removing local library item id=$id profile=${result.snapshot.token.profileId} " +
@@ -466,17 +470,23 @@ object LibraryRepository {
         )
     }
 
+    /** Runs [mutation], then tells library addons and connected media servers' favourites when it saved or removed the title. */
     private inline fun <T> withAddonLibraryEvent(id: String, type: String, mutation: () -> T): T {
-        if (!AddonEventDispatcher.hasEnabledAddonFor(ADDON_LIBRARY_RESOURCE)) return mutation()
+        val notifyAddons = AddonEventDispatcher.hasEnabledAddonFor(ADDON_LIBRARY_RESOURCE)
+        val mirrorFavorites = ServerFavorites.supportsType(type) && ServerFavorites.isAvailable()
+        if (!notifyAddons && !mirrorFavorites) return mutation()
         val wasSaved = isSaved(id, type)
         val result = mutation()
         val isSavedNow = isSaved(id, type)
         if (wasSaved != isSavedNow) {
-            AddonEventDispatcher.library(
-                type = type,
-                id = id,
-                action = if (isSavedNow) AddonLibraryAction.LIBRARY_ADD else AddonLibraryAction.LIBRARY_REMOVE,
-            )
+            if (notifyAddons) {
+                AddonEventDispatcher.library(
+                    type = type,
+                    id = id,
+                    action = if (isSavedNow) AddonLibraryAction.LIBRARY_ADD else AddonLibraryAction.LIBRARY_REMOVE,
+                )
+            }
+            if (mirrorFavorites) ServerFavorites.mirror(id, type, favorite = isSavedNow)
         }
         return result
     }
