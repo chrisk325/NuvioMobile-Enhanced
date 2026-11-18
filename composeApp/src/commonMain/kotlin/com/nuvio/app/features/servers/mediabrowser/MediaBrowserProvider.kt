@@ -50,7 +50,7 @@ internal abstract class MediaBrowserProvider(
 
     private val client = MediaBrowserClient(authorizationHeader, http)
     private val lock = SynchronizedObject()
-    private val aioStreamsServers = mutableMapOf<String, Boolean>()
+    private val serverKinds = mutableMapOf<String, ServerKind>()
     private val libraryGenres = mutableMapOf<String, String>()
 
     protected abstract fun viewsEndpoint(userId: String): Endpoint
@@ -220,17 +220,25 @@ internal abstract class MediaBrowserProvider(
         return items.mapNotNull(mapper(session)::title).distinctBy { it.preview.id }.take(limit)
     }
 
-    private suspend fun isAioStreams(session: ServerSession): Boolean {
-        synchronized(lock) { aioStreamsServers[session.apiRoot] }?.let { return it }
-        val detected = try {
-            publicInfo(session.connection.address).second.aioStreams != null
+    /** AIOStreams, or AIOMetadata, which sends the same "aiostreams" extension: servers made of catalogs. */
+    private suspend fun isAioStreams(session: ServerSession): Boolean = serverKind(session) != ServerKind.PLAIN
+
+    private suspend fun serverKind(session: ServerSession): ServerKind {
+        synchronized(lock) { serverKinds[session.apiRoot] }?.let { return it }
+        val info = try {
+            publicInfo(session.connection.address).second
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            return false
+            return ServerKind.PLAIN
         }
-        synchronized(lock) { aioStreamsServers[session.apiRoot] = detected }
-        return detected
+        val kind = when {
+            info.serverName.equals(AIOMETADATA_NAME, ignoreCase = true) -> ServerKind.AIOMETADATA
+            info.aioStreams != null -> ServerKind.AIOSTREAMS
+            else -> ServerKind.PLAIN
+        }
+        synchronized(lock) { serverKinds[session.apiRoot] = kind }
+        return kind
     }
 
     override suspend fun resumeItems(session: ServerSession, limit: Int): List<ServerTitle> {
@@ -368,12 +376,47 @@ internal abstract class MediaBrowserProvider(
         library: ServerLibrary,
         query: ServerTitleQuery
     ): List<ServerIndexEntry>? {
-        val filter = titleLookupQuery(query) ?: return null
-        val found = titleEntries(session, library, filter)
+        val filter = titleLookupQuery(query)
+        val byIds = if (filter != providerIdQuery(query)) idLookup(session, library, query) else emptyList()
+        if (verifiedTitleMatches(byIds, query).isNotEmpty()) return byIds
+        filter ?: return null
+        val found = byIds + titleEntries(session, library, filter)
         if (verifiedTitleMatches(found, query).isNotEmpty()) return found
         val retry = titleRetryQuery(query) ?: return found
         return found + titleEntries(session, library, retry)
     }
+
+    /**
+     * AIOMetadata finds titles by IMDb, TMDB and TVDB ids directly, which also matches titles whose name differs
+     * from the catalog's. Anything going wrong leaves the name search to find them.
+     */
+    private suspend fun idLookup(
+        session: ServerSession,
+        library: ServerLibrary,
+        query: ServerTitleQuery,
+    ): List<ServerIndexEntry> {
+        val filter = providerIdQuery(query) ?: return emptyList()
+        if (serverKind(session) != ServerKind.AIOMETADATA) return emptyList()
+        return try {
+            titleEntries(session, library, filter)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** "imdb.tt0111161,tmdb.278": the AnyProviderIdEquals filter Emby and AIOMetadata understand. */
+    protected fun providerIdQuery(query: ServerTitleQuery): Map<String, String>? {
+        val ids = listOfNotNull(
+            query.ids.imdb?.let { "imdb.$it" },
+            query.ids.tmdb?.let { "tmdb.$it" },
+            query.ids.tvdb?.let { "tvdb.$it" },
+        )
+        return if (ids.isEmpty()) null else mapOf("anyProviderIdEquals" to ids.joinToString(","))
+    }
+
+    private enum class ServerKind { PLAIN, AIOSTREAMS, AIOMETADATA }
 
     private suspend fun titleEntries(
         session: ServerSession,
@@ -670,6 +713,7 @@ internal abstract class MediaBrowserProvider(
 
     private companion object {
         const val API_KEY = "api_key"
+        const val AIOMETADATA_NAME = "AIOMetadata"
         const val MAX_STREAMING_BITRATE = 1_000_000_000L
         const val TITLE_LOOKUP_LIMIT = 20
         const val LIST_FIELDS = "Overview,Genres,ProviderIds,PremiereDate"

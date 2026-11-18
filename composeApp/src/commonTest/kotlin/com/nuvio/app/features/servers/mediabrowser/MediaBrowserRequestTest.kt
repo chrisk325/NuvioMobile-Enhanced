@@ -232,11 +232,86 @@ class MediaBrowserRequestTest {
 
         jellyfin.lookupTitle(session, movies, ServerTitleQuery(TrackingExternalIds(imdb = "tt0111161"), "Heat", 1995))
 
-        assertNull(http.lookups.single().url.parameters["parentId"])
+        // Its ids find nothing here, so the name search follows; neither is kept inside one catalog.
+        val (byIds, byName) = http.lookups
+        assertEquals("imdb.tt0111161", byIds.url.parameters["anyProviderIdEquals"])
+        assertNull(byIds.url.parameters["searchTerm"])
+        assertEquals("Heat", byName.url.parameters["searchTerm"])
+        assertNull(byName.url.parameters["anyProviderIdEquals"])
+        http.lookups.forEach { assertNull(it.url.parameters["parentId"]) }
         assertEquals(
             jellyfin.titleLookupScope(session, movies),
             jellyfin.titleLookupScope(session, ServerLibrary("cat2", "Trending", ServerMediaKind.MOVIE)),
         )
+    }
+
+    @Test
+    fun findsAioMetadataTitlesByTheirIdsWithoutTheName() = runTest {
+        val http = TestHttp { request ->
+            when (request.url.encodedPath) {
+                "/jellyfin/cfg/System/Info/Public" -> """{"ServerName": "AIOMetadata", "Version": "12.1.0", "aiostreams": {}}"""
+                else -> """{"Items": [{"Id": "m1", "ProductionYear": 1974,
+                    "ProviderIds": {"Imdb": "tt0071562", "Tmdb": "240"}}], "TotalRecordCount": 1}"""
+            }
+        }
+        val jellyfin = JellyfinProvider(http.client)
+        val session = session("jellyfin", "https://meta.example.com/jellyfin/cfg")
+        val ids = TrackingExternalIds(imdb = "tt0071562", tmdb = 240)
+
+        // A name the server would not find; the ids still do.
+        val found = jellyfin.lookupTitle(
+            session,
+            ServerLibrary("cat1", "Popular", ServerMediaKind.MOVIE),
+            ServerTitleQuery(ids, name = "Der Pate – Teil II", year = 1974),
+        )
+
+        assertEquals(listOf("m1"), found?.map { it.itemId })
+        val lookup = http.lookups.single()
+        assertEquals("imdb.tt0071562,tmdb.240", lookup.url.parameters["anyProviderIdEquals"])
+        assertEquals("Movie", lookup.url.parameters["includeItemTypes"])
+        assertNull(lookup.url.parameters["searchTerm"])
+    }
+
+    @Test
+    fun searchesByNameWhenAioMetadatasIdLookupFails() = runTest {
+        val http = TestHttp { request ->
+            when {
+                request.url.encodedPath.endsWith("/System/Info/Public") ->
+                    """{"ServerName": "AIOMetadata", "Version": "12.1.0", "aiostreams": {}}"""
+                request.url.parameters["anyProviderIdEquals"] != null -> "not json"
+                else -> """{"Items": [{"Id": "m1", "ProductionYear": 1994, "ProviderIds": {"Imdb": "tt0111161"}}]}"""
+            }
+        }
+        val jellyfin = JellyfinProvider(http.client)
+        val ids = TrackingExternalIds(imdb = "tt0111161")
+
+        val found = jellyfin.lookupTitle(
+            session("jellyfin", "https://meta.example.com/jellyfin/cfg"),
+            ServerLibrary("cat1", "Popular", ServerMediaKind.MOVIE),
+            ServerTitleQuery(ids, name = "The Shawshank Redemption", year = 1994),
+        )
+
+        assertEquals(listOf(ServerIndexEntry("m1", ids, year = 1994)), found)
+        assertEquals("The Shawshank Redemption", http.lookups.last().url.parameters["searchTerm"])
+    }
+
+    @Test
+    fun leavesIdLookupsToAioMetadata() = runTest {
+        val http = TestHttp { request ->
+            when (request.url.encodedPath) {
+                "/jellyfin/System/Info/Public" -> """{"ServerName": "Den", "Version": "10.10.7", "aiostreams": {}}"""
+                else -> """{"Items": []}"""
+            }
+        }
+        val jellyfin = JellyfinProvider(http.client)
+
+        jellyfin.lookupTitle(
+            session("jellyfin", "https://media.example.com/jellyfin"),
+            ServerLibrary("lib1", "Popular", ServerMediaKind.MOVIE),
+            ServerTitleQuery(TrackingExternalIds(imdb = "tt0111161"), name = "Heat", year = 1995),
+        )
+
+        assertTrue(http.lookups.none { it.url.parameters["anyProviderIdEquals"] != null })
     }
 
     @Test
