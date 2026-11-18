@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "0.9.92",
+          "buildVersion": "217",
+          "date": "2026-11-18T02:24:42Z",
+          "localizedDescription": "- [add plex and silo servers (#83)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/83) @chrisk325  \n- [upstream (#82)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/82) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/0.9.92-beta/nuvio-0.9.92-enhanced-release.ipa",
+          "size": 76975002,
+          "sha256": "4b7cdfc58f50bbedd9fe397c0966bb3463c5a553f4d862e4b230370889b97f19",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.9.90",
           "buildVersion": "215",
           "date": "2026-11-17T16:01:06Z",
