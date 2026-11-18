@@ -23,6 +23,8 @@ import nuvio.composeapp.generated.resources.action_retry
 import nuvio.composeapp.generated.resources.library_server_load_failed
 import nuvio.composeapp.generated.resources.library_servers_empty_message
 import nuvio.composeapp.generated.resources.library_servers_empty_title
+import nuvio.composeapp.generated.resources.library_servers_no_favorites_message
+import nuvio.composeapp.generated.resources.library_servers_no_favorites_title
 import org.jetbrains.compose.resources.stringResource
 
 internal data class LibraryServerShelf(
@@ -32,7 +34,7 @@ internal data class LibraryServerShelf(
 )
 
 internal suspend fun loadServerShelves(): List<LibraryServerShelf> = coroutineScope {
-    (ServerCatalog.favoriteLibraries() + ServerCatalog.libraries()).map { ref ->
+    ServerCatalog.libraryShelves().map { ref ->
         async {
             try {
                 LibraryServerShelf(ref, section = ServerCatalog.librarySection(ref, SERVER_SHELF_LIMIT))
@@ -62,6 +64,14 @@ internal fun LazyListScope.serverLibraryContent(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 title = stringResource(Res.string.library_servers_empty_title),
                 message = stringResource(Res.string.library_servers_empty_message),
+            )
+        }
+
+        shelves.none { it.failure != null || it.section?.items?.isNotEmpty() == true } -> item {
+            HomeEmptyStateCard(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                title = stringResource(Res.string.library_servers_no_favorites_title),
+                message = stringResource(Res.string.library_servers_no_favorites_message),
             )
         }
 

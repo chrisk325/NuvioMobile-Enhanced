@@ -79,6 +79,9 @@ interface ServerProvider {
 
     suspend fun setPlayed(session: ServerSession, itemId: String, played: Boolean): Unit = unsupported()
 
+    /** True when the server's libraries are catalogs (AIOStreams, AIOMetadata): rows for Home, not the Library. */
+    suspend fun servesCatalogs(session: ServerSession): Boolean = false
+
     /** The movies and shows the signed-in user marked as favourites on the server. */
     suspend fun favoritesPage(session: ServerSession, start: Int, limit: Int): ServerPage<ServerTitle> = unsupported()
 

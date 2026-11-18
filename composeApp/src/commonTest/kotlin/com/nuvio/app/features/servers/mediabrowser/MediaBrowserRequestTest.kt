@@ -232,6 +232,7 @@ class MediaBrowserRequestTest {
 
         jellyfin.lookupTitle(session, movies, ServerTitleQuery(TrackingExternalIds(imdb = "tt0111161"), "Heat", 1995))
 
+        assertTrue(jellyfin.servesCatalogs(session))
         // Its ids find nothing here, so the name search follows; neither is kept inside one catalog.
         val (byIds, byName) = http.lookups
         assertEquals("imdb.tt0111161", byIds.url.parameters["anyProviderIdEquals"])
@@ -348,6 +349,7 @@ class MediaBrowserRequestTest {
         val second = jellyfin.titleLookupScope(session, ServerLibrary("lib2", "4K Movies", ServerMediaKind.MOVIE))
 
         assertEquals(listOf("lib1", "lib2"), listOf(first, second))
+        assertFalse(jellyfin.servesCatalogs(session))
     }
 
     @Test

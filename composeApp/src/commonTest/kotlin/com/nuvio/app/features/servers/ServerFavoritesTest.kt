@@ -22,10 +22,11 @@ class ServerFavoritesTest {
         ServerFavorites.reset()
     }
 
-    private fun provider(favorites: Boolean = true) = FakeServerProvider(favorites = favorites).apply {
-        indexedIds["7"] = TrackingExternalIds(imdb = "tt0111161", tmdb = 278)
-        indexedIds[FakeServerProvider.SHOW_ID] = TrackingExternalIds(imdb = "tt0944947", tmdb = 1399)
-    }
+    private fun provider(favorites: Boolean = true, catalogs: Boolean = false) =
+        FakeServerProvider(favorites = favorites, catalogs = catalogs).apply {
+            indexedIds["7"] = TrackingExternalIds(imdb = "tt0111161", tmdb = 278)
+            indexedIds[FakeServerProvider.SHOW_ID] = TrackingExternalIds(imdb = "tt0944947", tmdb = 1399)
+        }
 
     // The matcher and the server calls run on real dispatchers.
     private suspend fun <T> onServer(block: suspend () -> T): T =
@@ -141,6 +142,28 @@ class ServerFavoritesTest {
 
         assertEquals(listOf("7" to true), provider.favoriteChanges)
         assertNull(ServerFavorites.mirror("tt0111161", "collection", favorite = true))
+    }
+
+    @Test
+    fun libraryShowsOnlyFavouritesForACatalogServer() = runTest {
+        installFakeServer(provider(catalogs = true))
+
+        val shelves = onServer { ServerCatalog.libraryShelves() }
+
+        assertEquals(listOf(ServerCatalog.FAVORITES_ID), shelves.map { it.library.id })
+        assertEquals(2, ServerCatalog.homeDefinitions().count { it.catalogId != "resume" }, "its catalogs stay on Home")
+    }
+
+    @Test
+    fun libraryKeepsAMediaServersOwnLibraries() = runTest {
+        val connection = installFakeServer(provider())
+
+        val shelves = onServer { ServerCatalog.libraryShelves() }
+
+        assertEquals(
+            listOf(ServerCatalog.FAVORITES_ID) + connection.selectedLibraries.map { it.id },
+            shelves.map { it.library.id },
+        )
     }
 
     @Test
