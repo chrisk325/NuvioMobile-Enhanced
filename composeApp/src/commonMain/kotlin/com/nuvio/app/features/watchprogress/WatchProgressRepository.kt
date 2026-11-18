@@ -46,6 +46,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import kotlin.concurrent.Volatile
 
 private const val WATCH_PROGRESS_METADATA_RESOLUTION_CONCURRENCY = 4
 private const val WATCH_PROGRESS_METADATA_RESOLUTION_LIMIT = 64
