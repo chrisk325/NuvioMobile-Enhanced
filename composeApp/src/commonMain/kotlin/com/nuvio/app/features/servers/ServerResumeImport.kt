@@ -18,29 +18,27 @@ import kotlinx.serialization.json.Json
 import kotlin.time.Clock
 
 /**
- * Brings each server's continue-watching list into the app's own Continue watching, for servers with
- * "Import watch progress" on, and takes out what the server finished or dropped. Opening a title already imports
- * its progress; this covers everything in progress.
- *
- * The last list from each server is kept on the device, so the server is asked at most every few minutes (across
- * restarts too) and only what changed since is added, updated or taken out.
+ * One server's continue-watching list as last fetched, kept on the device. [dismissed] holds the videos removed
+ * from Continue watching here; they stay out until the server changes them.
  */
 @Serializable
 internal data class ServerResumeCache(
     val fetchedAtMs: Long = 0L,
-    val items: Map<String, Item> = emptyMap(),
+    val entries: List<WatchProgressEntry> = emptyList(),
+    val dismissed: Set<String> = emptySet(),
 ) {
-    @Serializable
-    data class Item(val positionMs: Long, val durationMs: Long, val updatedAtMs: Long)
+    val shown: List<WatchProgressEntry>
+        get() = entries.filterNot { it.videoId in dismissed }
 }
 
-/** What one import changes: the entries to add or update, and the videos the server dropped since last time. */
-internal class ServerResumeDiff(
-    val changed: List<WatchProgressEntry>,
-    val dropped: Set<String>,
-    val cache: ServerResumeCache,
-)
-
+/**
+ * Shows each server's continue-watching list in the app's own Continue watching, for servers with
+ * "Import watch progress" on.
+ *
+ * The list is kept on the device and shown from there, apart from the app's synced progress, so restarts and
+ * syncs leave it alone. The server is asked again at most every few minutes, and Continue watching changes only
+ * when the server's list did: new and moved items show up, and items the server finished or dropped go.
+ */
 internal object ServerResumeImport {
     private val log = Logger.withTag("ServerResumeImport")
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -48,6 +46,8 @@ internal object ServerResumeImport {
     private val json = Json { ignoreUnknownKeys = true }
     private var job: Job? = null
     private val caches = mutableMapOf<String, ServerResumeCache>()
+    private var listening = false
+    private var cleanedUp = false
 
     internal var nowMs: () -> Long = { Clock.System.now().toEpochMilliseconds() }
 
@@ -58,14 +58,29 @@ internal object ServerResumeImport {
                 ServerRepository.provider(connection)?.supports(ServerCapability.USER_STATE_READ) == true
         }
 
-    /** Imports in the background, at most once every few minutes per server unless [force]. */
+    /** Shows the kept lists, then asks the servers whose list is older than a few minutes, unless [force]. */
     fun refresh(force: Boolean = false) {
+        show()
         val due = connections().filter { connection -> force || nowMs() - cache(connection.id).fetchedAtMs >= MIN_INTERVAL_MS }
         if (due.isEmpty()) return
         synchronized(lock) {
             if (job?.isActive == true) return
             job = scope.launch { due.forEach { import(it) } }
         }
+    }
+
+    /** After a title's details came from [connectionId], asks again soon so its progress shows. */
+    fun refreshSoon(connectionId: String) {
+        val connection = connections().firstOrNull { it.id == connectionId } ?: return
+        if (nowMs() - cache(connection.id).fetchedAtMs < SOON_INTERVAL_MS) return
+        scope.launch { import(connection) }
+    }
+
+    /** Puts the kept lists of the current servers in Continue watching; nothing changes when they are the same. */
+    fun show() {
+        listen()
+        cleanUpOnce()
+        WatchProgressRepository.setExternalEntries(connections().flatMap { cache(it.id).shown })
     }
 
     suspend fun import(connection: ServerConnection) {
@@ -80,52 +95,33 @@ internal object ServerResumeImport {
         }
         val previous = cache(connection.id)
         // A full list may have cut off older items, so it can't tell what the server dropped.
-        val diff = diff(previous, entries(connection, resume, previous), complete = resume.size < LIMIT, fetchedAtMs)
-        saveCache(connection.id, diff.cache)
-        if (diff.changed.isNotEmpty()) WatchProgressRepository.applyExternalProgress(diff.changed)
-        val removed = if (diff.dropped.isEmpty()) {
-            0
-        } else {
-            WatchProgressRepository.removeExternalProgress {
-                it.videoId in diff.dropped && isStale(it, connection.id, emptySet(), fetchedAtMs)
-            }
-        }
-        log.i {
-            "Continue watching from ${connection.providerId}: ${resume.size} listed, ${diff.changed.size} new or " +
-                "changed, $removed dropped"
-        }
+        val next = next(previous, entries(connection, resume, previous), complete = resume.size < LIMIT, fetchedAtMs)
+        saveCache(connection.id, next)
+        show()
+        log.i { "Continue watching from ${connection.providerId}: ${resume.size} listed, ${next.shown.size} shown" }
     }
 
     /**
-     * Compares [entries] with the list kept from the last import: only new or changed items are applied, and only
-     * items the server listed last time and no longer does are dropped. A [complete] list is needed to drop anything.
+     * The list to keep after an import: the server's [entries], plus, when the list wasn't [complete], what it may
+     * have cut off. A video stays dismissed while the server reports it unchanged.
      */
-    internal fun diff(
+    internal fun next(
         previous: ServerResumeCache,
         entries: List<WatchProgressEntry>,
         complete: Boolean,
         fetchedAtMs: Long,
-    ): ServerResumeDiff {
-        val items = entries.associate { entry ->
-            entry.videoId to ServerResumeCache.Item(entry.lastPositionMs, entry.durationMs, entry.lastUpdatedEpochMs)
+    ): ServerResumeCache {
+        val listed = entries.mapTo(mutableSetOf()) { it.videoId }
+        val kept = if (complete) entries else entries + previous.entries.filterNot { it.videoId in listed }
+        val before = previous.entries.associateBy { it.videoId }
+        val dismissed = previous.dismissed.filterTo(mutableSetOf()) { videoId ->
+            val old = before[videoId]
+            val new = kept.firstOrNull { it.videoId == videoId }
+            old != null && new != null &&
+                old.lastPositionMs == new.lastPositionMs && old.lastUpdatedEpochMs == new.lastUpdatedEpochMs
         }
-        val changed = entries.filter { previous.items[it.videoId] != items.getValue(it.videoId) }
-        val dropped = if (complete) previous.items.keys - items.keys else emptySet()
-        // Items an incomplete list left out are kept, so their first-seen time and their removal still count later.
-        val kept = if (complete) items else previous.items + items
-        return ServerResumeDiff(changed, dropped, ServerResumeCache(fetchedAtMs, kept))
+        return ServerResumeCache(fetchedAtMs, kept, dismissed)
     }
-
-    /**
-     * True for an entry this server put in Continue watching that its list no longer has: finished or removed on
-     * the server. Progress from playing here keeps the stream it played and stays, as does anything updated since
-     * the list was fetched.
-     */
-    internal fun isStale(entry: WatchProgressEntry, connectionId: String, listed: Set<String>, fetchedAtMs: Long): Boolean =
-        entry.providerAddonId == "$MEDIA_SERVER_PROVIDER_PREFIX$connectionId" &&
-            entry.lastSourceUrl == null &&
-            entry.videoId !in listed &&
-            entry.lastUpdatedEpochMs < fetchedAtMs
 
     internal fun entries(
         connection: ServerConnection,
@@ -134,10 +130,11 @@ internal object ServerResumeImport {
     ): List<WatchProgressEntry> {
         val present = connection.presenter()
         val label = ServerRepository.sourceLabel(connection)
+        val seen = previous.entries.associate { it.videoId to it.lastUpdatedEpochMs }
         val now = nowMs()
         return resume.mapNotNull { (title, state) ->
             if (state.played || state.positionMs <= 0L || state.durationMs <= 0L) return@mapNotNull null
-            entry(present(title), state, label, connection.id) { videoId -> previous.items[videoId]?.updatedAtMs ?: now }
+            entry(present(title), state, label, connection.id) { videoId -> seen[videoId] ?: now }
         }.distinctBy { it.videoId }
     }
 
@@ -178,6 +175,34 @@ internal object ServerResumeImport {
         )
     }
 
+    /** Remembers what Continue watching removed, so it stays out until the server changes it. */
+    internal fun dismiss(removed: List<WatchProgressEntry>) {
+        removed.groupBy { it.providerAddonId?.removePrefix(MEDIA_SERVER_PROVIDER_PREFIX) }.forEach { (connectionId, entries) ->
+            if (connectionId == null) return@forEach
+            val cache = cache(connectionId)
+            saveCache(connectionId, cache.copy(dismissed = cache.dismissed + entries.map { it.videoId }))
+        }
+    }
+
+    private fun listen() {
+        synchronized(lock) {
+            if (listening) return
+            listening = true
+        }
+        WatchProgressRepository.onExternalEntriesRemoved = ::dismiss
+    }
+
+    // Earlier versions stored these entries with the app's synced progress, where syncs wiped them.
+    private fun cleanUpOnce() {
+        synchronized(lock) {
+            if (cleanedUp) return
+            cleanedUp = true
+        }
+        val tags = connections().mapTo(mutableSetOf()) { "$MEDIA_SERVER_PROVIDER_PREFIX${it.id}" }
+        if (tags.isEmpty()) return
+        WatchProgressRepository.removeExternalProgress { it.providerAddonId in tags && it.lastSourceUrl == null }
+    }
+
     private fun cache(connectionId: String): ServerResumeCache = synchronized(lock) {
         caches.getOrPut(connectionId) {
             runCatching { ServerStorage.read(cacheKey(connectionId)) }.getOrNull()
@@ -193,10 +218,11 @@ internal object ServerResumeImport {
 
     private fun cacheKey(connectionId: String) = "resume.$connectionId"
 
-    /** Forgets a server's last list, so its next import brings everything in again. */
+    /** Forgets a server's kept list and takes it out of Continue watching; its next import brings everything in. */
     fun forget(connectionId: String) {
         synchronized(lock) { caches.remove(connectionId) }
         runCatching { ServerStorage.write(cacheKey(connectionId), null) }
+        show()
     }
 
     internal fun reset() {
@@ -205,9 +231,13 @@ internal object ServerResumeImport {
             job = null
             caches.keys.forEach { runCatching { ServerStorage.write(cacheKey(it), null) } }
             caches.clear()
+            listening = false
+            cleanedUp = false
         }
+        WatchProgressRepository.setExternalEntries(emptyList())
     }
 
     private const val LIMIT = 50
     private const val MIN_INTERVAL_MS = 3 * 60_000L
+    private const val SOON_INTERVAL_MS = 30_000L
 }

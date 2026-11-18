@@ -6,7 +6,6 @@ import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ServerResumeImportTest {
@@ -96,87 +95,90 @@ class ServerResumeImportTest {
         val resume = listOf(ServerResume(show(connection.id), episodeState(connection.id, lastPlayed = null)))
 
         val first = ServerResumeImport.entries(connection, resume).single()
-        val kept = ServerResumeImport.diff(ServerResumeCache(), listOf(first), complete = true, fetchedAtMs = now).cache
+        val kept = ServerResumeImport.next(ServerResumeCache(), listOf(first), complete = true, fetchedAtMs = now)
         now = 9_000L
         val second = ServerResumeImport.entries(connection, resume, kept).single()
 
         assertEquals(5_000L, first.lastUpdatedEpochMs)
-        assertEquals(5_000L, second.lastUpdatedEpochMs)
+        assertEquals(first, second, "an unchanged item comes back identical, so Continue watching doesn't change")
+    }
+
+    private fun imported(connectionId: String, videoId: String, position: Long = 10L, updatedAt: Long = 1_000L) =
+        WatchProgressEntry(
+            contentType = "series",
+            parentMetaId = "show",
+            parentMetaType = "series",
+            videoId = videoId,
+            title = "One Piece",
+            lastPositionMs = position,
+            durationMs = 100L,
+            lastUpdatedEpochMs = updatedAt,
+            providerAddonId = "server:$connectionId",
+        )
+
+    @Test
+    fun keepsTheServersListAsItIs() {
+        val listed = listOf(imported("c1", "ep1"), imported("c1", "ep2"))
+
+        val kept = ServerResumeImport.next(ServerResumeCache(), listed, complete = true, fetchedAtMs = 3_000L)
+
+        assertEquals(listed, kept.shown)
+        assertEquals(3_000L, kept.fetchedAtMs)
     }
 
     @Test
-    fun appliesOnlyWhatChangedSinceTheLastImport() {
-        val first = listOf(imported("c1", "ep1"), imported("c1", "ep2"))
-        val kept = ServerResumeImport.diff(ServerResumeCache(), first, complete = true, fetchedAtMs = 1_000L)
-        assertEquals(listOf("ep1", "ep2"), kept.changed.map { it.videoId }, "the first import brings everything")
+    fun dropsWhatTheServerNoLongerListsUnlessTheListWasCutOff() {
+        val kept = ServerResumeImport.next(ServerResumeCache(), listOf(imported("c1", "ep1"), imported("c1", "ep2")), true, 1_000L)
 
-        val moved = imported("c1", "ep2").copy(lastPositionMs = 50L, lastUpdatedEpochMs = 2_000L)
-        val next = ServerResumeImport.diff(kept.cache, listOf(imported("c1", "ep1"), moved, imported("c1", "ep3")), true, 3_000L)
+        val complete = ServerResumeImport.next(kept, listOf(imported("c1", "ep2")), complete = true, fetchedAtMs = 2_000L)
+        val cutOff = ServerResumeImport.next(kept, listOf(imported("c1", "ep2")), complete = false, fetchedAtMs = 2_000L)
 
-        assertEquals(listOf("ep2", "ep3"), next.changed.map { it.videoId })
-        assertTrue(next.dropped.isEmpty())
-        assertEquals(3_000L, next.cache.fetchedAtMs)
+        assertEquals(listOf("ep2"), complete.shown.map { it.videoId })
+        assertEquals(setOf("ep1", "ep2"), cutOff.shown.mapTo(mutableSetOf()) { it.videoId })
     }
 
     @Test
-    fun leavesContinueWatchingAloneWhenNothingChanged() {
-        val entries = listOf(imported("c1", "ep1"))
-        val kept = ServerResumeImport.diff(ServerResumeCache(), entries, complete = true, fetchedAtMs = 1_000L).cache
+    fun aDismissedItemStaysOutUntilTheServerChangesIt() {
+        val first = ServerResumeImport.next(ServerResumeCache(), listOf(imported("c1", "ep1"), imported("c1", "ep2")), true, 1_000L)
+        val dismissed = first.copy(dismissed = setOf("ep1"))
 
-        val again = ServerResumeImport.diff(kept, entries, complete = true, fetchedAtMs = 5_000L)
+        val unchanged = ServerResumeImport.next(dismissed, listOf(imported("c1", "ep1"), imported("c1", "ep2")), true, 2_000L)
+        val watchedFurther = ServerResumeImport.next(
+            dismissed,
+            listOf(imported("c1", "ep1", position = 40L, updatedAt = 1_500L), imported("c1", "ep2")),
+            complete = true,
+            fetchedAtMs = 2_000L,
+        )
 
-        assertTrue(again.changed.isEmpty())
-        assertTrue(again.dropped.isEmpty())
+        assertEquals(listOf("ep2"), unchanged.shown.map { it.videoId })
+        assertEquals(listOf("ep1", "ep2"), watchedFurther.shown.map { it.videoId })
+        assertTrue(watchedFurther.dismissed.isEmpty())
     }
 
     @Test
-    fun dropsOnlyWhatTheServerListedBefore() {
-        val kept = ServerResumeImport.diff(ServerResumeCache(), listOf(imported("c1", "ep1"), imported("c1", "ep2")), true, 1_000L).cache
+    fun aDismissedItemTheServerDroppedIsForgotten() {
+        val dismissed = ServerResumeImport.next(ServerResumeCache(), listOf(imported("c1", "ep1")), true, 1_000L)
+            .copy(dismissed = setOf("ep1"))
 
-        val next = ServerResumeImport.diff(kept, listOf(imported("c1", "ep2")), complete = true, fetchedAtMs = 2_000L)
-        val cutOff = ServerResumeImport.diff(kept, listOf(imported("c1", "ep2")), complete = false, fetchedAtMs = 2_000L)
+        val next = ServerResumeImport.next(dismissed, emptyList(), complete = true, fetchedAtMs = 2_000L)
 
-        assertEquals(setOf("ep1"), next.dropped)
-        assertEquals(setOf("ep2"), next.cache.items.keys)
-        assertTrue(cutOff.dropped.isEmpty(), "a full list may have cut ep1 off")
-        assertEquals(setOf("ep1", "ep2"), cutOff.cache.items.keys)
-    }
-
-    private fun imported(connectionId: String, videoId: String, updatedAt: Long = 1_000L) = WatchProgressEntry(
-        contentType = "series",
-        parentMetaId = "show",
-        parentMetaType = "series",
-        videoId = videoId,
-        title = "One Piece",
-        lastPositionMs = 10L,
-        durationMs = 100L,
-        lastUpdatedEpochMs = updatedAt,
-        providerAddonId = "server:$connectionId",
-    )
-
-    @Test
-    fun dropsWhatTheServerNoLongerLists() {
-        val gone = imported("c1", "ep1")
-
-        assertTrue(ServerResumeImport.isStale(gone, "c1", listed = setOf("ep2"), fetchedAtMs = 5_000L))
-        assertFalse(ServerResumeImport.isStale(imported("c1", "ep2"), "c1", listed = setOf("ep2"), fetchedAtMs = 5_000L))
+        assertTrue(next.dismissed.isEmpty())
     }
 
     @Test
-    fun leavesOtherProgressAlone() {
-        val listed = emptySet<String>()
+    fun keepsTheServersListApartFromTheAppsOwnProgress() {
+        val own = imported("c1", "ep1", updatedAt = 5_000L).copy(providerAddonId = null, lastSourceUrl = "https://x/ep1")
+        val fromServer = listOf(imported("c1", "ep1", updatedAt = 1_000L), imported("c1", "ep2"))
 
-        // Another server's, the app's own, and one being played right now.
-        assertFalse(ServerResumeImport.isStale(imported("c2", "ep1"), "c1", listed, fetchedAtMs = 5_000L))
-        assertFalse(ServerResumeImport.isStale(imported("c1", "ep1").copy(providerAddonId = null), "c1", listed, 5_000L))
-        assertFalse(ServerResumeImport.isStale(imported("c1", "ep1", updatedAt = 6_000L), "c1", listed, 5_000L))
-    }
+        val merged = com.nuvio.app.features.watchprogress.mergeExternalProgressEntries(listOf(own), fromServer, emptySet())
 
-    @Test
-    fun keepsProgressFromPlayingHere() {
-        val playedHere = imported("c1", "ep1").copy(lastSourceUrl = "https://fake.example/ep1")
-
-        assertFalse(ServerResumeImport.isStale(playedHere, "c1", listed = emptySet(), fetchedAtMs = 5_000L))
+        // Playing ep1 here is newer, so it wins; ep2 only the server has.
+        assertEquals(listOf(own, fromServer[1]), merged)
+        assertEquals(
+            listOf(own),
+            com.nuvio.app.features.watchprogress.mergeExternalProgressEntries(listOf(own), fromServer, setOf("show")),
+            "with a tracker that has the show, the tracker's progress is the one shown",
+        )
     }
 
     @Test
