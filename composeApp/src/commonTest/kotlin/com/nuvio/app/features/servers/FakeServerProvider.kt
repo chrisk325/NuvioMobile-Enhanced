@@ -12,6 +12,7 @@ internal class FakeServerProvider(
     private val transcodes: Boolean = false,
     favorites: Boolean = false,
     private val catalogs: Boolean = false,
+    userStateRead: Boolean = false,
 ) : ServerProvider {
     override val id: String = "fake"
     override val displayName: String = "Fake"
@@ -20,7 +21,8 @@ internal class FakeServerProvider(
         ServerCapability.SEARCH,
         ServerCapability.EXTERNAL_ID_LOOKUP,
         ServerCapability.USER_STATE_WRITE,
-    ) + if (favorites) setOf(ServerCapability.FAVORITES) else emptySet()
+    ) + (if (favorites) setOf(ServerCapability.FAVORITES) else emptySet()) +
+        (if (userStateRead) setOf(ServerCapability.USER_STATE_READ) else emptySet())
 
     val movies = MOVIE_LIBRARY
     val shows = SERIES_LIBRARY

@@ -27,6 +27,21 @@ class WatchProgressSourceProjectionTest {
     }
 
     @Test
+    fun `remote source keeps progress imported from a media server unless it tracks the title`() {
+        val fromServer = entry(parentMetaId = "server-only").copy(providerAddonId = "server:c1")
+        val alsoTracked = entry(parentMetaId = "shared").copy(providerAddonId = "server:c1")
+        val providerEntries = listOf(entry(parentMetaId = "shared", updatedAt = 100L))
+
+        val projected = projectWatchProgressSourceEntries(
+            source = WatchProgressSource.TRAKT,
+            nuvioEntries = listOf(fromServer, alsoTracked, entry(parentMetaId = "nuvio-only")),
+            providerEntries = providerEntries,
+        )
+
+        assertEquals(providerEntries + fromServer, projected)
+    }
+
+    @Test
     fun `Nuvio source excludes every provider progress entry`() {
         val nuvioEntries = listOf(entry(parentMetaId = "nuvio"))
         val providerEntries = listOf(entry(parentMetaId = "provider"))
