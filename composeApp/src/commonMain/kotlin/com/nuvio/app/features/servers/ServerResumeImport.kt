@@ -17,7 +17,8 @@ import kotlin.time.Clock
 
 /**
  * Brings each server's continue-watching list into the app's own Continue watching, for servers with
- * "Import watch progress" on. Opening a title already imports its progress; this covers everything in progress.
+ * "Import watch progress" on, and takes out what the server finished or dropped. Opening a title already imports
+ * its progress; this covers everything in progress.
  */
 internal object ServerResumeImport {
     private val log = Logger.withTag("ServerResumeImport")
@@ -49,6 +50,7 @@ internal object ServerResumeImport {
     }
 
     suspend fun import(connection: ServerConnection) {
+        val fetchedAtMs = nowMs()
         val resume = try {
             ServerRepository.call(connection.id) { provider, session -> provider.resumeProgress(session, LIMIT) }
         } catch (error: CancellationException) {
@@ -60,8 +62,29 @@ internal object ServerResumeImport {
         synchronized(lock) { importedAtMs[connection.id] = nowMs() }
         val entries = entries(connection, resume)
         if (entries.isNotEmpty()) WatchProgressRepository.applyExternalProgress(entries)
-        log.i { "Imported ${entries.size} of ${resume.size} continue-watching items from ${connection.providerId}" }
+        // A full list may have cut off older items, so it can't tell what the server dropped.
+        val removed = if (resume.size >= LIMIT) {
+            0
+        } else {
+            val listed = entries.mapTo(mutableSetOf()) { it.videoId }
+            WatchProgressRepository.removeExternalProgress { isStale(it, connection.id, listed, fetchedAtMs) }
+        }
+        log.i {
+            "Imported ${entries.size} of ${resume.size} continue-watching items from ${connection.providerId}, " +
+                "dropped $removed the server no longer lists"
+        }
     }
+
+    /**
+     * True for an entry this server put in Continue watching that its list no longer has: finished or removed on
+     * the server. Progress from playing here keeps the stream it played and stays, as does anything updated since
+     * the list was fetched.
+     */
+    internal fun isStale(entry: WatchProgressEntry, connectionId: String, listed: Set<String>, fetchedAtMs: Long): Boolean =
+        entry.providerAddonId == "$MEDIA_SERVER_PROVIDER_PREFIX$connectionId" &&
+            entry.lastSourceUrl == null &&
+            entry.videoId !in listed &&
+            entry.lastUpdatedEpochMs < fetchedAtMs
 
     internal fun entries(connection: ServerConnection, resume: List<ServerResume>): List<WatchProgressEntry> {
         val present = connection.presenter()
@@ -114,6 +137,6 @@ internal object ServerResumeImport {
         }
     }
 
-    private const val LIMIT = 30
+    private const val LIMIT = 50
     private const val MIN_INTERVAL_MS = 3 * 60_000L
 }

@@ -2,9 +2,11 @@ package com.nuvio.app.features.servers
 
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.tracking.TrackingExternalIds
+import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ServerResumeImportTest {
@@ -98,6 +100,43 @@ class ServerResumeImportTest {
 
         assertEquals(5_000L, first.lastUpdatedEpochMs)
         assertEquals(5_000L, second.lastUpdatedEpochMs)
+    }
+
+    private fun imported(connectionId: String, videoId: String, updatedAt: Long = 1_000L) = WatchProgressEntry(
+        contentType = "series",
+        parentMetaId = "show",
+        parentMetaType = "series",
+        videoId = videoId,
+        title = "One Piece",
+        lastPositionMs = 10L,
+        durationMs = 100L,
+        lastUpdatedEpochMs = updatedAt,
+        providerAddonId = "server:$connectionId",
+    )
+
+    @Test
+    fun dropsWhatTheServerNoLongerLists() {
+        val gone = imported("c1", "ep1")
+
+        assertTrue(ServerResumeImport.isStale(gone, "c1", listed = setOf("ep2"), fetchedAtMs = 5_000L))
+        assertFalse(ServerResumeImport.isStale(imported("c1", "ep2"), "c1", listed = setOf("ep2"), fetchedAtMs = 5_000L))
+    }
+
+    @Test
+    fun leavesOtherProgressAlone() {
+        val listed = emptySet<String>()
+
+        // Another server's, the app's own, and one being played right now.
+        assertFalse(ServerResumeImport.isStale(imported("c2", "ep1"), "c1", listed, fetchedAtMs = 5_000L))
+        assertFalse(ServerResumeImport.isStale(imported("c1", "ep1").copy(providerAddonId = null), "c1", listed, 5_000L))
+        assertFalse(ServerResumeImport.isStale(imported("c1", "ep1", updatedAt = 6_000L), "c1", listed, 5_000L))
+    }
+
+    @Test
+    fun keepsProgressFromPlayingHere() {
+        val playedHere = imported("c1", "ep1").copy(lastSourceUrl = "https://fake.example/ep1")
+
+        assertFalse(ServerResumeImport.isStale(playedHere, "c1", listed = emptySet(), fetchedAtMs = 5_000L))
     }
 
     @Test

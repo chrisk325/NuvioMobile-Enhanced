@@ -1197,6 +1197,20 @@ object WatchProgressRepository {
         }
     }
 
+    /**
+     * Drops the app's own entries that an outside source added and no longer lists. Only this device's entries
+     * change; nothing is removed from a tracker.
+     */
+    fun removeExternalProgress(shouldRemove: (WatchProgressEntry) -> Boolean): Int {
+        ensureLoaded()
+        val removed = localEntriesSnapshot().filter(shouldRemove).mapNotNull { removeLocalEntry(it.resolvedProgressKey()) }
+        if (removed.isNotEmpty()) {
+            publish()
+            persist()
+        }
+        return removed.size
+    }
+
     fun clearProgress(videoId: String, parentMetaId: String? = null) {
         clearProgress(videoIds = listOf(videoId), parentMetaId = parentMetaId)
     }
