@@ -11,6 +11,7 @@ internal class FakeServerProvider(
     private val movieCount: Int = 120,
     private val transcodes: Boolean = false,
     favorites: Boolean = false,
+    private val catalogs: Boolean = false,
 ) : ServerProvider {
     override val id: String = "fake"
     override val displayName: String = "Fake"
@@ -137,6 +138,8 @@ internal class FakeServerProvider(
         synchronized(lock) { playedChanges += itemId to played }
         if (itemId in failingPlayed) throw ServerException(ServerFailure.FORBIDDEN)
     }
+
+    override suspend fun servesCatalogs(session: ServerSession): Boolean = catalogs
 
     override suspend fun favoritesPage(session: ServerSession, start: Int, limit: Int): ServerPage<ServerTitle> {
         val ids = synchronized(lock) { favoriteIds.toList() }
