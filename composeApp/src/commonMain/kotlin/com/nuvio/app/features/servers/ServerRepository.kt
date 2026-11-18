@@ -266,6 +266,7 @@ object ServerRepository {
 
     fun setImportWatchState(connectionId: String, enabled: Boolean) {
         updateConnection(connectionId) { it.copy(importWatchState = enabled) }
+        if (!enabled) ServerResumeImport.forget(connectionId)
     }
 
     fun setEnabled(connectionId: String, enabled: Boolean) {
@@ -277,6 +278,7 @@ object ServerRepository {
         val session = session(connectionId)
         saveConnections(_uiState.value.connections.filterNot { it.id == connectionId }, invalidate = true)
         deleteCredential(connection.credentialRef)
+        ServerResumeImport.forget(connectionId)
         setFailure(connectionId, null)
         if (session != null) {
             scope.launch {

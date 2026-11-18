@@ -14,6 +14,7 @@ class ServerResumeImportTest {
     fun tearDown() {
         removeFakeServer()
         ServerResumeImport.reset()
+        ServerResumeImport.nowMs = { kotlin.time.Clock.System.now().toEpochMilliseconds() }
     }
 
     private fun show(connectionId: String) = ServerTitle(
@@ -95,11 +96,50 @@ class ServerResumeImportTest {
         val resume = listOf(ServerResume(show(connection.id), episodeState(connection.id, lastPlayed = null)))
 
         val first = ServerResumeImport.entries(connection, resume).single()
+        val kept = ServerResumeImport.diff(ServerResumeCache(), listOf(first), complete = true, fetchedAtMs = now).cache
         now = 9_000L
-        val second = ServerResumeImport.entries(connection, resume).single()
+        val second = ServerResumeImport.entries(connection, resume, kept).single()
 
         assertEquals(5_000L, first.lastUpdatedEpochMs)
         assertEquals(5_000L, second.lastUpdatedEpochMs)
+    }
+
+    @Test
+    fun appliesOnlyWhatChangedSinceTheLastImport() {
+        val first = listOf(imported("c1", "ep1"), imported("c1", "ep2"))
+        val kept = ServerResumeImport.diff(ServerResumeCache(), first, complete = true, fetchedAtMs = 1_000L)
+        assertEquals(listOf("ep1", "ep2"), kept.changed.map { it.videoId }, "the first import brings everything")
+
+        val moved = imported("c1", "ep2").copy(lastPositionMs = 50L, lastUpdatedEpochMs = 2_000L)
+        val next = ServerResumeImport.diff(kept.cache, listOf(imported("c1", "ep1"), moved, imported("c1", "ep3")), true, 3_000L)
+
+        assertEquals(listOf("ep2", "ep3"), next.changed.map { it.videoId })
+        assertTrue(next.dropped.isEmpty())
+        assertEquals(3_000L, next.cache.fetchedAtMs)
+    }
+
+    @Test
+    fun leavesContinueWatchingAloneWhenNothingChanged() {
+        val entries = listOf(imported("c1", "ep1"))
+        val kept = ServerResumeImport.diff(ServerResumeCache(), entries, complete = true, fetchedAtMs = 1_000L).cache
+
+        val again = ServerResumeImport.diff(kept, entries, complete = true, fetchedAtMs = 5_000L)
+
+        assertTrue(again.changed.isEmpty())
+        assertTrue(again.dropped.isEmpty())
+    }
+
+    @Test
+    fun dropsOnlyWhatTheServerListedBefore() {
+        val kept = ServerResumeImport.diff(ServerResumeCache(), listOf(imported("c1", "ep1"), imported("c1", "ep2")), true, 1_000L).cache
+
+        val next = ServerResumeImport.diff(kept, listOf(imported("c1", "ep2")), complete = true, fetchedAtMs = 2_000L)
+        val cutOff = ServerResumeImport.diff(kept, listOf(imported("c1", "ep2")), complete = false, fetchedAtMs = 2_000L)
+
+        assertEquals(setOf("ep1"), next.dropped)
+        assertEquals(setOf("ep2"), next.cache.items.keys)
+        assertTrue(cutOff.dropped.isEmpty(), "a full list may have cut ep1 off")
+        assertEquals(setOf("ep1", "ep2"), cutOff.cache.items.keys)
     }
 
     private fun imported(connectionId: String, videoId: String, updatedAt: Long = 1_000L) = WatchProgressEntry(
