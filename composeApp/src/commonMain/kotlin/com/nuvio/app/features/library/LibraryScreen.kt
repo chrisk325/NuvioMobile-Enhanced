@@ -140,6 +140,7 @@ import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.home.HomeCatalogSection
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.home.components.HomeEmptyStateCard
+import com.nuvio.app.features.servers.ServerFavorites
 import com.nuvio.app.features.servers.ServerRepository
 import com.nuvio.app.features.home.components.HomePosterCard
 import com.nuvio.app.features.home.components.HomeSkeletonRow
@@ -236,6 +237,7 @@ fun LibraryScreen(
         ServerRepository.uiState
     }.collectAsStateWithLifecycle()
     val hasServers = serversUiState.connections.any { it.enabled }
+    val serverFavoritesUiState by ServerFavorites.state.collectAsStateWithLifecycle()
     var sourceModeName by rememberSaveable { mutableStateOf(LibraryViewMode.Saved.name) }
     val sourceMode = remember(sourceModeName, hasServers) {
         runCatching { LibraryViewMode.valueOf(sourceModeName) }.getOrDefault(LibraryViewMode.Saved)
@@ -436,8 +438,11 @@ fun LibraryScreen(
         }
     }
 
-    LaunchedEffect(sourceMode, serversUiState.revision, serverShelvesRequest) {
-        if (sourceMode == LibraryViewMode.Servers) serverShelves = loadServerShelves()
+    LaunchedEffect(sourceMode, serversUiState.revision, serverShelvesRequest, serverFavoritesUiState.writes) {
+        if (sourceMode == LibraryViewMode.Servers) {
+            ServerFavorites.ensureFresh()
+            serverShelves = loadServerShelves()
+        }
     }
 
     ScreenActivityEffect(sourceMode, cloudSettings.cloudLibraryEnabled, cloudSettings.providerApiKeys) { screenActive ->

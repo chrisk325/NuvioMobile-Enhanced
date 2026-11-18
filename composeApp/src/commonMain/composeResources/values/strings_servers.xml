@@ -57,6 +57,16 @@
     <string name="servers_play_method_transcode">Transcoding</string>
     <string name="servers_watched_failed">Could not update watched state on the server.</string>
     <string name="servers_resume_row">Continue watching</string>
+    <string name="servers_favorites_row">Favorites</string>
+    <string name="servers_favorite_add">Favorite on %1$s</string>
+    <string name="servers_favorite_remove">Unfavorite on %1$s</string>
+    <string name="servers_favorite_add_generic">Favorite on server</string>
+    <string name="servers_favorite_remove_generic">Unfavorite on server</string>
+    <string name="servers_favorite_added">Added to %1$s favorites</string>
+    <string name="servers_favorite_removed">Removed from %1$s favorites</string>
+    <string name="servers_favorite_not_found">This title isn't on your media server.</string>
+    <string name="servers_generic_name">server</string>
+    <string name="servers_favorite_failed">Could not update favorites on the server.</string>
     <string name="servers_failure_unsupported">The server doesn't support this item.</string>
     <string name="servers_failure_incomplete">Still checking this server's library. Try again in a moment.</string>
     <string name="servers_failure_remote_playback">Plex only allows playback from this server away from its home network with Plex Pass or a Remote Watch Pass.</string>

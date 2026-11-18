@@ -121,6 +121,58 @@ class MediaBrowserRequestTest {
         assertEquals(1, http.requests.size)
     }
 
+    @Test
+    fun jellyfinMarksAndClearsFavourites() = runTest {
+        val http = TestHttp { "{}" }
+        val jellyfin = JellyfinProvider(http.client)
+        val session = session("jellyfin", "https://media.example.com")
+
+        jellyfin.setFavorite(session, "m1", favorite = true)
+        jellyfin.setFavorite(session, "m1", favorite = false)
+
+        assertEquals(listOf(HttpMethod.Post, HttpMethod.Delete), http.requests.map { it.method })
+        http.requests.forEach { request ->
+            assertEquals("/UserFavoriteItems/m1", request.url.encodedPath)
+            assertEquals("u1", request.url.parameters.get("userId"))
+        }
+    }
+
+    @Test
+    fun embyMarksFavouritesUnderTheUser() = runTest {
+        val http = TestHttp { "{}" }
+        val emby = EmbyProvider(http.client)
+
+        emby.setFavorite(session("emby", "https://media.example.com"), "m1", favorite = true)
+
+        val request = http.requests.single()
+        assertEquals(HttpMethod.Post, request.method)
+        assertEquals("/emby/Users/u1/FavoriteItems/m1", request.url.encodedPath)
+    }
+
+    @Test
+    fun listsTheUsersFavouriteMoviesAndShows() = runTest {
+        val http = TestHttp {
+            """{"Items": [
+                {"Id": "m1", "Name": "Heat", "Type": "Movie", "ProviderIds": {"Imdb": "tt0113277"}},
+                {"Id": "s1", "Name": "Dark", "Type": "Series", "ProviderIds": {"Tmdb": "70523"}}
+            ], "TotalRecordCount": 2}"""
+        }
+        val jellyfin = JellyfinProvider(http.client)
+
+        val page = jellyfin.favoritesPage(session("jellyfin", "https://media.example.com"), start = 0, limit = 50)
+
+        assertEquals(listOf("movie", "series"), page.items.map { it.preview.type })
+        assertEquals(TrackingExternalIds(imdb = "tt0113277"), page.items.first().externalIds)
+        assertEquals(2, page.totalCount)
+        val request = http.requests.single()
+        assertEquals("/Items", request.url.encodedPath)
+        assertEquals("IsFavorite", request.url.parameters.get("filters"))
+        assertEquals("Movie,Series", request.url.parameters.get("includeItemTypes"))
+        assertEquals("true", request.url.parameters.get("recursive"))
+        assertEquals("u1", request.url.parameters.get("userId"))
+        assertEquals("50", request.url.parameters.get("limit"))
+    }
+
     private fun session(providerId: String, address: String) = ServerSession(
         connection = ServerConnection(
             id = "cabc",

@@ -12,6 +12,7 @@ enum class ServerCapability {
     USER_STATE_READ,
     USER_STATE_WRITE,
     TRANSCODING,
+    FAVORITES,
 }
 
 interface ServerProvider {
@@ -77,6 +78,11 @@ interface ServerProvider {
     suspend fun resumeItems(session: ServerSession, limit: Int): List<ServerTitle> = unsupported()
 
     suspend fun setPlayed(session: ServerSession, itemId: String, played: Boolean): Unit = unsupported()
+
+    /** The movies and shows the signed-in user marked as favourites on the server. */
+    suspend fun favoritesPage(session: ServerSession, start: Int, limit: Int): ServerPage<ServerTitle> = unsupported()
+
+    suspend fun setFavorite(session: ServerSession, itemId: String, favorite: Boolean): Unit = unsupported()
 
     suspend fun externalIdIndex(
         session: ServerSession,

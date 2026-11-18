@@ -66,11 +66,21 @@ internal class ServerMatcher(
     private val titleNames = linkedMapOf<String, TitleName>()
 
     fun request(type: String, videoId: String, season: Int?, episode: Int?): MatchRequest? {
+        val request = titleRequest(type, videoId) ?: return null
+        if (request.kind == ServerMediaKind.MOVIE) return request
+        val parts = videoId.split(':')
+        val position = parts.drop(parentSize(videoId)).map { it.toIntOrNull() }.takeIf { it.size == 2 }
+        val requestedSeason = season ?: position?.get(0) ?: return null
+        val requestedEpisode = episode ?: position?.get(1) ?: return null
+        return request.copy(season = requestedSeason, episode = requestedEpisode)
+    }
+
+    /** A request for the movie or show itself, never one of its episodes. */
+    fun titleRequest(type: String, videoId: String): MatchRequest? {
         if (ServerItemRef.isServerId(videoId)) return null
         val kind = ServerMediaKind.fromContentType(type) ?: return null
         val parts = videoId.split(':')
-        val parentSize = if (videoId.startsWith("tt")) 1 else 2
-        val parentId = parts.take(parentSize).joinToString(":")
+        val parentId = parts.take(parentSize(videoId)).joinToString(":")
         val meta = cachedMeta(type, parentId)
         val metaImdb = meta?.imdbId?.takeIf { it.startsWith("tt") }
         val ids = parseTrackingExternalIds(parentId).mergeMissing(TrackingExternalIds(imdb = metaImdb))
@@ -81,13 +91,10 @@ internal class ServerMatcher(
                 titleNames.putBounded(nameKey, it, TITLE_NAME_CACHE_SIZE)
             }
         }
-        val request = MatchRequest(kind, parentId, ids, name = title?.name, year = title?.year)
-        if (kind == ServerMediaKind.MOVIE) return request
-        val position = parts.drop(parentSize).map { it.toIntOrNull() }.takeIf { it.size == 2 }
-        val requestedSeason = season ?: position?.get(0) ?: return null
-        val requestedEpisode = episode ?: position?.get(1) ?: return null
-        return request.copy(season = requestedSeason, episode = requestedEpisode)
+        return MatchRequest(kind, parentId, ids, name = title?.name, year = title?.year)
     }
+
+    private fun parentSize(videoId: String): Int = if (videoId.startsWith("tt")) 1 else 2
 
     fun supports(connection: ServerConnection, kind: ServerMediaKind): Boolean =
         connection.selectedLibraries(kind).isNotEmpty() &&
@@ -109,6 +116,10 @@ internal class ServerMatcher(
             match.takeIf { datesCompatible(catalogDate, it.premiereDate) }?.let { ServerItemRef(connection.id, it.itemId) }
         }
     }
+
+    /** The server items for the movie or show in [request], ignoring any season or episode it names. */
+    suspend fun matchTitle(connection: ServerConnection, request: MatchRequest, forceRefresh: Boolean): List<ServerItemRef> =
+        titleItemIds(connection, request, forceRefresh).map { ServerItemRef(connection.id, it) }
 
     private suspend fun titleItemIds(connection: ServerConnection, request: MatchRequest, forceRefresh: Boolean): List<String> {
         val ids = withConvertedIds(request)

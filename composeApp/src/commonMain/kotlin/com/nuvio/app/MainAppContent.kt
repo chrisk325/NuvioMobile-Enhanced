@@ -20,6 +20,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -205,6 +207,8 @@ import com.nuvio.app.features.watchprogress.toContinueWatchingItem
 import com.nuvio.app.navigation.*
 import com.nuvio.app.core.ui.glass.nuvioBackdropSource
 import com.nuvio.app.core.ui.glass.rememberNuvioBackdrop
+import com.nuvio.app.features.servers.ServerFavoriteResult
+import com.nuvio.app.features.servers.ServerFavorites
 import com.nuvio.app.features.servers.ServerRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -2123,6 +2127,17 @@ internal fun MainAppContent(
                     )
                     val removesFromLibrary = isSaved &&
                         (posterActionTarget.libraryItem != null || !isRemoteLibrarySource)
+                    val serversUiState by ServerRepository.uiState.collectAsStateWithLifecycle()
+                    val serverFavoritesState by ServerFavorites.state.collectAsStateWithLifecycle()
+                    val showServerFavorite = remember(preview.type, serversUiState.revision) {
+                        ServerFavorites.supportsType(preview.type) && ServerFavorites.isAvailable()
+                    }
+                    LaunchedEffect(showServerFavorite) {
+                        if (showServerFavorite) ServerFavorites.ensureFresh()
+                    }
+                    val isServerFavorite = showServerFavorite &&
+                        ServerFavorites.isFavorite(preview.id, preview.type, serverFavoritesState)
+                    val serverFavoriteName = remember(serversUiState.revision) { ServerFavorites.serverName() }
                     NuvioPosterZoomActionOverlay(
                         imageUrl = selectedPosterAnchor?.imageUrl ?: preview.poster,
                         title = preview.name,
@@ -2134,7 +2149,7 @@ internal fun MainAppContent(
                             },
                         isWatched = isWatched,
                         anchor = selectedPosterAnchor,
-                        actions = listOf(
+                        actions = listOfNotNull(
                             PosterZoomOverlayAction(
                                 icon = if (isSaved) Icons.Default.DeleteOutline else Icons.Default.Add,
                                 label = if (isSaved) {
@@ -2265,6 +2280,45 @@ internal fun MainAppContent(
                                     }
                                 },
                             ),
+                            if (showServerFavorite) {
+                                PosterZoomOverlayAction(
+                                    icon = if (isServerFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    label = when {
+                                        serverFavoriteName == null && isServerFavorite ->
+                                            stringResource(Res.string.servers_favorite_remove_generic)
+                                        serverFavoriteName == null ->
+                                            stringResource(Res.string.servers_favorite_add_generic)
+                                        isServerFavorite ->
+                                            stringResource(Res.string.servers_favorite_remove, serverFavoriteName)
+                                        else -> stringResource(Res.string.servers_favorite_add, serverFavoriteName)
+                                    },
+                                    onSelected = {
+                                        coroutineScope.launch {
+                                            val result = ServerFavorites.setFavorite(
+                                                id = preview.id,
+                                                type = preview.type,
+                                                favorite = !isServerFavorite,
+                                                name = preview.name,
+                                            )
+                                            val name = serverFavoriteName ?: getString(Res.string.servers_generic_name)
+                                            val message = when (result) {
+                                                ServerFavoriteResult.ADDED ->
+                                                    getString(Res.string.servers_favorite_added, name)
+                                                ServerFavoriteResult.REMOVED ->
+                                                    getString(Res.string.servers_favorite_removed, name)
+                                                ServerFavoriteResult.NOT_FOUND ->
+                                                    getString(Res.string.servers_favorite_not_found)
+                                                ServerFavoriteResult.FAILED,
+                                                ServerFavoriteResult.UNAVAILABLE ->
+                                                    getString(Res.string.servers_favorite_failed)
+                                            }
+                                            NuvioToastController.show(message)
+                                        }
+                                    },
+                                )
+                            } else {
+                                null
+                            },
                         ),
                         backdrop = posterOverlayBackdrop,
                         onDismissed = {

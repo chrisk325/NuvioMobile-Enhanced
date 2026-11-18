@@ -63,6 +63,8 @@ internal abstract class MediaBrowserProvider(
 
     protected abstract fun playedEndpoint(userId: String, itemId: String): Endpoint
 
+    protected abstract fun favoriteEndpoint(userId: String, itemId: String): Endpoint
+
     internal open fun isSupported(info: PublicInfo): Boolean = isSupportedVersion(info.version)
 
     override suspend fun signIn(address: String, username: String, password: String): ServerSignIn {
@@ -285,6 +287,39 @@ internal abstract class MediaBrowserProvider(
         val endpoint = playedEndpoint(session.userId, itemId)
         client.execute(
             method = if (played) HttpMethod.Post else HttpMethod.Delete,
+            baseUrl = session.apiRoot,
+            path = endpoint.path,
+            token = session.token,
+            query = endpoint.query,
+        )
+    }
+
+    override suspend fun favoritesPage(session: ServerSession, start: Int, limit: Int): ServerPage<ServerTitle> {
+        val result = get(
+            session,
+            itemsEndpoint(session.userId),
+            ItemsResult.serializer(),
+            mapOf(
+                "filters" to "IsFavorite",
+                "recursive" to "true",
+                "includeItemTypes" to ServerMediaKind.MIXED.itemType(),
+                "sortBy" to "SortName",
+                "sortOrder" to "Ascending",
+                "fields" to LIST_FIELDS,
+                "imageTypeLimit" to "1",
+                "enableImageTypes" to "Primary,Backdrop,Logo",
+                "startIndex" to start.toString(),
+                "limit" to limit.toString(),
+                "enableTotalRecordCount" to "true",
+            ),
+        )
+        return ServerPage(result.items.mapNotNull(mapper(session)::title), result.totalRecordCount)
+    }
+
+    override suspend fun setFavorite(session: ServerSession, itemId: String, favorite: Boolean) {
+        val endpoint = favoriteEndpoint(session.userId, itemId)
+        client.execute(
+            method = if (favorite) HttpMethod.Post else HttpMethod.Delete,
             baseUrl = session.apiRoot,
             path = endpoint.path,
             token = session.token,

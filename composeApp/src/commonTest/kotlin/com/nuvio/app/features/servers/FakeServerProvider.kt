@@ -10,6 +10,7 @@ import kotlinx.atomicfu.locks.synchronized
 internal class FakeServerProvider(
     private val movieCount: Int = 120,
     private val transcodes: Boolean = false,
+    favorites: Boolean = false,
 ) : ServerProvider {
     override val id: String = "fake"
     override val displayName: String = "Fake"
@@ -18,7 +19,7 @@ internal class FakeServerProvider(
         ServerCapability.SEARCH,
         ServerCapability.EXTERNAL_ID_LOOKUP,
         ServerCapability.USER_STATE_WRITE,
-    )
+    ) + if (favorites) setOf(ServerCapability.FAVORITES) else emptySet()
 
     val movies = MOVIE_LIBRARY
     val shows = SERIES_LIBRARY
@@ -33,6 +34,9 @@ internal class FakeServerProvider(
     val playedChanges = mutableListOf<Pair<String, Boolean>>()
     val userStates = mutableMapOf<String, List<ServerUserState>>()
     val failingPlayed = mutableSetOf<String>()
+    val favoriteIds = linkedSetOf<String>()
+    val favoriteChanges = mutableListOf<Pair<String, Boolean>>()
+    val failingFavorites = mutableSetOf<String>()
     val failingLibraries = mutableSetOf<String>()
     private val lock = SynchronizedObject()
 
@@ -132,6 +136,20 @@ internal class FakeServerProvider(
     override suspend fun setPlayed(session: ServerSession, itemId: String, played: Boolean) {
         synchronized(lock) { playedChanges += itemId to played }
         if (itemId in failingPlayed) throw ServerException(ServerFailure.FORBIDDEN)
+    }
+
+    override suspend fun favoritesPage(session: ServerSession, start: Int, limit: Int): ServerPage<ServerTitle> {
+        val ids = synchronized(lock) { favoriteIds.toList() }
+        val titles = ids.map { itemId ->
+            title(session, itemId).let { if (itemId == SHOW_ID) it.copy(preview = it.preview.copy(type = "series")) else it }
+        }
+        return ServerPage(titles.drop(start).take(limit), titles.size)
+    }
+
+    override suspend fun setFavorite(session: ServerSession, itemId: String, favorite: Boolean) {
+        synchronized(lock) { favoriteChanges += itemId to favorite }
+        if (itemId in failingFavorites) throw ServerException(ServerFailure.FORBIDDEN)
+        synchronized(lock) { if (favorite) favoriteIds += itemId else favoriteIds -= itemId }
     }
 
     override suspend fun report(session: ServerSession, playback: ServerPlaybackSession, event: ServerPlaybackEvent) {
