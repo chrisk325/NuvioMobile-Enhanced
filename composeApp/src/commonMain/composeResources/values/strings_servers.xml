@@ -49,6 +49,8 @@
     <string name="library_source_servers">Servers</string>
     <string name="library_servers_empty_title">No libraries selected</string>
     <string name="library_servers_empty_message">Choose which libraries to show in Settings, under Content &amp; Discovery, then Media servers.</string>
+    <string name="library_servers_no_favorites_title">No favorites yet</string>
+    <string name="library_servers_no_favorites_message">Long-press a title and choose Favorite to keep it here. Your server's catalogs are on Home.</string>
     <string name="library_server_load_failed">Couldn't load %1$s</string>
     <string name="servers_audio_switch_failed">Couldn't switch the audio track.</string>
     <string name="servers_subtitle_switch_failed">Couldn't switch the subtitle track.</string>

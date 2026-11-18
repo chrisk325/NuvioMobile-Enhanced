@@ -9,6 +9,7 @@ import com.nuvio.app.features.catalog.CatalogTarget
 import com.nuvio.app.features.home.HomeCatalogDefinition
 import com.nuvio.app.features.home.HomeCatalogSection
 import com.nuvio.app.features.home.MetaPreview
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.media_movies
@@ -68,6 +69,24 @@ internal object ServerCatalog {
         val name = runBlocking { getString(Res.string.servers_favorites_row) }
         return connections.map { ServerLibraryRef(it, ServerLibrary(FAVORITES_ID, name, ServerMediaKind.MIXED)) }
     }
+
+    /**
+     * The shelves for Library > Servers: favourites first, then each server's libraries, except on servers whose
+     * libraries are catalogs, which already appear on Home and leave just their favourites here.
+     */
+    suspend fun libraryShelves(): List<ServerLibraryRef> {
+        val catalogServers = ServerRepository.enabledConnections().filter { servesCatalogs(it) }.map { it.id }.toSet()
+        return favoriteLibraries() + libraries().filterNot { it.connection.id in catalogServers }
+    }
+
+    private suspend fun servesCatalogs(connection: ServerConnection): Boolean =
+        try {
+            ServerRepository.call(connection.id) { provider, session -> provider.servesCatalogs(session) }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            false
+        }
 
     fun titleLibraries(): List<ServerLibraryRef> =
         libraries().filter { it.library.kind != ServerMediaKind.COLLECTION }

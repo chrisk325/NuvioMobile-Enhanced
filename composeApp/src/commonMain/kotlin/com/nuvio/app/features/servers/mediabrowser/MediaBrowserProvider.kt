@@ -220,6 +220,8 @@ internal abstract class MediaBrowserProvider(
         return items.mapNotNull(mapper(session)::title).distinctBy { it.preview.id }.take(limit)
     }
 
+    override suspend fun servesCatalogs(session: ServerSession): Boolean = isAioStreams(session)
+
     /** AIOStreams, or AIOMetadata, which sends the same "aiostreams" extension: servers made of catalogs. */
     private suspend fun isAioStreams(session: ServerSession): Boolean = serverKind(session) != ServerKind.PLAIN
 
