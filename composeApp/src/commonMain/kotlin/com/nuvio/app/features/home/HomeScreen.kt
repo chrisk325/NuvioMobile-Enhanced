@@ -42,6 +42,7 @@ import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.ManagedAddon
 import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.servers.ServerRepository
+import com.nuvio.app.features.servers.ServerResumeImport
 import com.nuvio.app.features.addons.firstEnabledManifestError
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.CloudLibraryRepository
@@ -905,6 +906,10 @@ fun HomeScreen(
         ServerRepository.uiState
     }.collectAsStateWithLifecycle()
     val hasServerLibraries = serversUiState.enabledConnections.any { it.selectedLibraries.isNotEmpty() }
+    // Servers with "Import watch progress" on fill Continue watching with what is in progress on them.
+    ScreenActivityEffect(serversUiState.revision) { active ->
+        if (active) ServerResumeImport.refresh()
+    }
     val addonManifestsLoading = addonSignals.manifestsLoading
     val addonManifestErrorMessage = addonSignals.manifestErrorMessage
     val isResolvingHeroSources = addonManifestsLoading || homeUiState.isLoading
