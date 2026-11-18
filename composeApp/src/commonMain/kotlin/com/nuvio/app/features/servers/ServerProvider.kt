@@ -91,6 +91,9 @@ interface ServerProvider {
         limit: Int,
     ): ServerPage<ServerIndexEntry> = unsupported()
 
+    /** Libraries [lookupTitle] answers alike share a scope, so a title is looked up once per scope. */
+    suspend fun titleLookupScope(session: ServerSession, library: ServerLibrary): String = library.id
+
     suspend fun lookupTitle(
         session: ServerSession,
         library: ServerLibrary,

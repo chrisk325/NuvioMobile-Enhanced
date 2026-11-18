@@ -174,7 +174,10 @@ internal class ServerMatcher(
         query: ServerTitleQuery,
         libraries: List<ServerLibrary>,
     ): List<String>? = coroutineScope {
-        val found = libraries.map { library ->
+        val scoped = ServerRepository.call(connection.id) { provider, session ->
+            libraries.distinctBy { provider.titleLookupScope(session, it) }
+        }
+        val found = scoped.map { library ->
             async { ServerRepository.call(connection.id) { provider, session -> provider.lookupTitle(session, library, query) } }
         }.awaitAll()
         if (found.any { it == null }) return@coroutineScope null

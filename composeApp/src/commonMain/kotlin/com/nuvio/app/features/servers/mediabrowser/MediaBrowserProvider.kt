@@ -359,6 +359,10 @@ internal abstract class MediaBrowserProvider(
 
     protected open fun titleRetryQuery(query: ServerTitleQuery): Map<String, String>? = null
 
+    // AIOStreams' libraries are catalogs, which hold only part of what it can play, so titles are looked up across it.
+    override suspend fun titleLookupScope(session: ServerSession, library: ServerLibrary): String =
+        if (isAioStreams(session)) "all:${library.kind.name}" else library.id
+
     override suspend fun lookupTitle(
         session: ServerSession,
         library: ServerLibrary,
@@ -381,7 +385,7 @@ internal abstract class MediaBrowserProvider(
             itemsEndpoint(session.userId),
             ItemsResult.serializer(),
             mapOf(
-                "parentId" to library.id,
+                "parentId" to library.id.takeUnless { isAioStreams(session) },
                 "recursive" to "true",
                 "includeItemTypes" to library.kind.itemType(),
                 "fields" to "ProviderIds,ProductionYear",
