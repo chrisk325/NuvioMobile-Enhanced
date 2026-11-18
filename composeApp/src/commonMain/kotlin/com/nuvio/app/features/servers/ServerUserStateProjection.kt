@@ -3,6 +3,7 @@ package com.nuvio.app.features.servers
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.watched.WatchedItem
 import com.nuvio.app.features.watched.WatchedRepository
+import com.nuvio.app.features.watchprogress.MEDIA_SERVER_PROVIDER_PREFIX
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 
@@ -66,6 +67,6 @@ internal object ServerUserStateProjection {
         durationMs = durationMs,
         lastUpdatedEpochMs = lastPlayedEpochMs ?: 0L,
         providerName = label,
-        providerAddonId = "server:$connectionId",
+        providerAddonId = "$MEDIA_SERVER_PROVIDER_PREFIX$connectionId",
     )
 }

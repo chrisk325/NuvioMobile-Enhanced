@@ -117,6 +117,12 @@ data class ServerTitle(
     val externalIds: TrackingExternalIds = TrackingExternalIds(),
 )
 
+/** A movie or episode in progress on the server, with the movie or show it belongs to. */
+data class ServerResume(
+    val title: ServerTitle,
+    val state: ServerUserState,
+)
+
 data class ServerItemDetails(
     val meta: MetaDetails,
     val externalIds: TrackingExternalIds,

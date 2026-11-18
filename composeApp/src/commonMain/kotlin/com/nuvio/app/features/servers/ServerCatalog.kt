@@ -34,7 +34,7 @@ internal fun ServerTitle.catalogPreview(manifests: List<AddonManifest>): MetaPre
 private fun metaManifests(): List<AddonManifest> =
     AddonRepository.uiState.value.addons.enabledAddons().mapNotNull { it.manifest }
 
-private fun ServerConnection.presenter(): (ServerTitle) -> MetaPreview {
+internal fun ServerConnection.presenter(): (ServerTitle) -> MetaPreview {
     if (!useCatalogMetadata) return ServerTitle::preview
     val manifests = metaManifests()
     return { title -> title.catalogPreview(manifests) }
@@ -123,8 +123,10 @@ internal object ServerCatalog {
     }
 
     private fun resumeDefinitions(): List<HomeCatalogDefinition> {
+        // A server whose progress is imported shows it in the app's own Continue watching instead of a row of its own.
         val connections = ServerRepository.enabledConnections().filter { connection ->
-            connection.selectedLibraries.isNotEmpty() &&
+            !connection.importWatchState &&
+                connection.selectedLibraries.isNotEmpty() &&
                 ServerRepository.provider(connection)?.supports(ServerCapability.USER_STATE_READ) == true
         }
         if (connections.isEmpty()) return emptyList()
