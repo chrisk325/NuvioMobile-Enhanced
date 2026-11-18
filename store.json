@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.0",
+          "buildVersion": "225",
+          "date": "2026-11-18T10:01:17Z",
+          "localizedDescription": "- 5d82984ef fix build error @chrisk325  \n- [Server cw keep (#89)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/89) @chrisk325  \n- [Keep each server's Continue watching list and apply only what changed (#88)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/88) @chrisk325  \n- [Server continue watching (#87)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/87) @chrisk325  \n- [Show only favourites in Library > Servers for catalog servers (#86)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/86) @chrisk325  \n- [fix jellyfin favourites (#85)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/85) @chrisk325  \n- [feat(home): gradient dynamic background extracted from hero artwork (#84)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/84) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.0-beta/nuvio-1.0.0-enhanced-release.ipa",
+          "size": 77075678,
+          "sha256": "e6caa5c3971f95535f3c683812864b5cbb99acc2df5ffae7c023392a11ae3e35",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "0.9.92",
           "buildVersion": "217",
           "date": "2026-11-18T02:24:42Z",
