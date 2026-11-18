@@ -56,7 +56,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -77,7 +76,9 @@ import coil3.request.ImageRequest
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.build.TrailerPlaybackMode
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
-import com.nuvio.app.core.ui.LocalDynamicArtworkBackgroundColor
+import com.nuvio.app.core.ui.LocalDynamicArtworkWash
+import com.nuvio.app.core.ui.drawArtworkWashFade
+import com.nuvio.app.core.ui.rememberArtworkWashFadeAnchor
 import com.nuvio.app.core.ui.platformPhysicalTopInset
 import com.nuvio.app.core.ui.rememberDynamicArtworkBackgroundEnabled
 import com.nuvio.app.core.ui.PrefetchArtworkDominantColors
@@ -555,22 +556,22 @@ internal fun HomeHeroSection(
                     }
 
                     if (!isCardStyle) {
-                        val heroFadeColorState = LocalDynamicArtworkBackgroundColor.current
+                        // Fade into the dynamic artwork gradient (sampled at the hero's on-screen
+                        // position so it lines up with the background), or the theme background.
+                        val heroFadeWash = LocalDynamicArtworkWash.current
                         val themeBackground = MaterialTheme.colorScheme.background
+                        val overlayFadeAnchor = rememberArtworkWashFadeAnchor()
+                        val bottomFadeAnchor = rememberArtworkWashFadeAnchor()
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .then(overlayFadeAnchor.modifier)
                                 .drawBehind {
-                                    val fade = heroFadeColorState?.value ?: themeBackground
-                                    drawRect(
-                                        Brush.verticalGradient(
-                                            colors = listOf(
-                                                fade.copy(alpha = 0.02f),
-                                                fade.copy(alpha = 0.12f),
-                                                fade.copy(alpha = 0.34f),
-                                                fade.copy(alpha = 0.78f),
-                                            ),
-                                        ),
+                                    drawArtworkWashFade(
+                                        wash = heroFadeWash,
+                                        anchor = overlayFadeAnchor,
+                                        fallback = themeBackground,
+                                        alphas = HeroOverlayFadeAlphas,
                                     )
                                 },
                         )
@@ -580,9 +581,14 @@ internal fun HomeHeroSection(
                                 .fillMaxWidth()
                                 .height(layout.bottomFadeHeight)
                                 .align(Alignment.BottomCenter)
+                                .then(bottomFadeAnchor.modifier)
                                 .drawBehind {
-                                    val fade = heroFadeColorState?.value ?: themeBackground
-                                    drawRect(Brush.verticalGradient(colors = listOf(fade.copy(alpha = 0f), fade)))
+                                    drawArtworkWashFade(
+                                        wash = heroFadeWash,
+                                        anchor = bottomFadeAnchor,
+                                        fallback = themeBackground,
+                                        alphas = HeroBottomFadeAlphas,
+                                    )
                                 },
                         )
                     }
@@ -1129,3 +1135,6 @@ private fun resolveHeroTargetPage(
         else -> currentPage
     }
 }
+
+private val HeroOverlayFadeAlphas = floatArrayOf(0.02f, 0.12f, 0.34f, 0.78f)
+private val HeroBottomFadeAlphas = floatArrayOf(0f, 1f)
