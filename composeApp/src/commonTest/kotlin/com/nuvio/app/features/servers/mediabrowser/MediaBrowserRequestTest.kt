@@ -216,6 +216,30 @@ class MediaBrowserRequestTest {
     }
 
     @Test
+    fun treatsAioMetadataLikeAioStreams() = runTest {
+        // AIOMetadata's /System/Info/Public: it names itself AIOMetadata and carries the "aiostreams" extension key.
+        val http = TestHttp { request ->
+            when (request.url.encodedPath) {
+                "/jellyfin/cfg/System/Info/Public" ->
+                    """{"ServerName": "AIOMetadata", "Version": "12.1.0", "ProductName": "Jellyfin Server", "Id": "srv",
+                        "aiostreams": {"features": {"watchlistFavorites": true}}}"""
+                else -> """{"Items": []}"""
+            }
+        }
+        val jellyfin = JellyfinProvider(http.client)
+        val session = session("jellyfin", "https://meta.example.com/jellyfin/cfg")
+        val movies = ServerLibrary("cat1", "Popular", ServerMediaKind.MOVIE)
+
+        jellyfin.lookupTitle(session, movies, ServerTitleQuery(TrackingExternalIds(imdb = "tt0111161"), "Heat", 1995))
+
+        assertNull(http.lookups.single().url.parameters["parentId"])
+        assertEquals(
+            jellyfin.titleLookupScope(session, movies),
+            jellyfin.titleLookupScope(session, ServerLibrary("cat2", "Trending", ServerMediaKind.MOVIE)),
+        )
+    }
+
+    @Test
     fun keepsTitleLookupsInsideEachLibraryOnAPlainJellyfin() = runTest {
         val http = TestHttp { """{"ServerName": "Home", "Version": "10.10.7"}""" }
         val jellyfin = JellyfinProvider(http.client)
