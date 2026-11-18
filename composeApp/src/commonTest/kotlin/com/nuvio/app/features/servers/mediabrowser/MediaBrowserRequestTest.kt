@@ -273,6 +273,30 @@ class MediaBrowserRequestTest {
     }
 
     @Test
+    fun matchesAioMetadataAnimeByItsKitsuIdThroughTheNameSearch() = runTest {
+        val http = TestHttp { request ->
+            when (request.url.encodedPath) {
+                "/jellyfin/cfg/System/Info/Public" -> """{"ServerName": "AIOMetadata", "Version": "12.1.0", "aiostreams": {}}"""
+                else -> """{"Items": [{"Id": "a1", "ProductionYear": 1998, "ProviderIds": {"Kitsu": "1", "MyAnimeList": "1"}}]}"""
+            }
+        }
+        val jellyfin = JellyfinProvider(http.client)
+        val query = ServerTitleQuery(TrackingExternalIds(kitsu = 1), name = "Cowboy Bebop", year = 1998)
+
+        val found = jellyfin.lookupTitle(
+            session("jellyfin", "https://meta.example.com/jellyfin/cfg"),
+            ServerLibrary("cat1", "Anime", ServerMediaKind.SERIES),
+            query,
+        )!!
+
+        // AIOMetadata's id filter takes only IMDb, TMDB and TVDB, so the name search finds it and Kitsu confirms it.
+        assertEquals(listOf("a1"), com.nuvio.app.features.servers.verifiedTitleMatches(found, query))
+        val lookup = http.lookups.single()
+        assertNull(lookup.url.parameters["anyProviderIdEquals"])
+        assertEquals("Cowboy Bebop", lookup.url.parameters["searchTerm"])
+    }
+
+    @Test
     fun searchesByNameWhenAioMetadatasIdLookupFails() = runTest {
         val http = TestHttp { request ->
             when {
