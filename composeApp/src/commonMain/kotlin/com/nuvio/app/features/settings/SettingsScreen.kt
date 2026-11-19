@@ -796,6 +796,7 @@ private fun MobileSettingsScreen(
                     showUnairedNextUp = continueWatchingPreferencesUiState.showUnairedNextUp,
                     blurNextUp = continueWatchingPreferencesUiState.blurNextUp,
                     showResumePromptOnLaunch = continueWatchingPreferencesUiState.showResumePromptOnLaunch,
+                    separateNextUpRow = continueWatchingPreferencesUiState.separateNextUpRow,
                     sortMode = continueWatchingPreferencesUiState.sortMode,
                     clickAction = continueWatchingPreferencesUiState.clickAction,
                 )
@@ -1255,6 +1256,7 @@ private fun TabletSettingsScreen(
                         showUnairedNextUp = continueWatchingPreferencesUiState.showUnairedNextUp,
                         blurNextUp = continueWatchingPreferencesUiState.blurNextUp,
                         showResumePromptOnLaunch = continueWatchingPreferencesUiState.showResumePromptOnLaunch,
+                        separateNextUpRow = continueWatchingPreferencesUiState.separateNextUpRow,
                         sortMode = continueWatchingPreferencesUiState.sortMode,
                         clickAction = continueWatchingPreferencesUiState.clickAction,
                     )

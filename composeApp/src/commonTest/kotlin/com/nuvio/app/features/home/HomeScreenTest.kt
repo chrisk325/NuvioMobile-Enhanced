@@ -244,6 +244,56 @@ class HomeScreenTest {
     }
 
     @Test
+    fun `separate next up row keeps in progress items in continue watching`() {
+        val nowEpochMs = requireNotNull(parseReleaseDateToEpochMs("2026-07-19T12:00:00Z"))
+        val inProgress = progressEntry(
+            videoId = "movie-1",
+            title = "Movie",
+            lastUpdatedEpochMs = 500L,
+            seasonNumber = null,
+            episodeNumber = null,
+            episodeTitle = null,
+        ).toContinueWatchingItem()
+        val finishedRecently = continueWatchingItem(videoId = "recent:1:2", subtitle = "S1E2 • Recent")
+            .copy(released = "2026-01-01T00:00:00Z")
+        val newlyAired = continueWatchingItem(videoId = "aired:2:1", subtitle = "S2E1 • New")
+            .copy(released = "2026-07-19T06:00:00Z")
+        val unknownRelease = continueWatchingItem(videoId = "unknown:1:2", subtitle = "S1E2 • Unknown")
+        val unaired = continueWatchingItem(videoId = "future:1:3", subtitle = "S1E3 • Future")
+            .copy(released = "2026-07-25T00:00:00Z")
+        val finishedRecentlyAt = nowEpochMs - 60L * 60L * 1000L
+        val newlyAiredSeedAt = nowEpochMs - 30L * 24L * 60L * 60L * 1000L
+
+        val (continueWatching, nextUp) = splitNextUpItems(
+            items = listOf(unaired, finishedRecently, inProgress, unknownRelease, newlyAired),
+            enabled = true,
+            seedTimestampsByContentId = mapOf(
+                "recent" to finishedRecentlyAt,
+                "aired" to newlyAiredSeedAt,
+                "unknown" to 100L,
+            ),
+            nowEpochMs = nowEpochMs,
+        )
+
+        assertEquals(listOf("movie-1"), continueWatching.map(ContinueWatchingItem::videoId))
+        // The newly aired episode became available after the other show was last finished.
+        assertEquals(
+            listOf("aired:2:1", "recent:1:2", "unknown:1:2", "future:1:3"),
+            nextUp.map(ContinueWatchingItem::videoId),
+        )
+    }
+
+    @Test
+    fun `disabled next up row leaves continue watching unchanged`() {
+        val item = continueWatchingItem(videoId = "show:1:2", subtitle = "S1E2 • Next")
+
+        val (continueWatching, nextUp) = splitNextUpItems(items = listOf(item), enabled = false)
+
+        assertEquals(listOf(item), continueWatching)
+        assertTrue(nextUp.isEmpty())
+    }
+
+    @Test
     fun `continue watching click action opens details as chosen`() {
         val nowEpochMs = requireNotNull(parseReleaseDateToEpochMs("2026-07-19T12:00:00Z"))
         val inProgress = progressEntry(

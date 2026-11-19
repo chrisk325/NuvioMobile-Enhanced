@@ -20,6 +20,8 @@ private data class StoredContinueWatchingPreferences(
     val showUnairedNextUp: Boolean = true,
     @SerialName("blur_continue_watching_next_up")
     val blurNextUp: Boolean = false,
+    @SerialName("separate_next_up_row")
+    val separateNextUpRow: Boolean = true,
     val dismissedNextUpKeys: Set<String> = emptySet(),
     val showResumePromptOnLaunch: Boolean = true,
     @SerialName("sort_mode")
@@ -96,6 +98,7 @@ object ContinueWatchingPreferencesRepository {
                 useEpisodeThumbnails = stored.useEpisodeThumbnails,
                 showUnairedNextUp = stored.showUnairedNextUp,
                 blurNextUp = stored.blurNextUp,
+                separateNextUpRow = stored.separateNextUpRow,
                 dismissedNextUpKeys = normalizeDismissedNextUpKeys(stored.dismissedNextUpKeys),
                 showResumePromptOnLaunch = stored.showResumePromptOnLaunch,
                 sortMode = stored.sortMode,
@@ -139,6 +142,13 @@ object ContinueWatchingPreferencesRepository {
     fun setBlurNextUp(enabled: Boolean) {
         ensureLoaded()
         _uiState.value = _uiState.value.copy(blurNextUp = enabled)
+        persist()
+    }
+
+    fun setSeparateNextUpRow(enabled: Boolean) {
+        ensureLoaded()
+        if (_uiState.value.separateNextUpRow == enabled) return
+        _uiState.value = _uiState.value.copy(separateNextUpRow = enabled)
         persist()
     }
 
@@ -200,6 +210,7 @@ object ContinueWatchingPreferencesRepository {
                     useEpisodeThumbnails = _uiState.value.useEpisodeThumbnails,
                     showUnairedNextUp = _uiState.value.showUnairedNextUp,
                     blurNextUp = _uiState.value.blurNextUp,
+                    separateNextUpRow = _uiState.value.separateNextUpRow,
                     dismissedNextUpKeys = _uiState.value.dismissedNextUpKeys,
                     showResumePromptOnLaunch = _uiState.value.showResumePromptOnLaunch,
                     sortMode = _uiState.value.sortMode,

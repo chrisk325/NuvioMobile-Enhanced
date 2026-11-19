@@ -832,6 +832,7 @@ internal fun settingsSearchEntries(
         section = stringResource(Res.string.settings_continue_watching_section_up_next_behavior),
         rows = listOf(
             PlaybackSearchRow("episode-thumbnails", stringResource(Res.string.settings_continue_watching_use_episode_thumbnails_title), stringResource(Res.string.settings_continue_watching_use_episode_thumbnails_description)),
+            PlaybackSearchRow("separate-next-up", stringResource(Res.string.settings_continue_watching_separate_next_up_title), stringResource(Res.string.settings_continue_watching_separate_next_up_description)),
             PlaybackSearchRow("up-next", stringResource(Res.string.settings_continue_watching_up_next_title), stringResource(Res.string.settings_continue_watching_up_next_description)),
             PlaybackSearchRow("unaired-next-up", stringResource(Res.string.settings_continue_watching_show_unaired_next_up_title), stringResource(Res.string.settings_continue_watching_show_unaired_next_up_description)),
             PlaybackSearchRow("blur-next-up", stringResource(Res.string.settings_continue_watching_blur_next_up_title), stringResource(Res.string.settings_continue_watching_blur_next_up_description)),

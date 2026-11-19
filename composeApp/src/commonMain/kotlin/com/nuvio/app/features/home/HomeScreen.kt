@@ -163,11 +163,13 @@ fun HomeScreen(
     val homeListState = rememberLazyListState()
     val continueWatchingListState = rememberLazyListState()
     val upcomingListState = rememberLazyListState()
-    ScreenActivityEffect(homeListState, continueWatchingListState, upcomingListState) { active ->
+    val nextUpListState = rememberLazyListState()
+    ScreenActivityEffect(homeListState, continueWatchingListState, upcomingListState, nextUpListState) { active ->
         if (!active) {
             homeListState.stopScroll(MutatePriority.PreventUserInput)
             continueWatchingListState.stopScroll(MutatePriority.PreventUserInput)
             upcomingListState.stopScroll(MutatePriority.PreventUserInput)
+            nextUpListState.stopScroll(MutatePriority.PreventUserInput)
         }
     }
     val collections by CollectionRepository.collections.collectAsStateWithLifecycle()
@@ -345,6 +347,7 @@ fun HomeScreen(
     val cwCacheGeneration by ContinueWatchingEnrichmentCache.generation.collectAsStateWithLifecycle()
     var hasUserScrolledContinueWatching by remember(activeProfileId) { mutableStateOf(false) }
     var hasUserScrolledUpcoming by remember(activeProfileId) { mutableStateOf(false) }
+    var hasUserScrolledNextUp by remember(activeProfileId) { mutableStateOf(false) }
 
     LaunchedEffect(activeProfileId, continueWatchingListState) {
         snapshotFlow { continueWatchingListState.isScrollInProgress }.collect { isScrolling ->
@@ -355,6 +358,12 @@ fun HomeScreen(
     LaunchedEffect(activeProfileId, upcomingListState) {
         snapshotFlow { upcomingListState.isScrollInProgress }.collect { isScrolling ->
             if (isScrolling) hasUserScrolledUpcoming = true
+        }
+    }
+
+    LaunchedEffect(activeProfileId, nextUpListState) {
+        snapshotFlow { nextUpListState.isScrollInProgress }.collect { isScrolling ->
+            if (isScrolling) hasUserScrolledNextUp = true
         }
     }
 
@@ -575,7 +584,7 @@ fun HomeScreen(
     val shuffledContinueWatchingItems = remember(rawShuffledContinueWatchingItems, cwPosterPattern) {
         rawShuffledContinueWatchingItems.withCustomPosterUrls(cwPosterPattern)
     }
-    val (continueWatchingItems, upcomingItems) = remember(
+    val (mainContinueWatchingItems, upcomingItems) = remember(
         shuffledContinueWatchingItems,
         continueWatchingPreferences.sortMode,
     ) {
@@ -584,7 +593,28 @@ fun HomeScreen(
             mode = continueWatchingPreferences.sortMode,
         )
     }
-    val hasContinueWatchingRows = continueWatchingItems.isNotEmpty() || upcomingItems.isNotEmpty()
+    val nextUpSeedTimestamps = remember(effectivNextUpItems) {
+        buildMap {
+            effectivNextUpItems.forEach { (contentId, pair) ->
+                put(contentId, pair.first)
+                put(pair.second.parentMetaId, pair.first)
+            }
+        }
+    }
+    val (continueWatchingItems, nextUpItems) = remember(
+        mainContinueWatchingItems,
+        continueWatchingPreferences.separateNextUpRow,
+        nextUpSeedTimestamps,
+    ) {
+        splitNextUpItems(
+            items = mainContinueWatchingItems,
+            enabled = continueWatchingPreferences.separateNextUpRow,
+            seedTimestampsByContentId = nextUpSeedTimestamps,
+        )
+    }
+    val hasContinueWatchingRows = continueWatchingItems.isNotEmpty() ||
+        nextUpItems.isNotEmpty() ||
+        upcomingItems.isNotEmpty()
 
     ScreenActivityEffect(activeProfileId, continueWatchingItems.isNotEmpty(), hasUserScrolledContinueWatching) { active ->
         if (!active) return@ScreenActivityEffect
@@ -599,6 +629,23 @@ fun HomeScreen(
                     (index != 0 || offset != 0)
                 ) {
                     continueWatchingListState.scrollToItem(0)
+                }
+            }
+        }
+    }
+    ScreenActivityEffect(activeProfileId, nextUpItems.isNotEmpty(), hasUserScrolledNextUp) { active ->
+        if (!active) return@ScreenActivityEffect
+        if (!hasUserScrolledNextUp && nextUpItems.isNotEmpty()) {
+            snapshotFlow {
+                nextUpListState.firstVisibleItemIndex to
+                    nextUpListState.firstVisibleItemScrollOffset
+            }.collect { (index, offset) ->
+                if (
+                    !hasUserScrolledNextUp &&
+                    !nextUpListState.isScrollInProgress &&
+                    (index != 0 || offset != 0)
+                ) {
+                    nextUpListState.scrollToItem(0)
                 }
             }
         }
@@ -1096,11 +1143,13 @@ fun HomeScreen(
                         homeContinueWatchingSections(
                             preferences = continueWatchingPreferences,
                             continueWatchingItems = continueWatchingItems,
+                            nextUpItems = nextUpItems,
                             upcomingItems = upcomingItems,
                             dataSourceKey = effectiveWatchProgressSource,
                             sectionPadding = homeSectionPadding,
                             layout = continueWatchingLayout,
                             continueWatchingListState = continueWatchingListState,
+                            nextUpListState = nextUpListState,
                             upcomingListState = upcomingListState,
                             onItemClick = onContinueWatchingClick,
                             onItemLongPress = onContinueWatchingLongPress,
@@ -1117,11 +1166,13 @@ fun HomeScreen(
                         homeContinueWatchingSections(
                             preferences = continueWatchingPreferences,
                             continueWatchingItems = continueWatchingItems,
+                            nextUpItems = nextUpItems,
                             upcomingItems = upcomingItems,
                             dataSourceKey = effectiveWatchProgressSource,
                             sectionPadding = homeSectionPadding,
                             layout = continueWatchingLayout,
                             continueWatchingListState = continueWatchingListState,
+                            nextUpListState = nextUpListState,
                             upcomingListState = upcomingListState,
                             onItemClick = onContinueWatchingClick,
                             onItemLongPress = onContinueWatchingLongPress,
@@ -1208,11 +1259,13 @@ fun HomeScreen(
                         homeContinueWatchingSections(
                             preferences = continueWatchingPreferences,
                             continueWatchingItems = continueWatchingItems,
+                            nextUpItems = nextUpItems,
                             upcomingItems = upcomingItems,
                             dataSourceKey = effectiveWatchProgressSource,
                             sectionPadding = homeSectionPadding,
                             layout = continueWatchingLayout,
                             continueWatchingListState = continueWatchingListState,
+                            nextUpListState = nextUpListState,
                             upcomingListState = upcomingListState,
                             onItemClick = onContinueWatchingClick,
                             onItemLongPress = onContinueWatchingLongPress,
@@ -1268,11 +1321,13 @@ fun HomeScreen(
 private fun LazyListScope.homeContinueWatchingSections(
     preferences: ContinueWatchingPreferencesUiState,
     continueWatchingItems: List<ContinueWatchingItem>,
+    nextUpItems: List<ContinueWatchingItem>,
     upcomingItems: List<ContinueWatchingItem>,
     dataSourceKey: WatchProgressSource,
     sectionPadding: Dp,
     layout: ContinueWatchingLayout,
     continueWatchingListState: LazyListState,
+    nextUpListState: LazyListState,
     upcomingListState: LazyListState,
     onItemClick: ((ContinueWatchingItem) -> Unit)?,
     onItemLongPress: ((ContinueWatchingItem) -> Unit)?,
@@ -1292,6 +1347,26 @@ private fun LazyListScope.homeContinueWatchingSections(
                 sectionPadding = sectionPadding,
                 layout = layout,
                 listState = continueWatchingListState,
+                onItemClick = onItemClick,
+                onItemLongPress = onItemLongPress,
+                disintegrationRequest = disintegrationRequest,
+            )
+        }
+    }
+
+    if (nextUpItems.isNotEmpty()) {
+        item(key = HOME_NEXT_UP_SECTION_KEY, contentType = HOME_CONTINUE_WATCHING_ROW_CONTENT_TYPE) {
+            HomeContinueWatchingSection(
+                items = nextUpItems,
+                dataSourceKey = dataSourceKey,
+                style = preferences.style,
+                useEpisodeThumbnails = preferences.useEpisodeThumbnails,
+                blurNextUp = preferences.blurNextUp,
+                modifier = Modifier.padding(bottom = HomeContinueWatchingSectionBottomPadding),
+                title = stringResource(Res.string.next_up_section_title),
+                sectionPadding = sectionPadding,
+                layout = layout,
+                listState = nextUpListState,
                 onItemClick = onItemClick,
                 onItemLongPress = onItemLongPress,
                 disintegrationRequest = disintegrationRequest,
@@ -1323,6 +1398,7 @@ private fun LazyListScope.homeContinueWatchingSections(
 private const val HOME_CATALOG_PREVIEW_LIMIT = 18
 private const val HOME_CONTINUE_WATCHING_SECTION_KEY = "home_continue_watching"
 private const val HOME_UPCOMING_SECTION_KEY = "home_upcoming"
+private const val HOME_NEXT_UP_SECTION_KEY = "home_next_up"
 
 private const val HOME_CATALOG_ROW_CONTENT_TYPE = "home_catalog_row"
 private const val HOME_COLLECTION_ROW_CONTENT_TYPE = "home_collection_row"
@@ -1763,6 +1839,38 @@ internal fun splitUpcomingItems(
         }
     }
     return main to sortedUpcoming
+}
+
+/**
+ * Moves next-up episodes out of Continue Watching into their own Next Up row beneath it, the way
+ * AIOMetadata's Jellyfin Next Up shelf is kept apart from Resume: Continue Watching keeps what is
+ * partly played, and Next Up holds each show's next unwatched episode.
+ *
+ * Like AIOMetadata, a show is ordered by when its next episode became available to watch: the later
+ * of when its previous episode was finished and when the next one aired. A show finished weeks ago
+ * whose new episode came out today therefore leads the row. Unaired episodes, when shown here at
+ * all, follow in the order they arrived.
+ */
+internal fun splitNextUpItems(
+    items: List<ContinueWatchingItem>,
+    enabled: Boolean,
+    seedTimestampsByContentId: Map<String, Long> = emptyMap(),
+    nowEpochMs: Long = WatchProgressClock.nowEpochMs(),
+): Pair<List<ContinueWatchingItem>, List<ContinueWatchingItem>> {
+    if (!enabled) return items to emptyList()
+
+    val (nextUp, inProgress) = items.partition(ContinueWatchingItem::isNextUp)
+    if (nextUp.size < 2) return inProgress to nextUp
+
+    val (unaired, aired) = nextUp.partition { item -> item.isUpcoming(nowEpochMs) }
+    val sortedAired = aired.sortedByDescending { item ->
+        val finishedAt = seedTimestampsByContentId[item.parentMetaId] ?: 0L
+        val airedAt = parseReleaseDateToEpochMs(item.released)
+            ?.takeIf { releaseEpochMs -> releaseEpochMs <= nowEpochMs }
+            ?: 0L
+        maxOf(finishedAt, airedAt)
+    }
+    return inProgress to (sortedAired + unaired)
 }
 
 internal fun ContinueWatchingItem.isUpcoming(nowEpochMs: Long = WatchProgressClock.nowEpochMs()): Boolean =

@@ -139,6 +139,7 @@ fun ContinueWatchingSettingsScreen(
             showUnairedNextUp = continueWatchingPreferencesUiState.showUnairedNextUp,
             blurNextUp = continueWatchingPreferencesUiState.blurNextUp,
             showResumePromptOnLaunch = continueWatchingPreferencesUiState.showResumePromptOnLaunch,
+            separateNextUpRow = continueWatchingPreferencesUiState.separateNextUpRow,
             sortMode = continueWatchingPreferencesUiState.sortMode,
             clickAction = continueWatchingPreferencesUiState.clickAction,
         )
