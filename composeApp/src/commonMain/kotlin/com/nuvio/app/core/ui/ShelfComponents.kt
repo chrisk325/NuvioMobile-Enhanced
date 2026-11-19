@@ -276,7 +276,7 @@ fun NuvioPosterCard(
 }
 
 @Composable
-private fun NuvioShelfSectionHeader(
+internal fun NuvioShelfSectionHeader(
     title: String,
     modifier: Modifier = Modifier,
     onViewAllClick: (() -> Unit)? = null,

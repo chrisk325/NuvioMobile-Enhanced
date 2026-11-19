@@ -2,13 +2,18 @@ package com.nuvio.app.features.library
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.nuvio.app.core.ui.NuvioShelfSectionHeader
+import com.nuvio.app.core.ui.NuvioViewAllPillSize
 import com.nuvio.app.features.home.HomeCatalogSection
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.home.components.HomeCatalogRowSection
 import com.nuvio.app.features.home.components.HomeEmptyStateCard
 import com.nuvio.app.features.home.components.HomeSkeletonRow
+import com.nuvio.app.features.home.components.PosterGridRow
+import com.nuvio.app.features.home.stableKey
 import com.nuvio.app.features.servers.ServerCatalog
 import com.nuvio.app.features.servers.ServerFailure
 import com.nuvio.app.features.servers.ServerLibraryRef
@@ -49,6 +54,8 @@ internal suspend fun loadServerShelves(): List<LibraryServerShelf> = coroutineSc
 
 internal fun LazyListScope.serverLibraryContent(
     shelves: List<LibraryServerShelf>?,
+    layoutMode: LibraryLayoutMode,
+    columns: Int,
     watchedKeys: Set<String>,
     fullyWatchedSeriesKeys: Set<String>,
     onCatalogClick: ((HomeCatalogSection) -> Unit)?,
@@ -57,7 +64,11 @@ internal fun LazyListScope.serverLibraryContent(
     onRetry: () -> Unit,
 ) {
     when {
-        shelves == null -> items(3) { HomeSkeletonRow(horizontalPadding = 16.dp) }
+        shelves == null -> if (layoutMode == LibraryLayoutMode.VERTICAL) {
+            libraryVerticalSkeletonItems(columns)
+        } else {
+            items(3) { HomeSkeletonRow(horizontalPadding = 16.dp) }
+        }
 
         shelves.isEmpty() -> item {
             HomeEmptyStateCard(
@@ -77,7 +88,17 @@ internal fun LazyListScope.serverLibraryContent(
 
         else -> shelves.forEach { shelf ->
             val section = shelf.section
-            if (section != null && section.items.isNotEmpty()) {
+            if (section != null && section.items.isNotEmpty() && layoutMode == LibraryLayoutMode.VERTICAL) {
+                serverShelfGrid(
+                    section = section,
+                    columns = columns,
+                    watchedKeys = watchedKeys,
+                    fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
+                    onViewAllClick = onCatalogClick?.takeIf { section.hasMore }?.let { open -> { open(section) } },
+                    onPosterClick = onPosterClick,
+                    onPosterLongClick = onPosterLongClick,
+                )
+            } else if (section != null && section.items.isNotEmpty()) {
                 item(key = "server-shelf:${section.key}") {
                     HomeCatalogRowSection(
                         section = section,
@@ -100,6 +121,40 @@ internal fun LazyListScope.serverLibraryContent(
                 }
             }
         }
+    }
+}
+
+private fun LazyListScope.serverShelfGrid(
+    section: HomeCatalogSection,
+    columns: Int,
+    watchedKeys: Set<String>,
+    fullyWatchedSeriesKeys: Set<String>,
+    onViewAllClick: (() -> Unit)?,
+    onPosterClick: ((MetaPreview) -> Unit)?,
+    onPosterLongClick: ((MetaPreview) -> Unit)?,
+) {
+    item(key = "server-grid-header:${section.key}", contentType = "server_grid_header") {
+        NuvioShelfSectionHeader(
+            title = section.title,
+            modifier = libraryContentTransitionModifier().padding(horizontal = 16.dp),
+            onViewAllClick = onViewAllClick,
+            viewAllPillSize = NuvioViewAllPillSize.Compact,
+        )
+    }
+    items(
+        items = section.items.chunked(columns),
+        key = { row -> "server-grid:${section.key}:${row.first().stableKey()}" },
+        contentType = { "server_grid_row" },
+    ) { row ->
+        PosterGridRow(
+            items = row,
+            columns = columns,
+            modifier = libraryContentTransitionModifier().padding(horizontal = 16.dp),
+            watchedKeys = watchedKeys,
+            fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
+            onPosterClick = onPosterClick,
+            onPosterLongClick = onPosterLongClick,
+        )
     }
 }
 

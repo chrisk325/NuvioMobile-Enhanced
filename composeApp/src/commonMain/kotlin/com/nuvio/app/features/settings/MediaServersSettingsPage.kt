@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
+import com.nuvio.app.features.library.LibraryDisplaySettingsRepository
+import com.nuvio.app.features.library.LibraryLayoutMode
 import com.nuvio.app.features.servers.ServerConnection
 import com.nuvio.app.features.servers.ServerFailure
 import com.nuvio.app.features.servers.ServerProvider
@@ -34,8 +36,11 @@ import nuvio.composeapp.generated.resources.plex_add_description
 import nuvio.composeapp.generated.resources.plex_logo
 import nuvio.composeapp.generated.resources.servers_add_description
 import nuvio.composeapp.generated.resources.servers_empty
+import nuvio.composeapp.generated.resources.servers_library_grid_description
+import nuvio.composeapp.generated.resources.servers_library_grid_title
 import nuvio.composeapp.generated.resources.servers_section_add
 import nuvio.composeapp.generated.resources.servers_section_connected
+import nuvio.composeapp.generated.resources.servers_section_library
 import nuvio.composeapp.generated.resources.silo_add_description
 import nuvio.composeapp.generated.resources.silo_logo
 import org.jetbrains.compose.resources.painterResource
@@ -49,6 +54,10 @@ internal fun LazyListScope.mediaServersSettingsContent(
         val uiState by remember {
             ServerRepository.ensureLoaded()
             ServerRepository.uiState
+        }.collectAsStateWithLifecycle()
+        val displaySettings by remember {
+            LibraryDisplaySettingsRepository.ensureLoaded()
+            LibraryDisplaySettingsRepository.uiState
         }.collectAsStateWithLifecycle()
         var signIn by remember { mutableStateOf<ServerSignInRequest?>(null) }
         fun open(connection: ServerConnection) {
@@ -99,6 +108,26 @@ internal fun LazyListScope.mediaServersSettingsContent(
                         onClick = { signIn = ServerSignInRequest(provider) },
                     )
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(NuvioTokens.Space.s16))
+        SettingsSection(
+            title = stringResource(Res.string.servers_section_library),
+            isTablet = isTablet,
+        ) {
+            SettingsGroup(isTablet = isTablet) {
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.servers_library_grid_title),
+                    description = stringResource(Res.string.servers_library_grid_description),
+                    checked = displaySettings.serverLayoutMode == LibraryLayoutMode.VERTICAL,
+                    isTablet = isTablet,
+                    onCheckedChange = { vertical ->
+                        LibraryDisplaySettingsRepository.setServerLayoutMode(
+                            if (vertical) LibraryLayoutMode.VERTICAL else LibraryLayoutMode.HORIZONTAL,
+                        )
+                    },
+                )
             }
         }
 
