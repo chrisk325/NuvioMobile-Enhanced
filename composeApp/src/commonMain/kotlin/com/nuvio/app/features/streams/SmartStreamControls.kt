@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
@@ -41,6 +42,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.SheetValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -395,11 +398,16 @@ private fun SmartSheet(
     val close: () -> Unit = {
         scope.launch { dismissNuvioBottomSheet(sheetState = sheetState, onDismiss = onDismiss) }
     }
+    val scrollState = rememberScrollState()
+    val closing = sheetState.targetValue == SheetValue.Hidden
+    LaunchedEffect(closing) {
+        if (closing) scrollState.stopScroll()
+    }
     NuvioModalBottomSheet(onDismissRequest = close, sheetState = sheetState) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState, enabled = !closing)
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
