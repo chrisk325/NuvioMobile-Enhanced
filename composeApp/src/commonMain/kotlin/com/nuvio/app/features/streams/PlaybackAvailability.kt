@@ -31,10 +31,17 @@ internal class PlaybackAvailability(
     private val addons: List<ManagedAddon>,
     private val plugins: PluginsUiState,
 ) {
-    fun canStream(type: String, videoId: String): Boolean =
+    /** An episode should come with its show's [parentMetaId] and its numbers, which a media server needs to find it. */
+    fun canStream(
+        type: String,
+        videoId: String,
+        parentMetaId: String? = null,
+        seasonNumber: Int? = null,
+        episodeNumber: Int? = null,
+    ): Boolean =
         hasCompatiblePlaybackSource(addons, plugins, type, videoId) ||
             MetaDetailsRepository.findEmbeddedStreams(videoId).isNotEmpty() ||
-            ServerStreams.canServe(type, videoId)
+            ServerStreams.canServe(type, videoId, parentMetaId, seasonNumber, episodeNumber)
 
     fun canPlay(
         type: String,
@@ -42,7 +49,7 @@ internal class PlaybackAvailability(
         parentMetaId: String,
         seasonNumber: Int? = null,
         episodeNumber: Int? = null,
-    ): Boolean = canStream(type, videoId) || DownloadsRepository.findPlayableDownload(
+    ): Boolean = canStream(type, videoId, parentMetaId, seasonNumber, episodeNumber) || DownloadsRepository.findPlayableDownload(
         parentMetaId = parentMetaId,
         seasonNumber = seasonNumber,
         episodeNumber = episodeNumber,

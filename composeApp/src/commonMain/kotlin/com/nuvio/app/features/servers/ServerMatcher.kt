@@ -65,8 +65,15 @@ internal class ServerMatcher(
     private val lookups = linkedMapOf<LookupKey, TitleLookup>()
     private val titleNames = linkedMapOf<String, TitleName>()
 
-    fun request(type: String, videoId: String, season: Int?, episode: Int?): MatchRequest? {
-        val request = titleRequest(type, videoId) ?: return null
+    /**
+     * The request for [videoId]. An episode needs its [season] and [episode], or an id of the form
+     * "<show id>:<season>:<episode>" to read them from. With [parentId] (the show's or movie's own id) the title is
+     * taken from it, so episode ids of any other form work too.
+     */
+    fun request(type: String, videoId: String, season: Int?, episode: Int?, parentId: String? = null): MatchRequest? {
+        val request = parentId?.takeUnless { ServerItemRef.isServerId(it) }?.let { titleRequest(type, it) }
+            ?: titleRequest(type, videoId)
+            ?: return null
         if (request.kind == ServerMediaKind.MOVIE) return request
         val parts = videoId.split(':')
         val position = parts.drop(parentSize(videoId)).map { it.toIntOrNull() }.takeIf { it.size == 2 }

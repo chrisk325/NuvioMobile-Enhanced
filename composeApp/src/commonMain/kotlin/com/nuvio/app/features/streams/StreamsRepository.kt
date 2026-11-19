@@ -167,7 +167,7 @@ object StreamsRepository {
         }
 
         val isNativeServerRequest = ServerStreams.isNativeRequest(videoId)
-        val serverSources = ServerStreams.sources(type, videoId, season, episode, forceRefresh)
+        val serverSources = ServerStreams.sources(type, videoId, season, episode, forceRefresh, parentId = parentMetaId)
         val preferredGroupIds = serverSources.filter { it.preferred }.mapTo(mutableSetOf()) { it.addonId }
         val installedAddons = if (isNativeServerRequest) emptyList() else AddonRepository.uiState.value.addons.enabledAddons()
         val pluginScrapers = if (AppFeaturePolicy.pluginsEnabled && !isNativeServerRequest) {

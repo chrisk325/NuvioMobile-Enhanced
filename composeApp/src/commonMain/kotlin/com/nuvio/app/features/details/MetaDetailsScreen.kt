@@ -984,7 +984,7 @@ fun MetaDetailsScreen(
                 val manualPlayHandler = onPlayManually
                 val showManualPlayOption = manualPlayHandler != null && StreamAutoPlayPolicy.isEffectivelyEnabled(playerSettingsUiState)
                 val onPrimaryPlayLongClick: (() -> Unit)? = manualPlayHandler
-                    ?.takeIf { !shufflePoolEmpty && showManualPlayOption && playbackAvailability.canStream(meta.type, primaryVideoId) }
+                    ?.takeIf { !shufflePoolEmpty && showManualPlayOption && playbackAvailability.canStream(meta.type, primaryVideoId, meta.id, seriesAction?.seasonNumber, seriesAction?.episodeNumber) }
                     ?.let { manualPlay ->
                         {
                             stopHeroTrailerForNavigation()
@@ -1988,7 +1988,7 @@ fun MetaDetailsScreen(
                     if (
                         onPlayManually != null &&
                         StreamAutoPlayPolicy.isEffectivelyEnabled(playerSettingsUiState) &&
-                        playbackAvailability.canStream(meta.type, selectedEpisode.id)
+                        playbackAvailability.canStream(meta.type, selectedEpisode.id, meta.id, selectedEpisode.season, selectedEpisode.episode)
                     ) {
                         add(
                             PosterZoomOverlayAction(

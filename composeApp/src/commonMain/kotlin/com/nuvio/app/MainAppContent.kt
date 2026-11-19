@@ -1151,7 +1151,10 @@ internal fun MainAppContent(
 
             val isPartyMedia = PartyRepository.state.value.party?.media?.key ==
                 partyMediaKey(parentMetaType, parentMetaId, seasonNumber, episodeNumber)
-            if (!isPartyMedia && !PlaybackAvailability.current().canStream(type, videoId)) {
+            if (
+                !isPartyMedia &&
+                !PlaybackAvailability.current().canStream(type, videoId, parentMetaId, seasonNumber, episodeNumber)
+            ) {
                 NuvioToastController.show(playbackUnavailableMessage)
                 return
             }
@@ -1424,7 +1427,13 @@ internal fun MainAppContent(
 
         fun canSelectContinueWatchingStreams(item: ContinueWatchingItem): Boolean =
             !item.isCloudLibraryContinueWatchingItem() &&
-                playbackAvailability.canStream(item.parentMetaType, item.videoId)
+                playbackAvailability.canStream(
+                    type = item.parentMetaType,
+                    videoId = item.videoId,
+                    parentMetaId = item.parentMetaId,
+                    seasonNumber = item.seasonNumber,
+                    episodeNumber = item.episodeNumber,
+                )
 
         val openContinueWatching: (ContinueWatchingItem, Boolean, Boolean) -> Unit = { item, manualSelection, startFromBeginning ->
             resumePromptItem = null
