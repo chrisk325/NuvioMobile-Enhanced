@@ -34,10 +34,22 @@ internal class ServerStreamSource(
 internal object ServerStreams {
     fun isNativeRequest(videoId: String): Boolean = ServerItemRef.isServerId(videoId)
 
-    fun canServe(type: String, videoId: String): Boolean {
-        ServerItemRef.parse(videoId)?.let { ref -> return ServerRepository.connection(ref.connectionId)?.enabled == true }
+    /**
+     * Whether a server may play [videoId]. An episode is told by its [season] and [episode] (or an id carrying them)
+     * and its show's [parentId], as for [sources].
+     */
+    fun canServe(
+        type: String,
+        videoId: String,
+        parentId: String? = null,
+        season: Int? = null,
+        episode: Int? = null,
+    ): Boolean {
+        (ServerItemRef.parse(videoId) ?: ServerItemRef.parse(parentId))?.let { ref ->
+            return ServerRepository.connection(ref.connectionId)?.enabled == true
+        }
         val connections = ServerRepository.enabledConnections().ifEmpty { return false }
-        val request = ServerMatcher.shared.request(type, videoId, season = null, episode = null) ?: return false
+        val request = ServerMatcher.shared.request(type, videoId, season, episode, parentId) ?: return false
         return connections.any { ServerMatcher.shared.supports(it, request.kind) }
     }
 
@@ -49,13 +61,14 @@ internal object ServerStreams {
         season: Int?,
         episode: Int?,
         forceRefresh: Boolean = false,
+        parentId: String? = null,
     ): List<ServerStreamSource> {
         ServerItemRef.parse(videoId)?.let { ref ->
             val connection = ServerRepository.connection(ref.connectionId) ?: return emptyList()
             return listOf(source(connection, preferred = true) { candidates(ref) })
         }
         val connections = ServerRepository.enabledConnections().ifEmpty { return emptyList() }
-        val request = ServerMatcher.shared.request(type, videoId, season, episode) ?: return emptyList()
+        val request = ServerMatcher.shared.request(type, videoId, season, episode, parentId) ?: return emptyList()
         return connections
             .filter { ServerMatcher.shared.supports(it, request.kind) }
             .map { connection ->

@@ -42,6 +42,19 @@ class ServerPlaybackTest {
     }
 
     @Test
+    fun anEpisodeIsPlayableFromItsShowAndNumbers() {
+        val connection = installFakeServer()
+
+        // An id without its numbers can't say which episode; given them, the show is enough.
+        assertFalse(ServerStreams.canServe("series", "kitsu:123:5"))
+        assertTrue(ServerStreams.canServe("series", "kitsu:123:5", parentId = "kitsu:123", season = 1, episode = 5))
+        // Episode ids of any form, as long as the show's own id comes along.
+        assertTrue(ServerStreams.canServe("series", "someaddon:ep77", parentId = "tt0944947", season = 1, episode = 2))
+        // A show from the server plays its episodes from the server.
+        assertTrue(ServerStreams.canServe("series", "someaddon:ep77", parentId = ServerItemRef(connection.id, "500").encode()))
+    }
+
+    @Test
     fun serverItemsAndMatchableCatalogTitlesArePlayable() {
         val connection = installFakeServer()
         assertTrue(ServerStreams.canServe("movie", ServerItemRef(connection.id, "42").encode()))

@@ -38,6 +38,10 @@ class ServerMatcherTest {
         val episode = ServerMatcher.shared.request("series", "kitsu:123:5", 1, 5)!!
         assertEquals(1, episode.season)
         assertEquals(5, episode.episode)
+        val fromShow = ServerMatcher.shared.request("series", "someaddon:ep77", 1, 2, parentId = "tt0944947")!!
+        assertEquals("tt0944947", fromShow.ids.imdb)
+        assertEquals("tt0944947", fromShow.parentId)
+        assertEquals(1 to 2, fromShow.season to fromShow.episode)
         val index = LibraryIndex(listOf(ServerIndexEntry("a", TrackingExternalIds(kitsu = 123, anilist = 9))))
         assertEquals(listOf("a"), index.lookup(TrackingExternalIds(kitsu = 123)))
         assertTrue(index.lookup(TrackingExternalIds(kitsu = 123, anilist = 8)).isEmpty())
