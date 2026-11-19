@@ -12,14 +12,14 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.navigation3.ui.NavDisplay
 
 /**
- * Horizontal push/pop motion for the details screen.
+ * Horizontal push/pop motion for content pages (details, cast/person, catalogs, folders).
  *
- * Opening details: the details page slides in from the right edge while the screen underneath
- * (home, discover, ...) drifts a little to the left. Going back reverses it: details slides out
+ * Opening a page: the new page slides in from the right edge while the screen underneath
+ * (home, discover, ...) drifts a little to the left. Going back reverses it: the page slides out
  * to the right and the previous screen drifts back into place. The predictive back gesture
  * drives the same motion so the page follows the finger.
  */
-internal object DetailsSlideTransition {
+internal object PageSlideTransition {
     const val DurationMillis = 380
 
     /** How far the covered screen drifts, as a fraction of its width. */

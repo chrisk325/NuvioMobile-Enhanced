@@ -1847,7 +1847,7 @@ internal fun MainAppContent(
                         onAddProfileRequested = onSwitchProfile,
                     )
                 }
-                entry<DetailRoute>(metadata = DetailsSlideTransition.metadata) { route ->
+                entry<DetailRoute>(metadata = PageSlideTransition.metadata) { route ->
                     OpaqueAppSurfaces {
                         DetailsDestination(
                             route = route,
@@ -1862,7 +1862,7 @@ internal fun MainAppContent(
                         )
                     }
                 }
-                entry<PersonDetailRoute> { route ->
+                entry<PersonDetailRoute>(metadata = PageSlideTransition.metadata) { route ->
                     OpaqueAppSurfaces {
                         PersonDestination(
                             route = route,
@@ -1936,7 +1936,7 @@ internal fun MainAppContent(
                     }
                     }
                 }
-                entry<CatalogRoute> { route ->
+                entry<CatalogRoute>(metadata = PageSlideTransition.metadata) { route ->
                     CatalogDestination(
                         route = route,
                         navController = navController,
@@ -2063,7 +2063,7 @@ internal fun MainAppContent(
                         navController = navController,
                     )
                 }
-                entry<FolderDetailRoute> { route ->
+                entry<FolderDetailRoute>(metadata = PageSlideTransition.metadata) { route ->
                     FolderDestination(
                         route = route,
                         navController = navController,
