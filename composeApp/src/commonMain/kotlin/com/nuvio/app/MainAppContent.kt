@@ -1847,7 +1847,7 @@ internal fun MainAppContent(
                         onAddProfileRequested = onSwitchProfile,
                     )
                 }
-                entry<DetailRoute> { route ->
+                entry<DetailRoute>(metadata = DetailsSlideTransition.metadata) { route ->
                     OpaqueAppSurfaces {
                         DetailsDestination(
                             route = route,
