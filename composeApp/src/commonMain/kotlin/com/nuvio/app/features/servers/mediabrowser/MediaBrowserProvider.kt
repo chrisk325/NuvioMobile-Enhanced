@@ -10,6 +10,7 @@ import com.nuvio.app.features.servers.ServerIndexEntry
 import com.nuvio.app.features.servers.ServerItemDetails
 import com.nuvio.app.features.servers.ServerLibrary
 import com.nuvio.app.features.servers.ServerMediaKind
+import com.nuvio.app.features.servers.ServerNextUp
 import com.nuvio.app.features.servers.ServerPage
 import com.nuvio.app.features.servers.ServerPlayMethod
 import com.nuvio.app.features.servers.ServerPlaybackEvent
@@ -37,6 +38,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.DeserializationStrategy
+import kotlin.time.Instant
 
 internal data class Endpoint(
     val path: String,
@@ -62,6 +64,8 @@ internal abstract class MediaBrowserProvider(
     protected abstract fun itemEndpoint(userId: String, itemId: String): Endpoint
 
     protected abstract fun resumeEndpoint(userId: String): Endpoint
+
+    protected abstract fun nextUpEndpoint(userId: String): Endpoint
 
     protected abstract fun playedEndpoint(userId: String, itemId: String): Endpoint
 
@@ -312,29 +316,7 @@ internal abstract class MediaBrowserProvider(
             ),
         ).items
         val mapper = mapper(session)
-        val seriesIds = items.filter { it.isEpisode }.mapNotNull { it.seriesId }.distinct()
-        // An episode carries no ids of its show; fetching the shows lets the entry open and match the show.
-        val shows = if (seriesIds.isEmpty()) {
-            emptyMap()
-        } else {
-            try {
-                get(
-                    session,
-                    itemsEndpoint(session.userId),
-                    ItemsResult.serializer(),
-                    mapOf(
-                        "ids" to seriesIds.joinToString(","),
-                        "fields" to LIST_FIELDS,
-                        "imageTypeLimit" to "1",
-                        "enableImageTypes" to "Primary,Backdrop,Logo",
-                    ),
-                ).items.associateBy { it.id }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                emptyMap()
-            }
-        }
+        val shows = shows(session, items.filter { it.isEpisode }.mapNotNull { it.seriesId })
         val libraries = session.connection.selectedLibraries
         return items.mapNotNull { item ->
             val state = mapper.userState(item) ?: return@mapNotNull null
@@ -344,6 +326,66 @@ internal abstract class MediaBrowserProvider(
             val kind = ServerMediaKind.fromContentType(title.preview.type) ?: return@mapNotNull null
             if (libraries.none { it.holds(kind) }) return@mapNotNull null
             ServerResume(title, state)
+        }
+    }
+
+    override suspend fun nextUpProgress(session: ServerSession, limit: Int): List<ServerNextUp> {
+        val items = get(
+            session,
+            nextUpEndpoint(session.userId),
+            ItemsResult.serializer(),
+            mapOf(
+                "limit" to limit.toString(),
+                "fields" to LIST_FIELDS,
+                "enableUserData" to "true",
+                "imageTypeLimit" to "1",
+                "enableImageTypes" to "Primary,Backdrop,Logo,Thumb",
+                // Episodes already part way through are in Continue watching.
+                "enableResumable" to "false",
+                "enableRewatching" to "false",
+            ),
+        ).items.filter { it.isEpisode && it.userData?.played != true }
+        val mapper = mapper(session)
+        val shows = shows(session, items.mapNotNull { it.seriesId }, withUserData = true)
+        return items.mapNotNull { item ->
+            val show = item.seriesId?.let { shows[it] }
+            val title = show?.let(mapper::title) ?: mapper.resumeTitle(item) ?: return@mapNotNull null
+            ServerNextUp(
+                title = title,
+                episode = mapper.video(item),
+                // AIOMetadata dates the episode itself with when its show was last watched (or the episode aired),
+                // which is the order it lists them in; Jellyfin dates the show.
+                lastActivityEpochMs = (item.userData?.lastPlayedDate ?: show?.userData?.lastPlayedDate)
+                    ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() },
+            )
+        }.distinctBy { it.title.preview.id }
+    }
+
+    /** The shows [seriesIds] belong to; an episode carries no ids of its show, so this lets entries open and match it. */
+    private suspend fun shows(
+        session: ServerSession,
+        seriesIds: List<String>,
+        withUserData: Boolean = false,
+    ): Map<String, BaseItem> {
+        val ids = seriesIds.distinct()
+        if (ids.isEmpty()) return emptyMap()
+        return try {
+            get(
+                session,
+                itemsEndpoint(session.userId),
+                ItemsResult.serializer(),
+                mapOf(
+                    "ids" to ids.joinToString(","),
+                    "fields" to LIST_FIELDS,
+                    "enableUserData" to "true".takeIf { withUserData },
+                    "imageTypeLimit" to "1",
+                    "enableImageTypes" to "Primary,Backdrop,Logo",
+                ),
+            ).items.associateBy { it.id }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            emptyMap()
         }
     }
 

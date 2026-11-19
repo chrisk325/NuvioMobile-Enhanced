@@ -27,6 +27,8 @@ internal class EmbyProvider(
 
     override fun resumeEndpoint(userId: String) = Endpoint("/Users/${pathSegment(userId)}/Items/Resume")
 
+    override fun nextUpEndpoint(userId: String) = Endpoint("/Shows/NextUp", mapOf("UserId" to userId))
+
     override fun playedEndpoint(userId: String, itemId: String) =
         Endpoint("/Users/${pathSegment(userId)}/PlayedItems/${pathSegment(itemId)}")
 

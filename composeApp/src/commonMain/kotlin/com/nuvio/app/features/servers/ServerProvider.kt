@@ -92,6 +92,9 @@ interface ServerProvider {
     /** The server's continue-watching list with each item's position, for the app's own Continue watching. */
     suspend fun resumeProgress(session: ServerSession, limit: Int): List<ServerResume> = unsupported()
 
+    /** The server's "Next up": the next unwatched episode of each show being watched there, for the app's Next Up. */
+    suspend fun nextUpProgress(session: ServerSession, limit: Int): List<ServerNextUp> = unsupported()
+
     suspend fun setPlayed(session: ServerSession, itemId: String, played: Boolean): Unit = unsupported()
 
     /** True when the server's libraries are catalogs (AIOStreams, AIOMetadata): rows for Home, not the Library. */

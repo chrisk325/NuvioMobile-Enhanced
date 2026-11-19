@@ -1,5 +1,6 @@
 package com.nuvio.app.features.servers
 
+import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.tracking.TrackingExternalIds
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
@@ -190,5 +191,68 @@ class ServerResumeImportTest {
 
         assertEquals(listOf(connection.id), ServerResumeImport.connections().map { it.id })
         assertTrue(ServerCatalog.homeDefinitions().none { it.catalogId == "resume" })
+    }
+
+    private fun nextEpisode(connectionId: String) = MetaVideo(
+        id = ServerItemRef(connectionId, "ep5").encode(),
+        title = "The Man Who Will Become King",
+        released = "2026-01-02",
+        thumbnail = "https://server/ep5.jpg",
+        season = 1,
+        episode = 5,
+        overview = "Luffy sets sail.",
+    )
+
+    @Test
+    fun aServersNextUpPlaysItsEpisodeFromTheServer() {
+        val connection = installFakeServer()
+
+        val entry = ServerResumeImport.nextUpEntries(
+            connection,
+            listOf(ServerNextUp(show(connection.id), nextEpisode(connection.id), lastActivityEpochMs = 5_000L)),
+        ).single()
+
+        assertEquals(ServerItemRef(connection.id, "500").encode(), entry.contentId)
+        assertEquals(ServerItemRef(connection.id, "ep5").encode(), entry.videoId)
+        assertEquals(1 to 5, entry.season to entry.episode)
+        assertEquals(5_000L, entry.lastActivityEpochMs)
+        val item = entry.toContinueWatchingItem()
+        assertTrue(item.isNextUp)
+        assertEquals("https://server/ep5.jpg", item.imageUrl)
+        assertEquals("The Man Who Will Become King", item.episodeTitle)
+    }
+
+    @Test
+    fun aServersNextUpWithAddonMetadataPlaysACatalogEpisode() {
+        val connection = installFakeServer()
+        ServerRepository.setCatalogMetadata(connection.id, true)
+
+        val entry = ServerResumeImport.nextUpEntries(
+            ServerRepository.connection(connection.id)!!,
+            listOf(ServerNextUp(show(connection.id), nextEpisode(connection.id))),
+        ).single()
+
+        assertEquals("tmdb:37854", entry.contentId)
+        assertEquals("tmdb:37854:1:5", entry.videoId)
+    }
+
+    @Test
+    fun aServersNextUpKeepsTheServersOrderWithoutLastPlayedDates() {
+        val connection = installFakeServer()
+        ServerResumeImport.nowMs = { 10_000L }
+        val other = ServerTitle(
+            preview = MetaPreview(id = ServerItemRef(connection.id, "600").encode(), type = "series", name = "Lupin"),
+            externalIds = TrackingExternalIds(),
+        )
+
+        val entries = ServerResumeImport.nextUpEntries(
+            connection,
+            listOf(
+                ServerNextUp(other, nextEpisode(connection.id).copy(id = ServerItemRef(connection.id, "lupin2").encode())),
+                ServerNextUp(show(connection.id), nextEpisode(connection.id)),
+            ),
+        )
+
+        assertEquals(listOf("Lupin", "One Piece"), entries.sortedByDescending { it.lastActivityEpochMs }.map { it.title })
     }
 }

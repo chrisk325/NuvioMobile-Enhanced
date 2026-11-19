@@ -7,6 +7,7 @@ import com.nuvio.app.features.cloud.CloudLibraryProviderState
 import com.nuvio.app.features.cloud.CloudLibraryUiState
 import com.nuvio.app.features.cloud.playbackVideoId
 import com.nuvio.app.features.debrid.DebridProviders
+import com.nuvio.app.features.servers.ServerNextUpEntry
 import com.nuvio.app.features.watchprogress.CachedInProgressItem
 import com.nuvio.app.features.watchprogress.CachedNextUpItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingClickAction
@@ -281,6 +282,42 @@ class HomeScreenTest {
             listOf("aired:2:1", "recent:1:2", "unknown:1:2", "future:1:3"),
             nextUp.map(ContinueWatchingItem::videoId),
         )
+    }
+
+    @Test
+    fun `server next up fills shows the app has nothing for`() {
+        val nowEpochMs = requireNotNull(parseReleaseDateToEpochMs("2026-07-19T12:00:00Z"))
+        val local = continueWatchingItem(videoId = "show:1:4", subtitle = "S1E4 • Local")
+        fun entry(id: String, title: String, released: String? = "2026-07-01") = ServerNextUpEntry(
+            contentId = id,
+            contentType = "series",
+            videoId = "$id:1:2",
+            title = title,
+            season = 1,
+            episode = 2,
+            released = released,
+            lastActivityEpochMs = 1_000L,
+        )
+
+        val added = serverNextUpItemsToShow(
+            entries = listOf(
+                entry("lupin", "Lupin"),
+                entry("show", "Show"),
+                entry("server-show", "SHOW"),
+                entry("dismissed", "Dismissed"),
+                entry("hidden", "Hidden"),
+                entry("future", "Future", released = "2026-12-01"),
+            ),
+            shownItems = listOf(local),
+            dismissedNextUpKeys = setOf(nextUpDismissKey("dismissed", 1, 1)),
+            hiddenContentIds = setOf("hidden"),
+            showUnaired = false,
+            nowEpochMs = nowEpochMs,
+        )
+
+        assertEquals(listOf("lupin:1:2"), added.map { it.second.videoId })
+        assertTrue(added.single().second.isNextUp)
+        assertEquals(1_000L, added.single().first)
     }
 
     @Test
