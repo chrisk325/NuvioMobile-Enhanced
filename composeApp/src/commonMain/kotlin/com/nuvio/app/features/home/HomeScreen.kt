@@ -42,6 +42,7 @@ import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.ManagedAddon
 import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.servers.ServerRepository
+import com.nuvio.app.features.servers.ServerNextUpEntry
 import com.nuvio.app.features.servers.ServerResumeImport
 import com.nuvio.app.features.addons.firstEnabledManifestError
 import com.nuvio.app.features.cloud.CloudLibraryContentType
@@ -584,17 +585,37 @@ fun HomeScreen(
     val shuffledContinueWatchingItems = remember(rawShuffledContinueWatchingItems, cwPosterPattern) {
         rawShuffledContinueWatchingItems.withCustomPosterUrls(cwPosterPattern)
     }
+    // Media servers' own Next up (Jellyfin/Emby "/Shows/NextUp"), for shows watched there rather than in the app.
+    val serverNextUpEntries by ServerResumeImport.nextUp.collectAsStateWithLifecycle()
+    val serverNextUpItems = remember(
+        serverNextUpEntries,
+        shuffledContinueWatchingItems,
+        continueWatchingPreferences.dismissedNextUpKeys,
+        continueWatchingPreferences.showUnairedNextUp,
+        watchProgressUiState.hiddenContentIds,
+    ) {
+        serverNextUpItemsToShow(
+            entries = serverNextUpEntries,
+            shownItems = shuffledContinueWatchingItems,
+            dismissedNextUpKeys = continueWatchingPreferences.dismissedNextUpKeys,
+            hiddenContentIds = watchProgressUiState.hiddenContentIds,
+            showUnaired = continueWatchingPreferences.showUnairedNextUp,
+            isDroppedShow = WatchProgressRepository::isDroppedShow,
+        )
+    }
     val (mainContinueWatchingItems, upcomingItems) = remember(
         shuffledContinueWatchingItems,
+        serverNextUpItems,
         continueWatchingPreferences.sortMode,
     ) {
         splitUpcomingItems(
-            items = shuffledContinueWatchingItems,
+            items = shuffledContinueWatchingItems + serverNextUpItems.map { it.second },
             mode = continueWatchingPreferences.sortMode,
         )
     }
-    val nextUpSeedTimestamps = remember(effectivNextUpItems) {
+    val nextUpSeedTimestamps = remember(effectivNextUpItems, serverNextUpItems) {
         buildMap {
+            serverNextUpItems.forEach { (lastActivityEpochMs, item) -> put(item.parentMetaId, lastActivityEpochMs) }
             effectivNextUpItems.forEach { (contentId, pair) ->
                 put(contentId, pair.first)
                 put(pair.second.parentMetaId, pair.first)
@@ -1872,6 +1893,36 @@ internal fun splitNextUpItems(
     }
     return inProgress to (sortedAired + unaired)
 }
+
+/**
+ * The media servers' Next up episodes to add to Continue watching, each with when its show was last watched: those
+ * of shows not already there (in progress or with the app's own next up), not dismissed, hidden or dropped.
+ */
+internal fun serverNextUpItemsToShow(
+    entries: List<ServerNextUpEntry>,
+    shownItems: List<ContinueWatchingItem>,
+    dismissedNextUpKeys: Set<String>,
+    hiddenContentIds: Set<String>,
+    showUnaired: Boolean,
+    isDroppedShow: (String) -> Boolean = { false },
+    nowEpochMs: Long = WatchProgressClock.nowEpochMs(),
+): List<Pair<Long, ContinueWatchingItem>> {
+    if (entries.isEmpty()) return emptyList()
+    val shownIds = shownItems.mapTo(mutableSetOf()) { it.parentMetaId }
+    // The same show can come with the server's id on one side and an addon's on the other.
+    val shownTitles = shownItems.mapNotNullTo(mutableSetOf()) { it.title.nextUpTitleKey() }
+    return entries.mapNotNull { entry ->
+        val titleKey = entry.title.nextUpTitleKey()
+        if (entry.contentId in shownIds || (titleKey != null && titleKey in shownTitles)) return@mapNotNull null
+        if (entry.contentId in hiddenContentIds || isDroppedShow(entry.contentId)) return@mapNotNull null
+        if (nextUpDismissKey(entry.contentId, entry.season, entry.episode) in dismissedNextUpKeys) return@mapNotNull null
+        val item = entry.toContinueWatchingItem()
+        if (!showUnaired && item.isUpcoming(nowEpochMs)) return@mapNotNull null
+        entry.lastActivityEpochMs to item
+    }
+}
+
+private fun String.nextUpTitleKey(): String? = lowercase().filter { it.isLetterOrDigit() }.takeIf { it.isNotEmpty() }
 
 internal fun ContinueWatchingItem.isUpcoming(nowEpochMs: Long = WatchProgressClock.nowEpochMs()): Boolean =
     isNextUp && parseReleaseDateToEpochMs(released)

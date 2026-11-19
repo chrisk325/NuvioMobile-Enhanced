@@ -23,6 +23,8 @@ internal class JellyfinProvider(
 
     override fun resumeEndpoint(userId: String) = Endpoint("/UserItems/Resume", mapOf("userId" to userId))
 
+    override fun nextUpEndpoint(userId: String) = Endpoint("/Shows/NextUp", mapOf("userId" to userId))
+
     override fun playedEndpoint(userId: String, itemId: String) =
         Endpoint("/UserPlayedItems/${pathSegment(itemId)}", mapOf("userId" to userId))
 

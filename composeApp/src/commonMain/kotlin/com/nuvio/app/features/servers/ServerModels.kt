@@ -1,6 +1,7 @@
 package com.nuvio.app.features.servers
 
 import com.nuvio.app.features.details.MetaDetails
+import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.streams.StreamSubtitle
 import com.nuvio.app.features.tracking.TrackingExternalIds
@@ -126,6 +127,13 @@ data class ServerTitle(
 data class ServerResume(
     val title: ServerTitle,
     val state: ServerUserState,
+)
+
+/** A show's next episode to watch, as the server's Next up lists it; [lastActivityEpochMs] is when the show was last played. */
+data class ServerNextUp(
+    val title: ServerTitle,
+    val episode: MetaVideo,
+    val lastActivityEpochMs: Long? = null,
 )
 
 data class ServerItemDetails(

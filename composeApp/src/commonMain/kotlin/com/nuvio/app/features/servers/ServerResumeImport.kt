@@ -2,7 +2,9 @@ package com.nuvio.app.features.servers
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.watchprogress.ContinueWatchingItem
 import com.nuvio.app.features.watchprogress.MEDIA_SERVER_PROVIDER_PREFIX
+import com.nuvio.app.features.watchprogress.buildContinueWatchingEpisodeSubtitle
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import kotlinx.atomicfu.locks.SynchronizedObject
@@ -12,6 +14,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -26,9 +31,57 @@ internal data class ServerResumeCache(
     val fetchedAtMs: Long = 0L,
     val entries: List<WatchProgressEntry> = emptyList(),
     val dismissed: Set<String> = emptySet(),
+    val nextUp: List<ServerNextUpEntry> = emptyList(),
+    /** When Next up was last asked for; 0 for lists kept by versions that didn't ask, so they ask right away. */
+    val nextUpFetchedAtMs: Long = 0L,
 ) {
     val shown: List<WatchProgressEntry>
         get() = entries.filterNot { it.videoId in dismissed }
+}
+
+/** One show's next episode from a server's Next up, kept on the device and shown in the app's Next Up. */
+@Serializable
+internal data class ServerNextUpEntry(
+    val contentId: String,
+    val contentType: String,
+    val videoId: String,
+    val title: String,
+    val logo: String? = null,
+    val poster: String? = null,
+    val background: String? = null,
+    val season: Int? = null,
+    val episode: Int? = null,
+    val episodeTitle: String? = null,
+    val thumbnail: String? = null,
+    val overview: String? = null,
+    val released: String? = null,
+    val lastActivityEpochMs: Long = 0L,
+) {
+    fun toContinueWatchingItem(): ContinueWatchingItem = ContinueWatchingItem(
+        parentMetaId = contentId,
+        parentMetaType = contentType,
+        videoId = videoId,
+        title = title,
+        subtitle = buildContinueWatchingEpisodeSubtitle(
+            seasonNumber = season,
+            episodeNumber = episode,
+            episodeTitle = episodeTitle,
+        ),
+        imageUrl = thumbnail ?: background ?: poster,
+        logo = logo,
+        poster = poster,
+        background = background,
+        seasonNumber = season,
+        episodeNumber = episode,
+        episodeTitle = episodeTitle,
+        episodeThumbnail = thumbnail,
+        pauseDescription = overview,
+        released = released,
+        isNextUp = true,
+        resumePositionMs = 0L,
+        durationMs = 0L,
+        progressFraction = 0f,
+    )
 }
 
 /**
@@ -48,6 +101,10 @@ internal object ServerResumeImport {
     private val caches = mutableMapOf<String, ServerResumeCache>()
     private var listening = false
     private var cleanedUp = false
+    private val _nextUp = MutableStateFlow<List<ServerNextUpEntry>>(emptyList())
+
+    /** The Next up lists of the current servers, most recently watched show first. */
+    val nextUp: StateFlow<List<ServerNextUpEntry>> = _nextUp.asStateFlow()
 
     internal var nowMs: () -> Long = { Clock.System.now().toEpochMilliseconds() }
 
@@ -61,7 +118,10 @@ internal object ServerResumeImport {
     /** Shows the kept lists, then asks the servers whose list is older than a few minutes, unless [force]. */
     fun refresh(force: Boolean = false) {
         show()
-        val due = connections().filter { connection -> force || nowMs() - cache(connection.id).fetchedAtMs >= MIN_INTERVAL_MS }
+        val due = connections().filter { connection ->
+            val cache = cache(connection.id)
+            force || cache.nextUpFetchedAtMs == 0L || nowMs() - cache.fetchedAtMs >= MIN_INTERVAL_MS
+        }
         if (due.isEmpty()) return
         synchronized(lock) {
             if (job?.isActive == true) return
@@ -80,7 +140,12 @@ internal object ServerResumeImport {
     fun show() {
         listen()
         cleanUpOnce()
-        WatchProgressRepository.setExternalEntries(connections().flatMap { cache(it.id).shown })
+        val current = connections()
+        WatchProgressRepository.setExternalEntries(current.flatMap { cache(it.id).shown })
+        val nextUp = current.flatMap { cache(it.id).nextUp }
+            .sortedByDescending { it.lastActivityEpochMs }
+            .distinctBy { it.contentId }
+        if (nextUp != _nextUp.value) _nextUp.value = nextUp
     }
 
     suspend fun import(connection: ServerConnection) {
@@ -94,11 +159,70 @@ internal object ServerResumeImport {
             return
         }
         val previous = cache(connection.id)
+        val nextUp = try {
+            ServerRepository.call(connection.id) { provider, session -> provider.nextUpProgress(session, NEXT_UP_LIMIT) }
+                .let { nextUpEntries(connection, it, previous) }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: ServerException) {
+            if (error.failure == ServerFailure.UNSUPPORTED) {
+                emptyList()
+            } else {
+                log.w(error) { "Loading next up from ${connection.providerId} failed" }
+                previous.nextUp
+            }
+        } catch (error: Throwable) {
+            log.w(error) { "Loading next up from ${connection.providerId} failed" }
+            // Keep the last list when the server could not be asked.
+            previous.nextUp
+        }
         // A full list may have cut off older items, so it can't tell what the server dropped.
         val next = next(previous, entries(connection, resume, previous), complete = resume.size < LIMIT, fetchedAtMs)
+            .copy(nextUp = nextUp, nextUpFetchedAtMs = fetchedAtMs)
         saveCache(connection.id, next)
         show()
-        log.i { "Continue watching from ${connection.providerId}: ${resume.size} listed, ${next.shown.size} shown" }
+        log.i {
+            "Continue watching from ${connection.providerId}: ${resume.size} listed, ${next.shown.size} shown, " +
+                "${nextUp.size} next up"
+        }
+    }
+
+    internal fun nextUpEntries(
+        connection: ServerConnection,
+        nextUp: List<ServerNextUp>,
+        previous: ServerResumeCache = ServerResumeCache(),
+    ): List<ServerNextUpEntry> {
+        val present = connection.presenter()
+        val seen = previous.nextUp.associate { it.contentId to it.lastActivityEpochMs }
+        val now = nowMs()
+        return nextUp.mapIndexedNotNull { index, (title, episode, lastActivityEpochMs) ->
+            val preview = present(title)
+            if (preview.type != ServerMediaKind.SERIES.contentType) return@mapIndexedNotNull null
+            val videoId = when {
+                // A show from the server plays its episode from the server.
+                ServerItemRef.isServerId(preview.id) -> episode.id
+                // A show shown with addon metadata plays "<show id>:<season>:<episode>", like any catalog episode.
+                episode.season != null && episode.episode != null -> "${preview.id}:${episode.season}:${episode.episode}"
+                else -> return@mapIndexedNotNull null
+            }
+            ServerNextUpEntry(
+                contentId = preview.id,
+                contentType = preview.type,
+                videoId = videoId,
+                title = preview.name,
+                logo = preview.logo?.takeIf { it.isNotBlank() },
+                poster = preview.poster?.takeIf { it.isNotBlank() },
+                background = preview.banner?.takeIf { it.isNotBlank() },
+                season = episode.season,
+                episode = episode.episode,
+                episodeTitle = episode.title.takeIf { it.isNotBlank() },
+                thumbnail = episode.thumbnail?.takeIf { it.isNotBlank() },
+                overview = episode.overview?.takeIf { it.isNotBlank() },
+                released = episode.released?.takeIf { it.isNotBlank() },
+                // Without a last-played date, keep the server's order: it lists the most recently watched first.
+                lastActivityEpochMs = lastActivityEpochMs ?: ((seen[preview.id] ?: now) - index),
+            )
+        }.distinctBy { it.contentId }
     }
 
     /**
@@ -235,10 +359,12 @@ internal object ServerResumeImport {
             listening = false
             cleanedUp = false
         }
+        _nextUp.value = emptyList()
         WatchProgressRepository.setExternalEntries(emptyList())
     }
 
     private const val LIMIT = 50
+    private const val NEXT_UP_LIMIT = 30
     private const val MIN_INTERVAL_MS = 3 * 60_000L
     private const val SOON_INTERVAL_MS = 30_000L
 }
