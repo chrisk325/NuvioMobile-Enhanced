@@ -61,6 +61,7 @@ class MediaBrowserMapperTest {
         assertEquals(listOf("ms1", "ms2"), candidates.map { it.target.mediaSourceId })
         assertEquals("4K Remux", candidates.first().title)
         assertEquals("movie.mkv", candidates.first().filename)
+        assertNull(candidates.first().description)
     }
 
     @Test
