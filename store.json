@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.15",
+          "buildVersion": "231",
+          "date": "2026-11-19T14:32:10Z",
+          "localizedDescription": "- [match aiom next up (#96)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/96) @chrisk325  \n- [Add a separate Next Up row beneath Continue Watching (#95)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/95) @chrisk325  \n- [add sliding animations in the pages (#94)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/94) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.15-beta/nuvio-1.0.15-enhanced-release.ipa",
+          "size": 77131376,
+          "sha256": "287af40b5d7730f6ae326a244be4a6a8d708fbd68c0e1c2c72d12c16a57d93c4",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.13",
           "buildVersion": "229",
           "date": "2026-11-19T09:17:32Z",
