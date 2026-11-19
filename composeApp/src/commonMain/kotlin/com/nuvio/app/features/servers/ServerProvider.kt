@@ -32,6 +32,18 @@ interface ServerProvider {
         limit: Int,
     ): ServerPage<ServerTitle>
 
+    /** The genres [library] can be filtered by on Discover; empty when the server offers none. */
+    suspend fun libraryGenres(session: ServerSession, library: ServerLibrary): List<ServerGenre> = emptyList()
+
+    /** A page of [library] limited to the genre [genreId] from [libraryGenres]. */
+    suspend fun libraryGenrePage(
+        session: ServerSession,
+        library: ServerLibrary,
+        genreId: String,
+        start: Int,
+        limit: Int,
+    ): ServerPage<ServerTitle> = unsupported()
+
     suspend fun details(session: ServerSession, itemId: String): ServerItemDetails
 
     suspend fun candidates(session: ServerSession, itemId: String): List<ServerCandidate>

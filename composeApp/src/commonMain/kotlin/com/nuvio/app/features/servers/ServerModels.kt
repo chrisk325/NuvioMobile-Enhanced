@@ -107,6 +107,11 @@ data class ServerPlaybackTarget(
     val mediaSourceId: String?,
 )
 
+data class ServerGenre(
+    val id: String,
+    val name: String,
+)
+
 data class ServerPage<T>(
     val items: List<T>,
     val totalCount: Int?,

@@ -9,6 +9,7 @@ import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.addons.firstEnabledManifestError
 import com.nuvio.app.features.addons.hasPendingEnabledManifests
 import com.nuvio.app.features.servers.ServerCatalog
+import com.nuvio.app.features.servers.ServerGenre
 import com.nuvio.app.features.servers.ServerMediaKind
 import com.nuvio.app.features.servers.serverMessage
 import com.nuvio.app.features.servers.ServerRepository
@@ -35,6 +36,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
@@ -74,6 +76,8 @@ object SearchRepository {
     private var lastRequestKey: String? = null
     private var discoverSources: List<DiscoverCatalogOption> = emptyList()
     private var lastDiscoverRequestKey: DiscoverRequestKey? = null
+    private val serverGenreCache = MutableStateFlow<Map<String, List<ServerGenre>>>(emptyMap())
+    private val serverGenreRequests = MutableStateFlow<Set<String>>(emptySet())
 
     fun search(
         query: String,
@@ -233,6 +237,8 @@ object SearchRepository {
         lastRequestKey = null
         discoverSources = emptyList()
         lastDiscoverRequestKey = null
+        serverGenreCache.value = emptyMap()
+        serverGenreRequests.value = emptySet()
         _uiState.value = SearchUiState()
         _discoverUiState.value = DiscoverUiState()
     }
@@ -245,6 +251,7 @@ object SearchRepository {
         val hasPendingAddonManifests = enabledAddons.hasPendingEnabledManifests()
         val addonManifestErrorMessage = enabledAddons.firstEnabledManifestError()
         val activeAddons = enabledAddons.filter { it.manifest != null }
+        if (forceRefresh) serverGenreCache.value = emptyMap()
         val serverLibraries = ServerCatalog.titleLibraries()
         if (activeAddons.isEmpty() && serverLibraries.isEmpty()) {
             activeDiscoverJob?.cancel()
@@ -315,9 +322,14 @@ object SearchRepository {
         val typeOptions = sources.map { it.type }.distinct()
         val selectedType = selectedCatalog.type
         val catalogOptions = sources.filter { it.type == selectedType }
-        val selectedGenre = selectedCatalog.resolveGenreSelection(current.selectedGenre)
+        val serverGenres = serverGenreCache.value
+        val selectedGenre = selectedCatalog.resolveGenreSelection(
+            current.selectedGenre,
+            DiscoverUiState(serverGenres = serverGenres).genreOptionsFor(selectedCatalog),
+        )
 
         _discoverUiState.value = DiscoverUiState(
+            serverGenres = serverGenres,
             typeOptions = typeOptions,
             selectedType = selectedType,
             catalogOptions = catalogOptions,
@@ -365,7 +377,7 @@ object SearchRepository {
             selectedType = type,
             catalogOptions = catalogOptions,
             selectedCatalogKey = selectedCatalog.key,
-            selectedGenre = selectedCatalog.resolveGenreSelection(null),
+            selectedGenre = selectedCatalog.resolveGenreSelection(null, current.genreOptionsFor(selectedCatalog)),
             items = emptyList(),
             isLoading = false,
             nextSkip = null,
@@ -386,7 +398,7 @@ object SearchRepository {
         val selectedCatalog = current.catalogOptions.firstOrNull { it.key == catalogKey } ?: return
         _discoverUiState.value = current.copy(
             selectedCatalogKey = selectedCatalog.key,
-            selectedGenre = selectedCatalog.resolveGenreSelection(null),
+            selectedGenre = selectedCatalog.resolveGenreSelection(null, current.genreOptionsFor(selectedCatalog)),
             items = emptyList(),
             isLoading = false,
             nextSkip = null,
@@ -403,7 +415,7 @@ object SearchRepository {
     fun selectDiscoverGenre(genre: String?) {
         val current = _discoverUiState.value
         val selectedCatalog = current.selectedCatalog ?: return
-        val normalizedGenre = selectedCatalog.resolveGenreSelection(genre)
+        val normalizedGenre = selectedCatalog.resolveGenreSelection(genre, current.genreOptionsFor(selectedCatalog))
         if (current.selectedGenre == normalizedGenre) return
 
         _discoverUiState.value = current.copy(
@@ -509,6 +521,32 @@ object SearchRepository {
         )
     }
 
+    /** Fetches [target]'s genres once, so the Discover genre picker works for media server libraries. */
+    private fun loadServerGenres(catalogKey: String, target: CatalogTarget.Server) {
+        if (catalogKey in serverGenreCache.value) return
+        var claimed = false
+        serverGenreRequests.update { pending ->
+            claimed = catalogKey !in pending
+            pending + catalogKey
+        }
+        if (!claimed) return
+        scope.launch {
+            val genres = try {
+                ServerCatalog.genres(target)
+            } catch (error: CancellationException) {
+                serverGenreRequests.update { it - catalogKey }
+                throw error
+            } catch (error: Throwable) {
+                log.w(error) { "Discover server genres failed catalogKey=$catalogKey" }
+                emptyList()
+            }
+            serverGenreCache.update { it + (catalogKey to genres) }
+            serverGenreRequests.update { it - catalogKey }
+            log.d { "Discover server genres catalogKey=$catalogKey count=${genres.size}" }
+            _discoverUiState.update { state -> state.copy(serverGenres = serverGenreCache.value) }
+        }
+    }
+
     private fun loadDiscoverFeed(
         reset: Boolean,
         forceRefresh: Boolean,
@@ -517,6 +555,8 @@ object SearchRepository {
         val current = _discoverUiState.value
         val selectedCatalog = current.selectedCatalog ?: return
         val requestedSkip = if (reset) 0 else current.nextSkip ?: return
+        selectedCatalog.server?.let { target -> loadServerGenres(selectedCatalog.key, target) }
+        val serverGenreId = current.serverGenreId(selectedCatalog, current.selectedGenre)
         val requestUrl = if (selectedCatalog.server != null) {
             selectedCatalog.key
         } else {
@@ -549,7 +589,7 @@ object SearchRepository {
             runCatching {
                 val server = selectedCatalog.server
                 if (server != null) {
-                    ServerCatalog.page(server, skip = requestedSkip)
+                    ServerCatalog.page(server, skip = requestedSkip, genreId = serverGenreId)
                 } else {
                     fetchCatalogPage(
                         manifestUrl = selectedCatalog.manifestUrl,
@@ -678,7 +718,7 @@ private fun AddonCatalog.supportsDiscover(): Boolean {
 private fun AddonCatalog.genreExtra(): AddonExtraProperty? =
     extra.firstOrNull { property -> property.name == "genre" }
 
-private fun DiscoverCatalogOption.resolveGenreSelection(requestedGenre: String?): String? =
+private fun DiscoverCatalogOption.resolveGenreSelection(requestedGenre: String?, genreOptions: List<String>): String? =
     when {
         genreOptions.isEmpty() -> null
         requestedGenre != null && genreOptions.contains(requestedGenre) -> requestedGenre

@@ -159,7 +159,20 @@ internal object ServerCatalog {
 
     fun isServerKey(key: String): Boolean = key.startsWith(HOME_KEY_PREFIX)
 
-    suspend fun page(target: CatalogTarget.Server, skip: Int, limit: Int = SERVER_CATALOG_PAGE_SIZE): CatalogPage {
+    /** The genres a library target can be filtered by; empty for favourites, resume, collections and failures. */
+    suspend fun genres(target: CatalogTarget.Server): List<ServerGenre> {
+        if (target.collectionId != null || target.libraryId == FAVORITES_ID || target.libraryId == RESUME_ID) return emptyList()
+        val connection = ServerRepository.connection(target.connectionId) ?: return emptyList()
+        val library = connection.libraries.firstOrNull { it.id == target.libraryId } ?: return emptyList()
+        return ServerRepository.call(target.connectionId) { provider, session -> provider.libraryGenres(session, library) }
+    }
+
+    suspend fun page(
+        target: CatalogTarget.Server,
+        skip: Int,
+        limit: Int = SERVER_CATALOG_PAGE_SIZE,
+        genreId: String? = null,
+    ): CatalogPage {
         val connection = ServerRepository.connection(target.connectionId) ?: throw ServerException(ServerFailure.NOT_FOUND)
         target.collectionId?.let { collectionId ->
             return pageOf(connection, skip, limit) {
@@ -188,7 +201,11 @@ internal object ServerCatalog {
             ?: throw ServerException(ServerFailure.NOT_FOUND)
         return pageOf(connection, skip, limit) {
             ServerRepository.call(target.connectionId) { provider, session ->
-                provider.libraryPage(session, library, skip, limit)
+                if (genreId != null) {
+                    provider.libraryGenrePage(session, library, genreId, skip, limit)
+                } else {
+                    provider.libraryPage(session, library, skip, limit)
+                }
             }
         }
     }
