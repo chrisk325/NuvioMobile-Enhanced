@@ -95,9 +95,10 @@ internal object ServerStreams {
         val label = ServerRepository.sourceLabel(connection)
         return ServerRepository.call(ref.connectionId) { provider, session -> provider.candidates(session, ref.itemId) }
             .map { candidate ->
+                val (name, description) = splitFormattedTitle(candidate.title, candidate.description)
                 StreamItem(
-                    name = candidate.title,
-                    description = candidate.description,
+                    name = name,
+                    description = description,
                     sourceName = label,
                     addonName = label,
                     addonId = groupId(connection.id),
@@ -108,6 +109,20 @@ internal object ServerStreams {
                     serverTarget = candidate.target,
                 )
             }
+    }
+
+    /**
+     * A server source named by an addon formatter (e.g. an AIOStreams-backed plugin) carries the formatter's name and
+     * description as one multi-line title. Split it back so the card shows it the way the addon itself would: the
+     * first line as the stream name and the rest as its description.
+     */
+    internal fun splitFormattedTitle(title: String, description: String?): Pair<String, String?> {
+        val lines = title.replace("\r\n", "\n").replace('\r', '\n').lines()
+        val nameIndex = lines.indexOfFirst { it.isNotBlank() }
+        if (nameIndex < 0) return title to description
+        val rest = lines.drop(nameIndex + 1).joinToString("\n").trim('\n').takeIf { it.isNotBlank() }
+            ?: return lines[nameIndex].trim() to description
+        return lines[nameIndex].trim() to listOfNotNull(rest, description?.takeIf { it.isNotBlank() }).joinToString("\n")
     }
 
     private fun groupId(connectionId: String) = "$GROUP_PREFIX$connectionId"
