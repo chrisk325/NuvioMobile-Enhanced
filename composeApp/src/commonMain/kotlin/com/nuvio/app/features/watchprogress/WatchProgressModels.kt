@@ -248,6 +248,7 @@ data class ContinueWatchingPreferencesUiState(
     val useEpisodeThumbnails: Boolean = true,
     val showUnairedNextUp: Boolean = true,
     val blurNextUp: Boolean = false,
+    val separateNextUpRow: Boolean = true,
     val dismissedNextUpKeys: Set<String> = emptySet(),
     val showResumePromptOnLaunch: Boolean = true,
     val sortMode: ContinueWatchingSortMode = ContinueWatchingSortMode.DEFAULT,

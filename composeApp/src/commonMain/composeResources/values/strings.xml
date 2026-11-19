@@ -970,6 +970,9 @@
     <string name="settings_continue_watching_click_action_details_upcoming">Details for Upcoming Only</string>
     <string name="settings_continue_watching_click_action_details_upcoming_desc">Open details for episodes that have not aired yet, the stream for the rest</string>
     <string name="upcoming_section_title">Upcoming</string>
+    <string name="next_up_section_title">Next Up</string>
+    <string name="settings_continue_watching_separate_next_up_title">Separate Next Up Row</string>
+    <string name="settings_continue_watching_separate_next_up_description">Show the next episode of shows you have finished an episode of in its own row beneath Continue Watching, newest first by when it became available to watch.</string>
     <string name="settings_continue_watching_section_card_style">POSTER CARD STYLE</string>
     <string name="settings_continue_watching_section_on_launch">ON LAUNCH</string>
     <string name="settings_continue_watching_section_up_next_behavior">NEXT UP BEHAVIOR</string>

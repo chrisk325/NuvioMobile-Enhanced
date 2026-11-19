@@ -49,6 +49,8 @@ import nuvio.composeapp.generated.resources.settings_continue_watching_resume_pr
 import nuvio.composeapp.generated.resources.settings_continue_watching_resume_prompt_title
 import nuvio.composeapp.generated.resources.settings_continue_watching_blur_next_up_description
 import nuvio.composeapp.generated.resources.settings_continue_watching_blur_next_up_title
+import nuvio.composeapp.generated.resources.settings_continue_watching_separate_next_up_description
+import nuvio.composeapp.generated.resources.settings_continue_watching_separate_next_up_title
 import nuvio.composeapp.generated.resources.settings_continue_watching_show_unaired_next_up_description
 import nuvio.composeapp.generated.resources.settings_continue_watching_show_unaired_next_up_title
 import nuvio.composeapp.generated.resources.settings_continue_watching_section_card_style
@@ -87,6 +89,7 @@ internal fun LazyListScope.continueWatchingSettingsContent(
     showUnairedNextUp: Boolean,
     blurNextUp: Boolean,
     showResumePromptOnLaunch: Boolean,
+    separateNextUpRow: Boolean = true,
     sortMode: ContinueWatchingSortMode,
     clickAction: ContinueWatchingClickAction,
 ) {
@@ -135,6 +138,14 @@ internal fun LazyListScope.continueWatchingSettingsContent(
                     )
                     SettingsGroupDivider(isTablet = isTablet)
                 }
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.settings_continue_watching_separate_next_up_title),
+                    description = stringResource(Res.string.settings_continue_watching_separate_next_up_description),
+                    checked = separateNextUpRow,
+                    isTablet = isTablet,
+                    onCheckedChange = ContinueWatchingPreferencesRepository::setSeparateNextUpRow,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
                 SettingsSwitchRow(
                     title = stringResource(Res.string.settings_continue_watching_up_next_title),
                     description = stringResource(Res.string.settings_continue_watching_up_next_description),
