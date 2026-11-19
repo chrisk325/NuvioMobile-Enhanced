@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.10",
+          "buildVersion": "226",
+          "date": "2026-11-19T01:56:23Z",
+          "localizedDescription": "- [Offer media-server playback for shows, not only movies (#90)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/90) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.10-beta/nuvio-1.0.10-enhanced-release.ipa",
+          "size": 77073627,
+          "sha256": "336b4aa39d3ca929dea1e91bdf08f2713f6bbe6919651441eb4e69b9361ed999",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.0",
           "buildVersion": "225",
           "date": "2026-11-18T10:01:17Z",
