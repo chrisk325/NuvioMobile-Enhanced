@@ -353,7 +353,9 @@ internal abstract class MediaBrowserProvider(
             ServerNextUp(
                 title = title,
                 episode = mapper.video(item),
-                lastActivityEpochMs = show?.userData?.lastPlayedDate
+                // AIOMetadata dates the episode itself with when its show was last watched (or the episode aired),
+                // which is the order it lists them in; Jellyfin dates the show.
+                lastActivityEpochMs = (item.userData?.lastPlayedDate ?: show?.userData?.lastPlayedDate)
                     ?.let { runCatching { Instant.parse(it).toEpochMilliseconds() }.getOrNull() },
             )
         }.distinctBy { it.title.preview.id }

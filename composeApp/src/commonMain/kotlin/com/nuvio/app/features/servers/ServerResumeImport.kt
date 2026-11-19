@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -99,6 +100,7 @@ internal object ServerResumeImport {
     private val json = Json { ignoreUnknownKeys = true }
     private var job: Job? = null
     private val caches = mutableMapOf<String, ServerResumeCache>()
+    private val nextUpRetries = mutableMapOf<String, Job>()
     private var listening = false
     private var cleanedUp = false
     private val _nextUp = MutableStateFlow<List<ServerNextUpEntry>>(emptyList())
@@ -159,22 +161,13 @@ internal object ServerResumeImport {
             return
         }
         val previous = cache(connection.id)
-        val nextUp = try {
-            ServerRepository.call(connection.id) { provider, session -> provider.nextUpProgress(session, NEXT_UP_LIMIT) }
-                .let { nextUpEntries(connection, it, previous) }
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: ServerException) {
-            if (error.failure == ServerFailure.UNSUPPORTED) {
-                emptyList()
-            } else {
-                log.w(error) { "Loading next up from ${connection.providerId} failed" }
-                previous.nextUp
-            }
-        } catch (error: Throwable) {
-            log.w(error) { "Loading next up from ${connection.providerId} failed" }
-            // Keep the last list when the server could not be asked.
-            previous.nextUp
+        val fetched = fetchNextUp(connection, previous)
+        val nextUp = when {
+            fetched == null -> previous.nextUp
+            // AIOMetadata answers with nothing while it is still building the list, so keep the last one and ask
+            // again once it is built.
+            fetched.isEmpty() -> previous.nextUp.also { retryNextUpSoon(connection) }
+            else -> fetched
         }
         // A full list may have cut off older items, so it can't tell what the server dropped.
         val next = next(previous, entries(connection, resume, previous), complete = resume.size < LIMIT, fetchedAtMs)
@@ -184,6 +177,38 @@ internal object ServerResumeImport {
         log.i {
             "Continue watching from ${connection.providerId}: ${resume.size} listed, ${next.shown.size} shown, " +
                 "${nextUp.size} next up"
+        }
+    }
+
+    /** The server's Next up; empty when it keeps none, null when it could not be asked. */
+    private suspend fun fetchNextUp(connection: ServerConnection, previous: ServerResumeCache): List<ServerNextUpEntry>? =
+        try {
+            ServerRepository.call(connection.id) { provider, session -> provider.nextUpProgress(session, NEXT_UP_LIMIT) }
+                .let { nextUpEntries(connection, it, previous) }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            if ((error as? ServerException)?.failure != ServerFailure.UNSUPPORTED) {
+                log.w(error) { "Loading next up from ${connection.providerId} failed" }
+            }
+            null
+        }
+
+    /** Asks [connection] for its Next up once more shortly, and takes what it answers then, empty or not. */
+    private fun retryNextUpSoon(connection: ServerConnection) {
+        synchronized(lock) {
+            if (nextUpRetries[connection.id]?.isActive == true) return
+            nextUpRetries[connection.id] = scope.launch {
+                delay(NEXT_UP_RETRY_MS)
+                val askedAtMs = nowMs()
+                val fetched = fetchNextUp(connection, cache(connection.id)) ?: return@launch
+                val current = cache(connection.id)
+                // A full import that finished meanwhile already has the newer list.
+                if (current.nextUpFetchedAtMs > askedAtMs) return@launch
+                saveCache(connection.id, current.copy(nextUp = fetched, nextUpFetchedAtMs = askedAtMs))
+                show()
+                log.i { "Next up from ${connection.providerId} on a second ask: ${fetched.size}" }
+            }
         }
     }
 
@@ -354,6 +379,8 @@ internal object ServerResumeImport {
         synchronized(lock) {
             job?.cancel()
             job = null
+            nextUpRetries.values.forEach { it.cancel() }
+            nextUpRetries.clear()
             caches.keys.forEach { runCatching { ServerStorage.write(cacheKey(it), null) } }
             caches.clear()
             listening = false
@@ -365,6 +392,7 @@ internal object ServerResumeImport {
 
     private const val LIMIT = 50
     private const val NEXT_UP_LIMIT = 30
+    private const val NEXT_UP_RETRY_MS = 20_000L
     private const val MIN_INTERVAL_MS = 3 * 60_000L
     private const val SOON_INTERVAL_MS = 30_000L
 }
