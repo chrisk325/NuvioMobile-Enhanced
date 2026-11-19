@@ -32,6 +32,7 @@ enum class LibraryWatchedFilter {
 
 data class LibraryDisplaySettingsUiState(
     val layoutMode: LibraryLayoutMode = LibraryLayoutMode.HORIZONTAL,
+    val serverLayoutMode: LibraryLayoutMode = LibraryLayoutMode.HORIZONTAL,
     val sortOption: LibrarySortOption = LibrarySortOption.DEFAULT,
     val selectedSectionKey: String? = null,
     val selectedType: String? = null,
@@ -61,6 +62,13 @@ object LibraryDisplaySettingsRepository {
         ensureLoaded()
         if (_uiState.value.layoutMode == layoutMode) return
         _uiState.value = _uiState.value.copy(layoutMode = layoutMode)
+        persist()
+    }
+
+    fun setServerLayoutMode(layoutMode: LibraryLayoutMode) {
+        ensureLoaded()
+        if (_uiState.value.serverLayoutMode == layoutMode) return
+        _uiState.value = _uiState.value.copy(serverLayoutMode = layoutMode)
         persist()
     }
 
@@ -309,6 +317,7 @@ internal fun encodeLibraryDisplaySettings(state: LibraryDisplaySettingsUiState):
     LibraryDisplaySettingsJson.encodeToString(
         StoredLibraryDisplaySettings(
             layoutMode = state.layoutMode.name,
+            serverLayoutMode = state.serverLayoutMode.name,
             sortOption = state.sortOption.name,
             selectedSectionKey = state.selectedSectionKey,
             selectedType = state.selectedType,
@@ -325,6 +334,9 @@ internal fun decodeLibraryDisplaySettings(payload: String?): LibraryDisplaySetti
         }
     return LibraryDisplaySettingsUiState(
         layoutMode = stored?.layoutMode
+            ?.let { value -> LibraryLayoutMode.entries.firstOrNull { it.name == value } }
+            ?: LibraryLayoutMode.HORIZONTAL,
+        serverLayoutMode = stored?.serverLayoutMode
             ?.let { value -> LibraryLayoutMode.entries.firstOrNull { it.name == value } }
             ?: LibraryLayoutMode.HORIZONTAL,
         sortOption = stored?.sortOption
@@ -368,6 +380,7 @@ internal val LibrarySourceMode.isRemoteTrackingSource: Boolean
 @Serializable
 private data class StoredLibraryDisplaySettings(
     @SerialName("layout_mode") val layoutMode: String = LibraryLayoutMode.HORIZONTAL.name,
+    @SerialName("server_layout_mode") val serverLayoutMode: String = LibraryLayoutMode.HORIZONTAL.name,
     @SerialName("sort_option") val sortOption: String = LibrarySortOption.DEFAULT.name,
     @SerialName("selected_section_key") val selectedSectionKey: String? = null,
     @SerialName("selected_type") val selectedType: String? = null,

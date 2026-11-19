@@ -5,6 +5,7 @@ import com.nuvio.app.features.servers.ServerCapability
 import com.nuvio.app.features.servers.ServerEpisode
 import com.nuvio.app.features.servers.ServerException
 import com.nuvio.app.features.servers.ServerFailure
+import com.nuvio.app.features.servers.ServerGenre
 import com.nuvio.app.features.servers.ServerIndexEntry
 import com.nuvio.app.features.servers.ServerItemDetails
 import com.nuvio.app.features.servers.ServerLibrary
@@ -136,6 +137,35 @@ internal abstract class MediaBrowserProvider(
         }
         val mapper = mapper(session)
         return ServerPage(result.items.mapNotNull(mapper::title), result.totalRecordCount)
+    }
+
+    override suspend fun libraryGenres(session: ServerSession, library: ServerLibrary): List<ServerGenre> {
+        if (library.kind == ServerMediaKind.COLLECTION) return emptyList()
+        return get(
+            session,
+            Endpoint("/Genres"),
+            ItemsResult.serializer(),
+            mapOf(
+                "parentId" to library.id,
+                "userId" to session.userId,
+                "includeItemTypes" to library.kind.itemType(),
+                "sortBy" to "SortName",
+                "sortOrder" to "Ascending",
+            ),
+        ).items.mapNotNull { item ->
+            item.name?.trim()?.takeIf { it.isNotEmpty() }?.let { name -> ServerGenre(id = item.id, name = name) }
+        }.distinctBy { it.name }
+    }
+
+    override suspend fun libraryGenrePage(
+        session: ServerSession,
+        library: ServerLibrary,
+        genreId: String,
+        start: Int,
+        limit: Int,
+    ): ServerPage<ServerTitle> {
+        val result = libraryItems(session, library, start, limit, genreId)
+        return ServerPage(result.items.mapNotNull(mapper(session)::title), result.totalRecordCount)
     }
 
     private suspend fun libraryItems(

@@ -276,6 +276,7 @@ class LibraryDisplaySettingsTest {
     fun `display settings payload round trips and invalid values fall back safely`() {
         val state = LibraryDisplaySettingsUiState(
             layoutMode = LibraryLayoutMode.VERTICAL,
+            serverLayoutMode = LibraryLayoutMode.VERTICAL,
             sortOption = LibrarySortOption.TITLE_DESC,
             selectedSectionKey = "personal:1",
             selectedType = "series",

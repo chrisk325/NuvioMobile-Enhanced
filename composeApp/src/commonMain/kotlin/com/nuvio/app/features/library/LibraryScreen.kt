@@ -642,6 +642,8 @@ fun LibraryScreen(
             } else if (sourceMode == LibraryViewMode.Servers) {
                 serverLibraryContent(
                     shelves = serverShelves,
+                    layoutMode = displaySettings.serverLayoutMode,
+                    columns = gridColumns,
                     watchedKeys = watchedUiState.watchedKeys,
                     fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
                     onCatalogClick = onCatalogClick,

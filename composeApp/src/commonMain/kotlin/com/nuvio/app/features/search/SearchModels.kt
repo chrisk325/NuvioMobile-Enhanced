@@ -3,6 +3,7 @@ package com.nuvio.app.features.search
 import com.nuvio.app.features.catalog.CatalogTarget
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.home.HomeCatalogSection
+import com.nuvio.app.features.servers.ServerGenre
 
 enum class SearchEmptyStateReason {
     NoActiveAddons,
@@ -50,12 +51,24 @@ data class DiscoverUiState(
     val consecutiveDuplicatePages: Int = 0,
     val emptyStateReason: DiscoverEmptyStateReason? = null,
     val errorMessage: String? = null,
+    /** Genres loaded from media servers, by the server catalog option's key. */
+    val serverGenres: Map<String, List<ServerGenre>> = emptyMap(),
 ) {
     val selectedCatalog: DiscoverCatalogOption?
         get() = catalogOptions.firstOrNull { it.key == selectedCatalogKey }
 
     val genreOptions: List<String>
-        get() = selectedCatalog?.genreOptions.orEmpty()
+        get() = genreOptionsFor(selectedCatalog)
+
+    fun genreOptionsFor(catalog: DiscoverCatalogOption?): List<String> =
+        when {
+            catalog == null -> emptyList()
+            catalog.server != null -> serverGenres[catalog.key].orEmpty().map { it.name }
+            else -> catalog.genreOptions
+        }
+
+    fun serverGenreId(catalog: DiscoverCatalogOption, genre: String?): String? =
+        genre?.let { name -> serverGenres[catalog.key]?.firstOrNull { it.name == name }?.id }
 
     val canLoadMore: Boolean
         get() = nextSkip != null
