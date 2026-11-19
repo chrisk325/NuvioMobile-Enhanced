@@ -128,12 +128,15 @@ internal class MediaBrowserMapper(
         return sources.map { source ->
             val video = source.mediaStreams.firstOrNull { it.type.equals("Video", ignoreCase = true) }
             val audio = source.mediaStreams.firstOrNull { it.type.equals("Audio", ignoreCase = true) }
+            // A source the server names (e.g. one an addon-backed plugin formats) is shown as named, without
+            // the generated media-info line beneath it.
+            val namedTitle = source.name?.takeIf { it.isNotBlank() && sources.size > 1 }
             ServerCandidate(
                 target = ServerPlaybackTarget(item = itemRef, mediaSourceId = source.id),
-                title = source.name?.takeIf { it.isNotBlank() && sources.size > 1 }
+                title = namedTitle
                     ?: video?.let(::resolutionLabel)
                     ?: source.name.orEmpty(),
-                description = listOfNotNull(
+                description = if (namedTitle != null) null else listOfNotNull(
                     video?.displayTitle,
                     audio?.displayTitle,
                     source.container?.uppercase(),
