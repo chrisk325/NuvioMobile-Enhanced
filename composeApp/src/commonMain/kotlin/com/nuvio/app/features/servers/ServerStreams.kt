@@ -106,7 +106,7 @@ internal object ServerStreams {
                         filename = candidate.filename,
                         videoSize = candidate.sizeBytes,
                     ),
-                    serverTarget = candidate.target,
+                    serverTarget = candidate.target.takeUnless { candidate.informational },
                 )
             }
     }

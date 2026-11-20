@@ -159,6 +159,11 @@ data class ServerCandidate(
     val description: String?,
     val filename: String?,
     val sizeBytes: Long?,
+    /**
+     * An entry the server lists beside its versions that cannot play, e.g. an addon's statistics or status line that
+     * an addon-backed server (AIOMetadata) passes through as a placeholder source. Shown as information only.
+     */
+    val informational: Boolean = false,
 )
 
 data class ServerPlaybackRequest(

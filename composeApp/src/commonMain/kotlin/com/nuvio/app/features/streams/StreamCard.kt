@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.SkeletonBlock
+import com.nuvio.app.isIos
 import com.nuvio.app.features.debrid.DebridProviders
 import androidx.compose.ui.graphics.compositeOver
 import com.nuvio.app.core.ui.glass.ambientLiquidGlass
@@ -146,7 +147,7 @@ internal fun StreamCard(
                     Text(
                         text = partyLabel,
                         color = MaterialTheme.colorScheme.primary,
-                        fontSize = 12.sp,
+                        fontSize = StreamCardText.subtitle,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -160,8 +161,8 @@ internal fun StreamCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
+                        fontSize = StreamCardText.subtitle,
+                        lineHeight = StreamCardText.subtitleLineHeight,
                         shadow = streamGlassTextShadow(),
                     ),
                     color = Color.White,
@@ -196,7 +197,7 @@ internal fun StreamCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = stream.addonName,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, shadow = streamGlassTextShadow()),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = StreamCardText.addon, shadow = streamGlassTextShadow()),
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -250,9 +251,9 @@ private fun StreamNameWithInstantService(
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) {
     val nameStyle = MaterialTheme.typography.bodyMedium.copy(
-        fontSize = 14.sp,
+        fontSize = StreamCardText.name,
         fontWeight = FontWeight.Bold,
-        lineHeight = 20.sp,
+        lineHeight = StreamCardText.nameLineHeight,
         letterSpacing = 0.sp,
         shadow = streamGlassTextShadow(),
     )
@@ -312,12 +313,23 @@ private fun CurrentStreamBadge(label: String) {
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onPrimary,
-            fontSize = 11.sp,
+            fontSize = StreamCardText.badge,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+/** Stream card text sizes; on iOS the list reads a step larger. */
+private object StreamCardText {
+    private val step = if (isIos) 1.5f else 0f
+    val name = (14f + step).sp
+    val nameLineHeight = (20f + step).sp
+    val subtitle = (12f + step).sp
+    val subtitleLineHeight = (18f + step).sp
+    val addon = (10f + step).sp
+    val badge = (11f + step).sp
 }
 
 internal const val StreamGlassTintAlpha = 0.45f
