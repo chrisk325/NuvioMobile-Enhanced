@@ -31,6 +31,7 @@ internal class MediaBrowserMapper(
             poster = item.primaryImage(),
             banner = item.backdropImage(),
             logo = item.logoImage(),
+            landscapePoster = item.thumbImage(),
             posterShape = PosterShape.Poster,
             description = item.overview,
             releaseInfo = item.productionYear?.toString(),
@@ -58,6 +59,7 @@ internal class MediaBrowserMapper(
             poster = item.seriesPrimaryImageTag?.let { image(seriesId, "Primary", it, maxHeight = 600) },
             banner = item.backdropImage(),
             logo = item.logoImage(),
+            landscapePoster = item.parentThumbImage(),
             description = item.overview,
         )
     }
@@ -188,6 +190,16 @@ internal class MediaBrowserMapper(
                 parentBackdropImageTags.firstOrNull()?.let { image(parentId, "Backdrop/0", it, maxWidth = 1920) }
             }
 
+    /**
+     * Landscape artwork (Jellyfin's Thumb image), used for landscape poster cards. AIOMetadata's Jellyfin server
+     * publishes its landscape posters here.
+     */
+    private fun BaseItem.thumbImage(): String? =
+        imageTags["Thumb"]?.let { image(id, "Thumb", it, maxWidth = THUMB_MAX_WIDTH) } ?: parentThumbImage()
+
+    private fun BaseItem.parentThumbImage(): String? =
+        parentThumbItemId?.let { parentId -> parentThumbImageTag?.let { image(parentId, "Thumb", it, maxWidth = THUMB_MAX_WIDTH) } }
+
     private fun BaseItem.logoImage(): String? =
         imageTags["Logo"]?.let { image(id, "Logo", it, maxWidth = 800) }
             ?: parentLogoItemId?.let { parentId -> parentLogoImageTag?.let { image(parentId, "Logo", it, maxWidth = 800) } }
@@ -233,6 +245,8 @@ internal fun libraryKind(collectionType: String?, type: String? = null): ServerM
 }
 
 internal const val TICKS_PER_MS = 10_000L
+
+private const val THUMB_MAX_WIDTH = 1280
 
 /** Names AIOMetadata gives its own placeholder versions, which stand in for streams rather than describe one. */
 private val PLACEHOLDER_LABELS = setOf("streams load when played", "load the stream list")
