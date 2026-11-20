@@ -214,7 +214,7 @@ internal abstract class MediaBrowserProvider(
                 "parentId" to collectionId,
                 "fields" to LIST_FIELDS,
                 "imageTypeLimit" to "1",
-                "enableImageTypes" to "Primary,Backdrop,Logo",
+                "enableImageTypes" to "Primary,Backdrop,Logo,Thumb",
                 "startIndex" to start.toString(),
                 "limit" to limit.toString(),
                 "enableTotalRecordCount" to "true",
@@ -246,7 +246,7 @@ internal abstract class MediaBrowserProvider(
                             "limit" to limit.toString(),
                             "fields" to LIST_FIELDS,
                             "imageTypeLimit" to "1",
-                            "enableImageTypes" to "Primary,Backdrop,Logo",
+                            "enableImageTypes" to "Primary,Backdrop,Logo,Thumb",
                         ),
                     ).items
                 }
@@ -379,7 +379,7 @@ internal abstract class MediaBrowserProvider(
                     "fields" to LIST_FIELDS,
                     "enableUserData" to "true".takeIf { withUserData },
                     "imageTypeLimit" to "1",
-                    "enableImageTypes" to "Primary,Backdrop,Logo",
+                    "enableImageTypes" to "Primary,Backdrop,Logo,Thumb",
                 ),
             ).items.associateBy { it.id }
         } catch (error: CancellationException) {
@@ -443,7 +443,7 @@ internal abstract class MediaBrowserProvider(
                 "sortOrder" to "Ascending",
                 "fields" to LIST_FIELDS,
                 "imageTypeLimit" to "1",
-                "enableImageTypes" to "Primary,Backdrop,Logo",
+                "enableImageTypes" to "Primary,Backdrop,Logo,Thumb",
                 "startIndex" to start.toString(),
                 "limit" to limit.toString(),
                 "enableTotalRecordCount" to "true",
@@ -778,7 +778,7 @@ internal abstract class MediaBrowserProvider(
         "includeItemTypes" to library.kind.itemType().takeUnless { library.kind == ServerMediaKind.COLLECTION },
         "fields" to LIST_FIELDS,
         "imageTypeLimit" to "1",
-        "enableImageTypes" to "Primary,Backdrop,Logo",
+        "enableImageTypes" to "Primary,Backdrop,Logo,Thumb",
     )
 
     private val ServerSession.userId: String

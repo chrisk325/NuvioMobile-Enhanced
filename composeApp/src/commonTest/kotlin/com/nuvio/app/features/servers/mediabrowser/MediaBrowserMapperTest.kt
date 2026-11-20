@@ -135,6 +135,26 @@ class MediaBrowserMapperTest {
     }
 
     @Test
+    fun mapsThumbImageToLandscapePoster() {
+        assertNull(mapper.preview(movie)!!.landscapePoster)
+        val preview = mapper.preview(movie.copy(imageTags = mapOf("Primary" to "p1", "Thumb" to "t1")))!!
+        assertTrue(preview.landscapePoster!!.startsWith("https://media.example.com/jellyfin/Items/f1c9a0/Images/Thumb?tag=t1"))
+    }
+
+    @Test
+    fun usesSeriesThumbAsLandscapePosterForResumedEpisode() {
+        val episode = json.decodeFromString(
+            BaseItem.serializer(),
+            """
+            {"Id": "e1", "Name": "Pilot", "Type": "Episode", "SeriesId": "s1", "SeriesName": "Show",
+             "SeriesPrimaryImageTag": "sp", "ParentThumbItemId": "s1", "ParentThumbImageTag": "st"}
+            """,
+        )
+        val preview = mapper.resumeTitle(episode)!!.preview
+        assertTrue(preview.landscapePoster!!.startsWith("https://media.example.com/jellyfin/Items/s1/Images/Thumb?tag=st"))
+    }
+
+    @Test
     fun ignoresUnsupportedItemTypes() {
         assertNull(mapper.preview(movie.copy(type = "MusicAlbum")))
     }
