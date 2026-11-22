@@ -247,6 +247,7 @@ actual fun PlatformPlayerSurface(
                             language = trackLanguage,
                             trackId = trackId,
                         ),
+                        formatBadge = subtitleFormatBadgeForCodec(bridge.getSubtitleTrackCodec(i)),
                     )
                 }
                 Logger.d(TAG) { "getSubtitleTracks: found ${tracks.size} tracks" }
