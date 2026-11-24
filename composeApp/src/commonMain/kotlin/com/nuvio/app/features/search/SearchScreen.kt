@@ -55,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.network.NetworkCondition
 import com.nuvio.app.core.network.NetworkStatusRepository
 import com.nuvio.app.core.ui.NuvioInputField
+import com.nuvio.app.core.ui.rememberGlideFlingBehavior
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioNetworkOfflineCard
@@ -366,6 +367,7 @@ fun SearchScreen(
                 topPadding = 0.dp,
                 listState = listState,
                 autoHidesNativeTabBar = true,
+                flingBehavior = rememberGlideFlingBehavior(),
                 modifier = Modifier.weight(1f),
             ) {
                 if (query.isBlank()) {
