@@ -2,8 +2,10 @@ package com.nuvio.app.features.streams
 
 import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.core.sync.decodeSyncBoolean
+import com.nuvio.app.core.sync.decodeSyncInt
 import com.nuvio.app.core.sync.decodeSyncString
 import com.nuvio.app.core.sync.encodeSyncBoolean
+import com.nuvio.app.core.sync.encodeSyncInt
 import com.nuvio.app.core.sync.encodeSyncString
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -19,9 +21,10 @@ actual object StreamBadgeSettingsStorage {
     private const val playerBadgeSourceKey = "player_badge_source"
     private const val streamBackgroundModeKey = "stream_background_mode"
     private const val streamBadgePlacementKey = "stream_badge_placement"
+    private const val streamCardTextScaleKey = "stream_card_text_scale"
     private const val pinnedStreamSourcesKey = "pinned_stream_sources"
     private const val legacyDebridStreamBadgeRulesKey = "debrid_stream_badge_rules"
-    private val syncKeys = listOf(streamBadgeRulesKey, showFileSizeBadgesKey, showInPlayerKey, playerBadgeSourceKey, streamBadgePlacementKey, streamBackgroundModeKey)
+    private val syncKeys = listOf(streamBadgeRulesKey, showFileSizeBadgesKey, showInPlayerKey, playerBadgeSourceKey, streamBadgePlacementKey, streamBackgroundModeKey, streamCardTextScaleKey)
 
     actual fun loadStreamBadgeRules(): String? = loadString(streamBadgeRulesKey)
 
@@ -71,6 +74,12 @@ actual object StreamBadgeSettingsStorage {
         saveString(streamBadgePlacementKey, placement)
     }
 
+    actual fun loadStreamCardTextScale(): Int? = loadInt(streamCardTextScaleKey)
+
+    actual fun saveStreamCardTextScale(percent: Int) {
+        saveInt(streamCardTextScaleKey, percent)
+    }
+
     actual fun loadPinnedStreamSources(): String? = loadString(pinnedStreamSourcesKey)
 
     actual fun savePinnedStreamSources(sources: String) {
@@ -105,6 +114,20 @@ actual object StreamBadgeSettingsStorage {
         NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(key))
     }
 
+    private fun loadInt(key: String): Int? {
+        val defaults = NSUserDefaults.standardUserDefaults
+        val scopedKey = ProfileScopedKey.of(key)
+        return if (defaults.objectForKey(scopedKey) != null) {
+            defaults.integerForKey(scopedKey).toInt()
+        } else {
+            null
+        }
+    }
+
+    private fun saveInt(key: String, value: Int) {
+        NSUserDefaults.standardUserDefaults.setInteger(value.toLong(), forKey = ProfileScopedKey.of(key))
+    }
+
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
         loadStreamBadgeRules()?.let { put(streamBadgeRulesKey, encodeSyncString(it)) }
         loadShowFileSizeBadges()?.let { put(showFileSizeBadgesKey, encodeSyncBoolean(it)) }
@@ -112,6 +135,7 @@ actual object StreamBadgeSettingsStorage {
         loadPlayerBadgeSource()?.let { put(playerBadgeSourceKey, encodeSyncString(it)) }
         loadStreamBadgePlacement()?.let { put(streamBadgePlacementKey, encodeSyncString(it)) }
         loadStreamBackgroundMode()?.let { put(streamBackgroundModeKey, encodeSyncString(it)) }
+        loadStreamCardTextScale()?.let { put(streamCardTextScaleKey, encodeSyncInt(it)) }
     }
 
     actual fun replaceFromSyncPayload(payload: JsonObject) {
@@ -125,5 +149,6 @@ actual object StreamBadgeSettingsStorage {
         payload.decodeSyncString(playerBadgeSourceKey)?.let(::savePlayerBadgeSource)
         payload.decodeSyncString(streamBadgePlacementKey)?.let(::saveStreamBadgePlacement)
         payload.decodeSyncString(streamBackgroundModeKey)?.let(::saveStreamBackgroundMode)
+        payload.decodeSyncInt(streamCardTextScaleKey)?.let(::saveStreamCardTextScale)
     }
 }

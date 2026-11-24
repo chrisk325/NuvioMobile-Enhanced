@@ -99,6 +99,9 @@ import nuvio.composeapp.generated.resources.settings_stream_addon_logo_title
 import nuvio.composeapp.generated.resources.settings_stream_addon_logo_description
 import nuvio.composeapp.generated.resources.settings_stream_display_section
 import nuvio.composeapp.generated.resources.settings_stream_search_title
+import nuvio.composeapp.generated.resources.settings_stream_card_text_size_title
+import nuvio.composeapp.generated.resources.settings_stream_card_text_size_description
+import nuvio.composeapp.generated.resources.settings_stream_card_text_size_value
 import nuvio.composeapp.generated.resources.settings_stream_search_description
 import nuvio.composeapp.generated.resources.settings_stream_background_title
 import nuvio.composeapp.generated.resources.settings_stream_background_description
@@ -194,6 +197,19 @@ internal fun LazyListScope.streamsSettingsContent(isTablet: Boolean) {
                     checked = currentSettings.showStreamSearch,
                     isTablet = isTablet,
                     onCheckedChange = StreamBadgeSettingsRepository::setShowStreamSearch,
+                )
+                SettingsSliderRow(
+                    title = stringResource(Res.string.settings_stream_card_text_size_title),
+                    description = stringResource(Res.string.settings_stream_card_text_size_description),
+                    value = currentSettings.cardTextScalePercent,
+                    formatValue = { percent ->
+                        stringResource(Res.string.settings_stream_card_text_size_value, percent)
+                    },
+                    valueRange = StreamBadgeSettingsRepository.MIN_CARD_TEXT_SCALE_PERCENT..
+                        StreamBadgeSettingsRepository.MAX_CARD_TEXT_SCALE_PERCENT,
+                    step = StreamBadgeSettingsRepository.CARD_TEXT_SCALE_STEP_PERCENT,
+                    isTablet = isTablet,
+                    onValueChange = StreamBadgeSettingsRepository::setCardTextScalePercent,
                 )
             }
         }

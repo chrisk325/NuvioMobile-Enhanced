@@ -25,6 +25,8 @@ data class StreamBadgeSettingsUiState(
     val playerBadgeSource: String = "",
     val badgePlacement: StreamBadgePlacement = StreamBadgePlacement.BOTTOM,
     val backgroundMode: StreamBackgroundMode = StreamBackgroundMode.Normal,
+    /** Stream card text size as a percent of the default. */
+    val cardTextScalePercent: Int = StreamBadgeSettingsRepository.DEFAULT_CARD_TEXT_SCALE_PERCENT,
 )
 
 enum class StreamBackgroundMode {
@@ -38,6 +40,11 @@ enum class StreamBadgePlacement {
 }
 
 object StreamBadgeSettingsRepository {
+    const val MIN_CARD_TEXT_SCALE_PERCENT = 70
+    const val MAX_CARD_TEXT_SCALE_PERCENT = 160
+    const val CARD_TEXT_SCALE_STEP_PERCENT = 5
+    const val DEFAULT_CARD_TEXT_SCALE_PERCENT = 100
+
     private val _uiState = MutableStateFlow(StreamBadgeSettingsUiState())
     val uiState: StateFlow<StreamBadgeSettingsUiState> = _uiState.asStateFlow()
 
@@ -56,6 +63,7 @@ object StreamBadgeSettingsRepository {
     private var playerBadgeSource = ""
     private var badgePlacement = StreamBadgePlacement.BOTTOM
     private var backgroundMode = StreamBackgroundMode.Normal
+    private var cardTextScalePercent = DEFAULT_CARD_TEXT_SCALE_PERCENT
 
     fun ensureLoaded() {
         if (hasLoaded) return
@@ -76,6 +84,7 @@ object StreamBadgeSettingsRepository {
         playerBadgeSource = ""
         badgePlacement = StreamBadgePlacement.BOTTOM
         backgroundMode = StreamBackgroundMode.Normal
+        cardTextScalePercent = DEFAULT_CARD_TEXT_SCALE_PERCENT
         _uiState.value = StreamBadgeSettingsUiState()
     }
 
@@ -205,6 +214,15 @@ object StreamBadgeSettingsRepository {
         publish()
     }
 
+    fun setCardTextScalePercent(percent: Int) {
+        ensureLoaded()
+        val next = percent.coerceIn(MIN_CARD_TEXT_SCALE_PERCENT, MAX_CARD_TEXT_SCALE_PERCENT)
+        if (cardTextScalePercent == next) return
+        cardTextScalePercent = next
+        StreamBadgeSettingsStorage.saveStreamCardTextScale(next)
+        publish()
+    }
+
     private fun loadFromDisk() {
         hasLoaded = true
         val storedRules = parseStreamBadgeRules(StreamBadgeSettingsStorage.loadStreamBadgeRules())
@@ -222,6 +240,8 @@ object StreamBadgeSettingsRepository {
         backgroundMode = StreamBadgeSettingsStorage.loadStreamBackgroundMode()
             ?.let { storedMode -> StreamBackgroundMode.entries.firstOrNull { it.name.equals(storedMode, ignoreCase = true) } }
             ?: StreamBackgroundMode.Normal
+        cardTextScalePercent = (StreamBadgeSettingsStorage.loadStreamCardTextScale() ?: DEFAULT_CARD_TEXT_SCALE_PERCENT)
+            .coerceIn(MIN_CARD_TEXT_SCALE_PERCENT, MAX_CARD_TEXT_SCALE_PERCENT)
         badgePlacement = StreamBadgeSettingsStorage.loadStreamBadgePlacement()
             ?.let { storedPlacement ->
                 StreamBadgePlacement.entries.firstOrNull { placement ->
@@ -246,6 +266,7 @@ object StreamBadgeSettingsRepository {
             playerBadgeSource = playerBadgeSource,
             badgePlacement = badgePlacement,
             backgroundMode = backgroundMode,
+            cardTextScalePercent = cardTextScalePercent,
         )
     }
 
