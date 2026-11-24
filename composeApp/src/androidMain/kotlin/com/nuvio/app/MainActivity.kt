@@ -121,6 +121,7 @@ open class MainActivity : AppCompatActivity() {
         ProfileBiometricAuth.initialize(this)
         AutoSyncPreferencesAndroid.initialize(applicationContext) // AutoSync hook
         window.setBackgroundDrawableResource(R.color.nuvio_background)
+        requestHighestRefreshRate()
         SyncClientIdentityStorage.initialize(applicationContext)
         AddonHttpClientProvider.initialize(applicationContext)
         AddonStorage.initialize(applicationContext)
@@ -217,6 +218,12 @@ open class MainActivity : AppCompatActivity() {
             }
         }
         contentReady = true
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Re-apply in case the display changed (fold/unfold, external display) while paused.
+        requestHighestRefreshRate()
     }
 
     override fun onNewIntent(intent: Intent) {

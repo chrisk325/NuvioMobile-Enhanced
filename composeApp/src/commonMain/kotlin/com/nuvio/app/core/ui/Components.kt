@@ -17,6 +17,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -113,6 +115,7 @@ fun NuvioScreen(
     topPadding: Dp? = null,
     listState: LazyListState = rememberLazyListState(),
     autoHidesNativeTabBar: Boolean = false,
+    flingBehavior: FlingBehavior = ScrollableDefaults.flingBehavior(),
     content: LazyListScope.() -> Unit,
 ) {
     NativeTabBarScrollEffect(listState = listState, enabled = autoHidesNativeTabBar)
@@ -142,6 +145,7 @@ fun NuvioScreen(
                 bottom = nuvioSafeBottomPadding(tokens.spacing.screenBottom),
             ).withVerticalBar(),
             verticalArrangement = Arrangement.spacedBy(tokens.spacing.listGap),
+            flingBehavior = flingBehavior,
             content = content,
         )
     }
