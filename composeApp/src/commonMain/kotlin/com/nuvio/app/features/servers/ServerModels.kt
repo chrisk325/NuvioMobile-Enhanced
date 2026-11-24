@@ -106,6 +106,11 @@ private fun String.unescapeSegment(): String? {
 data class ServerPlaybackTarget(
     val item: ServerItemRef,
     val mediaSourceId: String?,
+    /**
+     * The http(s) address an addon-backed server (AIOMetadata, AIOStreams) listed for this source. Played directly
+     * when the server's PlaybackInfo can no longer find the source, e.g. after its stream search timed out.
+     */
+    val remoteUrl: String? = null,
 )
 
 data class ServerGenre(
