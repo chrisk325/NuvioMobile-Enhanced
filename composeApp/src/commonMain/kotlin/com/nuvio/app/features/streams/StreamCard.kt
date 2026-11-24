@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
@@ -85,7 +86,7 @@ internal fun StreamCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 68.dp)
+            .heightIn(min = cardText.minHeight)
             .shadow(
                 elevation = 2.dp,
                 shape = cardShape,
@@ -125,7 +126,7 @@ internal fun StreamCard(
                 onClick = onClick,
                 onLongClick = onLongClick,
             )
-            .padding(14.dp),
+            .padding(horizontal = 14.dp, vertical = cardText.verticalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -135,7 +136,7 @@ internal fun StreamCard(
                     stream = stream,
                     showFileSizeBadges = showFileSizeBadges,
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(cardText.gap(6f)))
             }
 
             StreamNameWithInstantService(
@@ -162,7 +163,7 @@ internal fun StreamCard(
 
             val subtitle = stream.streamSubtitle
             if (!subtitle.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(cardText.gap(2f)))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
@@ -175,7 +176,7 @@ internal fun StreamCard(
             }
 
             if (hasBadges && badgePlacement == StreamBadgePlacement.BOTTOM) {
-                Spacer(modifier = Modifier.height(5.dp))
+                Spacer(modifier = Modifier.height(cardText.gap(5f)))
                 StreamCardBadgeRow(
                     badgeImages = badgeImages,
                     stream = stream,
@@ -214,17 +215,18 @@ internal fun StreamCard(
 
 @Composable
 internal fun StreamCardSkeleton(modifier: Modifier = Modifier) {
+    val cardText = rememberStreamCardText()
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 68.dp)
+            .heightIn(min = cardText.minHeight)
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White.copy(alpha = 0.05f))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+            .padding(horizontal = 14.dp, vertical = cardText.verticalPadding),
+        verticalArrangement = Arrangement.spacedBy(cardText.gap(8f), Alignment.CenterVertically),
     ) {
-        SkeletonBlock(modifier = Modifier.fillMaxWidth(0.55f), height = 14.dp, cornerRadius = 4.dp)
-        SkeletonBlock(modifier = Modifier.fillMaxWidth(0.85f), height = 10.dp, cornerRadius = 4.dp)
+        SkeletonBlock(modifier = Modifier.fillMaxWidth(0.55f), height = cardText.gap(14f), cornerRadius = 4.dp)
+        SkeletonBlock(modifier = Modifier.fillMaxWidth(0.85f), height = cardText.gap(10f), cornerRadius = 4.dp)
     }
 }
 
@@ -329,9 +331,13 @@ private fun CurrentStreamBadge(label: String, cardText: StreamCardText) {
 
 /**
  * Stream card text sizes, scaled by the user's stream card text size setting. On iOS the list reads a step larger.
+ * The card's height, vertical padding and line gaps follow the same scale so the card grows and shrinks with its text.
  */
-internal class StreamCardText(scale: Float) {
+internal class StreamCardText(private val scale: Float) {
     private val step = if (isIos) 1.5f else 0f
+    val minHeight: Dp = (68f * scale).dp
+    val verticalPadding: Dp = (14f * scale).dp
+    fun gap(base: Float): Dp = (base * scale).dp
     private fun size(base: Float): TextUnit = ((base + step) * scale).sp
     val name = size(14f)
     val nameLineHeight = size(20f)
