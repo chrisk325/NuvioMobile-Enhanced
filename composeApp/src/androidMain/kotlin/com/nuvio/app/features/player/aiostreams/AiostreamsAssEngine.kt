@@ -222,6 +222,11 @@ internal class AiostreamsAssEngine(
         updateLayout()
     }
 
+    /** Whether the GPU draws the subtitles, rather than the CPU blending them into one picture. */
+    fun setGpu(on: Boolean) {
+        if (!released) ass.setGpu(on)
+    }
+
     fun setSubtitleDelayMs(delayMs: Int) {
         val next = delayMs * 1000L
         if (next == delayUs) return

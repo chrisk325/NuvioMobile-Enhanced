@@ -154,6 +154,7 @@ actual object PlayerSettingsStorage {
     private const val tunnelingEnabledKey = "tunneling_enabled"
     private const val useLibassKey = "use_libass"
     private const val useLibmpvAssKey = "use_libmpv_ass"
+    private const val libmpvAssGpuKey = "libmpv_ass_gpu"
     private const val vodDiskCacheAutoSizeKey = "vod_disk_cache_auto_size"
     private const val vodDiskCacheEnabledKey = "vod_disk_cache_enabled"
     private const val vodDiskCacheSizeMbKey = "vod_disk_cache_size_mb"
@@ -220,6 +221,7 @@ actual object PlayerSettingsStorage {
         useLibassKey,
         libassRenderTypeKey,
         useLibmpvAssKey,
+        libmpvAssGpuKey,
         iosVideoOutputPresetKey,
         iosToneMappingModeKey,
         iosTargetPrimariesKey,
@@ -1865,6 +1867,23 @@ actual object PlayerSettingsStorage {
             ?.apply()
     }
 
+    actual fun loadLibmpvAssGpu(): Boolean? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(libmpvAssGpuKey)
+            if (sharedPreferences.contains(key)) {
+                sharedPreferences.getBoolean(key, true)
+            } else {
+                null
+            }
+        }
+
+    actual fun saveLibmpvAssGpu(enabled: Boolean) {
+        preferences
+            ?.edit()
+            ?.putBoolean(ProfileScopedKey.of(libmpvAssGpuKey), enabled)
+            ?.apply()
+    }
+
     actual fun loadLibassRenderScale(): String? =
         preferences?.getString(ProfileScopedKey.of(libassRenderScaleKey), null)
 
@@ -2121,6 +2140,7 @@ actual object PlayerSettingsStorage {
         loadUseLibass()?.let { put(useLibassKey, encodeSyncBoolean(it)) }
         loadLibassRenderType()?.let { put(libassRenderTypeKey, encodeSyncString(it)) }
         loadUseLibmpvAss()?.let { put(useLibmpvAssKey, encodeSyncBoolean(it)) }
+        loadLibmpvAssGpu()?.let { put(libmpvAssGpuKey, encodeSyncBoolean(it)) }
         loadIosVideoOutputPreset()?.let { put(iosVideoOutputPresetKey, encodeSyncString(it)) }
         loadIosToneMappingMode()?.let { put(iosToneMappingModeKey, encodeSyncString(it)) }
         loadIosTargetPrimaries()?.let { put(iosTargetPrimariesKey, encodeSyncString(it)) }
@@ -2214,6 +2234,7 @@ actual object PlayerSettingsStorage {
         payload.decodeSyncBoolean(useLibassKey)?.let(::saveUseLibass)
         payload.decodeSyncString(libassRenderTypeKey)?.let(::saveLibassRenderType)
         payload.decodeSyncBoolean(useLibmpvAssKey)?.let(::saveUseLibmpvAss)
+        payload.decodeSyncBoolean(libmpvAssGpuKey)?.let(::saveLibmpvAssGpu)
         payload.decodeSyncString(iosVideoOutputPresetKey)?.let(::saveIosVideoOutputPreset)
         payload.decodeSyncString(iosToneMappingModeKey)?.let(::saveIosToneMappingMode)
         payload.decodeSyncString(iosTargetPrimariesKey)?.let(::saveIosTargetPrimaries)

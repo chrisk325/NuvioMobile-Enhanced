@@ -1314,6 +1314,8 @@
     <string name="settings_playback_enable_libass_description">Eksperimental: rendering ASS/SSA lanjutan (gaya, posisi, animasi)</string>
     <string name="settings_playback_enable_libmpv_ass">Gunakan libass dari libmpv untuk subtitle ASS/SSA</string>
     <string name="settings_playback_enable_libmpv_ass_description">Eksperimental: menggambar ASS/SSA dengan libass bawaan libmpv pada overlay yang sinkron per frame, menggantikan rendering ASS ExoPlayer</string>
+    <string name="settings_playback_libmpv_ass_gpu">Gambar subtitle ASS libmpv di GPU</string>
+    <string name="settings_playback_libmpv_ass_gpu_description">Memadukan subtitle ASS/SSA di kartu grafis, bukan di prosesor, sehingga menghemat waktu prosesor. Matikan jika subtitle terlihat salah</string>
     <string name="settings_playback_external_player">Player Eksternal</string>
     <string name="settings_playback_external_player_app">Applikasi Pemutar Video Eksternal</string>
     <string name="settings_playback_external_player_description_android">Buka pemutaran baru dengan aplikasi video bawaan Android atau pemilih sistem.</string>

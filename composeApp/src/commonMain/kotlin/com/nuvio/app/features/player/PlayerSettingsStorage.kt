@@ -224,6 +224,8 @@ internal expect object PlayerSettingsStorage {
     fun saveLibassRenderType(renderType: String)
     fun loadUseLibmpvAss(): Boolean?
     fun saveUseLibmpvAss(enabled: Boolean)
+    fun loadLibmpvAssGpu(): Boolean?
+    fun saveLibmpvAssGpu(enabled: Boolean)
     fun loadLibassRenderScale(): String?
     fun saveLibassRenderScale(scale: String)
     fun loadLibassRenderMode(): String?

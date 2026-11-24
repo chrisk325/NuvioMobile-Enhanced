@@ -60,7 +60,9 @@ internal data class AssStyle(
 /**
  * libass, drawing ASS into a surface of its own between the video and the
  * page, which the compositor lays over the video without the app drawing. One
- * thread owns libass; the file's reader only queues what it finds for it.
+ * thread owns libass; the file's reader only queues what it finds for it. Each
+ * moment's images become a picture of masks, drawn through GL: by the GPU from
+ * the masks, or blended on the CPU into one picture, as [setGpu] picks.
  */
 internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Callback {
     val view = SurfaceView(context).apply {
@@ -110,9 +112,15 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
     private var layout = AssLayout()
     private var drawn = 0L
 
+    /** Whether the GPU draws the masks, rather than the CPU blending them into one picture. */
+    private var gpu = true
+
+    /** A new window, which has nothing on it yet. */
+    private var mustDraw = false
+
     init {
         worker.post {
-            native = nativeCreate(font().path)
+            native = AssNative.create(font().path)
             if (native == 0L) Log.e(TAG, "libass is missing from libmpv")
         }
     }
@@ -127,7 +135,7 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
             }
 
             override fun header(track: String, header: ByteArray) = queue(opened) {
-                tracks.getOrPut(track) { nativeNewTrack(native, header) }
+                tracks.getOrPut(track) { AssNative.newTrack(native, header) }
                 wanted.getOrPut(track) { HashSet() } += styleFonts(header)
                 if (track == shown) giveFonts()
             }
@@ -136,7 +144,7 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
                 val lines = recent.getOrPut(track) { ArrayDeque() }
                 lines += Line(startMs, durationMs, line)
                 while (lines.isNotEmpty() && lines.first().endMs < timeUs / 1000 - KEPT_MS) lines.removeFirst()
-                if (track == shown) tracks[track]?.let { nativeAddLine(it, line, startMs, durationMs) }
+                if (track == shown) tracks[track]?.let { AssNative.addLine(it, line, startMs, durationMs) }
                 if (overrideFonts(line, wanted.getOrPut(track) { HashSet() }) && track == shown) giveFonts()
             }
         }
@@ -147,7 +155,7 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
         file++
         queue {
             freeTracks()
-            nativeClearFonts(native)
+            AssNative.clearFonts(native)
             recent.clear()
             fonts = emptyList()
             given.clear()
@@ -160,14 +168,14 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
 
     /** A whole script from outside the file, which [select] shows as `key`. */
     fun addScript(key: String, script: ByteArray) = queue {
-        tracks.remove(key)?.let(::nativeFreeTrack)
-        tracks[key] = nativeReadScript(native, script)
+        tracks.remove(key)?.let(AssNative::freeTrack)
+        tracks[key] = AssNative.readScript(native, script)
         scripts += key
     }
 
     fun removeScript(key: String) = queue {
         if (shown == key) shown = null
-        tracks.remove(key)?.let(::nativeFreeTrack)
+        tracks.remove(key)?.let(AssNative::freeTrack)
         scripts -= key
         redraw()
     }
@@ -175,8 +183,8 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
     /** Shows the file's track or the script with `key`, or nothing. */
     fun select(key: String?) = queue {
         if (key != shown) {
-            shown?.takeIf { it !in scripts }?.let(tracks::get)?.let(::nativeFlushTrack)
-            tracks[key]?.let { track -> recent[key]?.forEach { nativeAddLine(track, it.bytes, it.startMs, it.durationMs) } }
+            shown?.takeIf { it !in scripts }?.let(tracks::get)?.let(AssNative::flushTrack)
+            tracks[key]?.let { track -> recent[key]?.forEach { AssNative.addLine(track, it.bytes, it.startMs, it.durationMs) } }
         }
         shown = key
         giveFonts()
@@ -184,7 +192,17 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
     }
 
     /** Megabytes of drawn subtitles libass keeps, 0 for its own limit. */
-    fun setCacheLimit(mb: Int) = queue { nativeSetCacheLimit(native, mb) }
+    fun setCacheLimit(mb: Int) = queue { AssNative.setCacheLimit(native, mb) }
+
+    /** Whether the GPU draws the subtitles' masks, rather than the CPU blending them into one picture. */
+    fun setGpu(on: Boolean) = worker.post {
+        if (on == gpu) return@post
+        gpu = on
+        if (native == 0L) return@post
+        AssNative.setGpu(native, on)
+        atNanos = 0
+        draw(force = true)
+    }
 
     /** Draws what shows at `timeUs` of the script, for the frame the screen shows at `atNanos`. */
     fun render(timeUs: Long, atNanos: Long) {
@@ -223,7 +241,10 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
             surface = holder.surface
             this.width = (width * scale).roundToInt()
             this.height = (height * scale).roundToInt()
-            nativeSetWindow(native, surface, this.width, this.height)
+            AssNative.setGpu(native, gpu)
+            AssNative.setWindow(native, surface, this.width, this.height)
+            AssNative.setFrameSize(native, this.width, this.height)
+            mustDraw = true
             applyLayout()
             draw(force = true)
         }
@@ -234,7 +255,7 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
         val done = CountDownLatch(1)
         worker.post {
             surface = null
-            if (native != 0L) nativeSetWindow(native, null, 0, 0)
+            if (native != 0L) AssNative.setWindow(native, null, 0, 0)
             done.countDown()
         }
         done.await(2, TimeUnit.SECONDS)
@@ -242,7 +263,7 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
 
     fun release() = worker.post {
         freeTracks()
-        nativeRelease(native)
+        AssNative.release(native)
         native = 0L
         thread.quitSafely()
     }
@@ -255,7 +276,7 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
     }
 
     private fun freeTracks() {
-        tracks.values.forEach(::nativeFreeTrack)
+        tracks.values.forEach(AssNative::freeTrack)
         tracks.clear()
         scripts.clear()
     }
@@ -266,11 +287,11 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
         val giving = fonts.filter { font -> font.file !in given && font.names?.any(names::contains) != false }
         if (giving.isEmpty()) return
         for (font in giving) {
-            runCatching { nativeAddFont(native, font.file.name, font.file.readBytes()) }
+            runCatching { AssNative.addFont(native, font.file.name, font.file.readBytes()) }
                 .onFailure { Log.w(TAG, "couldn't read ${font.file.name}", it) }
             given += font.file
         }
-        nativeReloadFonts(native)
+        AssNative.reloadFonts(native)
         applyLayout()
     }
 
@@ -296,20 +317,33 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
         apply()
         if (native == 0L || surface == null) return
         val track = shown?.let(tracks::get) ?: 0L
+        val redraw = force || mustDraw || track != drawn
+        // Nothing shows, nor showed: there's nothing to render or clear.
+        if (track == 0L && drawn == 0L && !redraw) return
+        val ms = timeUs / 1000
+        val at = atNanos
         val start = System.nanoTime()
-        val changed = nativeRender(native, track, timeUs / 1000, force || track != drawn)
-        drawn = track
-        if (!changed) return
+        // Rendered into a picture of masks, which shows at once.
+        AssNative.queue(native, track, ms)
+        val taken = AssNative.take(native, ms, 0)
         val rendered = System.nanoTime()
-        if (!nativeDraw(native)) return
-        val now = System.nanoTime()
+        drawn = track
         renders.add(rendered - start)
+        if (taken < 0 || (taken == 0 && !redraw)) return
+        mustDraw = false
+        if (!AssNative.draw(native)) return
+        val now = System.nanoTime()
         blends.add(now - rendered)
-        // Posted a refresh ahead of the video frame, so both show together.
-        val wait = atNanos - now - REFRESH_NANOS
-        if (wait > 0) SystemClock.sleep(wait / 1_000_000)
-        else if (atNanos != 0L && wait < -REFRESH_NANOS) late.incrementAndGet()
-        nativePost(native)
+        if (AssNative.stamped(native)) {
+            // The compositor holds it for the video frame's time.
+            if (at != 0L && now > at) late.incrementAndGet()
+        } else {
+            // Posted a refresh ahead of the video frame, so both show together.
+            val wait = at - now - REFRESH_NANOS
+            if (wait > 0) SystemClock.sleep(wait / 1_000_000)
+            else if (at != 0L && wait < -REFRESH_NANOS) late.incrementAndGet()
+        }
+        AssNative.post(native, at)
     }
 
     // mpv's configure_ass(): its own options reach ASS only as far as the override allows.
@@ -328,13 +362,13 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
             val videoHeight = stage.video.height() * sy
             if (videoWidth >= 1) fontScale *= height / minOf(height.toDouble(), width / videoWidth * videoHeight)
         }
-        nativeSetLayout(
+        AssNative.setLayout(
             native, stage.videoWidth, stage.videoHeight,
             (stage.video.top * sy).roundToInt(), ((stage.stageHeight - stage.video.bottom) * sy).roundToInt(),
             (stage.video.left * sx).roundToInt(), ((stage.stageWidth - stage.video.right) * sx).roundToInt(),
             useMargins, fontScale.toFloat(), if (style.override == AssStyle.NONE) 0.0 else 100 - stage.position,
         )
-        nativeSetStyle(
+        AssNative.setStyle(
             native, style.override, style.color, style.outlineColor, style.backColor,
             style.outlineSize, style.borderStyle, style.bold, style.shadowSize,
             style.fontFile.takeIf { force },
@@ -342,10 +376,6 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
     }
 
     private companion object {
-        init {
-            System.loadLibrary("aiostreams_ass")
-        }
-
         const val TAG = "ass"
 
         /** A 1080p picture: subtitles drawn larger only cost more to blend. */
@@ -354,63 +384,6 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
 
         /** Lines a track keeps from before the playhead, for one it shows later; signs can stay up a while. */
         const val KEPT_MS = 30_000L
-
-        @JvmStatic
-        external fun nativeCreate(font: String): Long
-
-        @JvmStatic
-        external fun nativeAddFont(handle: Long, name: String, data: ByteArray)
-
-        @JvmStatic
-        external fun nativeClearFonts(handle: Long)
-
-        @JvmStatic
-        external fun nativeReloadFonts(handle: Long)
-
-        @JvmStatic
-        external fun nativeNewTrack(handle: Long, header: ByteArray): Long
-
-        @JvmStatic
-        external fun nativeReadScript(handle: Long, script: ByteArray): Long
-
-        @JvmStatic
-        external fun nativeAddLine(track: Long, line: ByteArray, startMs: Long, durationMs: Long)
-
-        @JvmStatic
-        external fun nativeFreeTrack(track: Long)
-
-        @JvmStatic
-        external fun nativeFlushTrack(track: Long)
-
-        @JvmStatic
-        external fun nativeSetCacheLimit(handle: Long, mb: Int)
-
-        @JvmStatic
-        external fun nativeSetWindow(handle: Long, surface: Surface?, width: Int, height: Int)
-
-        @JvmStatic
-        external fun nativeSetLayout(
-            handle: Long, videoWidth: Int, videoHeight: Int, top: Int, bottom: Int, left: Int, right: Int,
-            useMargins: Boolean, fontScale: Float, linePosition: Double,
-        )
-
-        @JvmStatic
-        external fun nativeSetStyle(
-            handle: Long, override: Int, color: Int, outlineColor: Int, backColor: Int,
-            outlineSize: Double, borderStyle: Int, bold: Boolean, shadowSize: Double, fontFile: String?,
-        )
-
-        @JvmStatic
-        external fun nativeRender(handle: Long, track: Long, timeMs: Long, force: Boolean): Boolean
-
-        @JvmStatic
-        external fun nativeDraw(handle: Long): Boolean
-
-        @JvmStatic
-        external fun nativePost(handle: Long)
-
-        @JvmStatic
-        external fun nativeRelease(handle: Long)
     }
 }
 

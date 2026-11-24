@@ -1373,6 +1373,8 @@
     <string name="settings_playback_enable_libass_description">Experimental: advanced ASS/SSA rendering (styles, positioning, animations)</string>
     <string name="settings_playback_enable_libmpv_ass">Use libmpv&apos;s libass for ASS/SSA subtitles</string>
     <string name="settings_playback_enable_libmpv_ass_description">Experimental: draws ASS/SSA with the libass bundled in libmpv on a frame-synced overlay, replacing ExoPlayer&apos;s ASS rendering</string>
+    <string name="settings_playback_libmpv_ass_gpu">Draw libmpv ASS subtitles on the GPU</string>
+    <string name="settings_playback_libmpv_ass_gpu_description">Blends ASS/SSA subtitles on the graphics card instead of the processor, which takes less processor time. Turn it off if subtitles look wrong</string>
     <string name="settings_playback_external_player">External Player</string>
     <string name="settings_playback_external_player_app">External Player App</string>
     <string name="settings_playback_external_player_description_android">Open new playback with Android&apos;s default video app or system chooser.</string>
