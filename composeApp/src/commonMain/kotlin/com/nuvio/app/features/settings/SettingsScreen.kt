@@ -397,8 +397,15 @@ fun SettingsScreen(
             onRequestedPageConsumed()
         }
 
+        // When this page is its own navigation entry, going back simply pops it. Leave that to the
+        // navigation host so Android predictive back can play the slide transition; only handle
+        // back here when it moves between pages inside this screen.
+        val backPopsRoute = onNavigatePage != null && onExternalBack != null
         PlatformBackHandler(
-            enabled = screenActive && previousPage != null && (rootActionsEnabled || onExternalBack != null),
+            enabled = screenActive &&
+                previousPage != null &&
+                !backPopsRoute &&
+                (rootActionsEnabled || onExternalBack != null),
             onBack = ::navigateBack,
         )
 

@@ -14,7 +14,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.navigation3.ui.NavDisplay
 
 /**
- * Horizontal push/pop motion for content pages (details, streams, cast/person, catalogs, folders).
+ * Horizontal push/pop motion for every pushed page (details, streams, cast/person, catalogs, folders,
+ * settings pages, downloads, collections, watch party, ...). The root tabs and the player keep their
+ * own transitions.
  *
  * Opening a page: the new page slides in from the right edge while the screen underneath
  * (home, discover, ...) drifts a little to the left. Going back reverses it: the page slides out

@@ -12,7 +12,6 @@ import com.nuvio.app.navigation.NuvioNavigator
 internal fun DownloadsDestination(
     route: DownloadsRoute,
     navController: NuvioNavigator,
-    useNativeNavigation: Boolean,
     onOpenDownload: (DownloadItem) -> Unit,
 ) {
     val onBack = rememberGuardedPopBackStack(navController, route)
@@ -20,11 +19,9 @@ internal fun DownloadsDestination(
         onBack = onBack,
         onOpenDownload = onOpenDownload,
         onOpenDetails = navController::openDownloadDetails,
-        onNavigateToShow = if (useNativeNavigation) {
-            { showId, title -> navController.navigate(DownloadShowRoute(showId, title)) }
-        } else {
-            null
-        },
+        // A show's episodes open as their own route so the page slides in and supports
+        // predictive back, rather than swapping content inside this screen.
+        onNavigateToShow = { showId, title -> navController.navigate(DownloadShowRoute(showId, title)) },
     )
 }
 
