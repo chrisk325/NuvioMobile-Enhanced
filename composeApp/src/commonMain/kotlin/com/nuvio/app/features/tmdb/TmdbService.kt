@@ -76,6 +76,22 @@ object TmdbService {
         return imdbId
     }
 
+    /** Resolves a TVDB series id to its IMDb id via TMDB's /find endpoint. */
+    suspend fun tvdbToImdb(tvdbId: Int): String? {
+        val apiKey = TmdbSettingsRepository.effectiveApiKey()
+        val body = fetch<TmdbFindResponse>(
+            endpoint = "find/$tvdbId",
+            apiKey = apiKey,
+            query = mapOf("external_source" to "tvdb_id"),
+        ) ?: return null
+        val tmdbId = (body.tvResults.firstOrNull() ?: body.movieResults.firstOrNull())
+            ?.id?.takeIf { it > 0 } ?: return null
+        val mediaType = if (body.tvResults.isNotEmpty()) "tv" else "movie"
+        return tmdbToImdb(tmdbId, mediaType).also { imdbId ->
+            InAppLogger.info("Metadata/TMDB", "tvdbToImdb tvdbId=$tvdbId tmdb=$tmdbId imdb=$imdbId")
+        }
+    }
+
     private suspend fun imdbToTmdb(imdbId: String, mediaType: String, apiKey: String): String? {
         val normalizedType = normalizeMediaType(mediaType)
         val cacheKey = "$imdbId:$normalizedType"

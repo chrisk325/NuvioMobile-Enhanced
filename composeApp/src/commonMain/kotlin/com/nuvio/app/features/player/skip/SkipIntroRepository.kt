@@ -27,6 +27,7 @@ object SkipIntroRepository {
         contentId: String?,
         videoId: String?,
         requireSkipIntroEnabled: Boolean = true,
+        fallbackImdbId: String? = null,
     ): List<SkipInterval> {
         if (!introDbConfigured ||
             (requireSkipIntroEnabled && !PlayerSettingsRepository.uiState.value.skipIntroEnabled)
@@ -35,6 +36,7 @@ object SkipIntroRepository {
             contentId, videoId,
             resolveTmdb = { TmdbService.tmdbToImdb(it, "movie") },
             resolveAnime = { source, id -> SimklIdResolver.resolveIds(source, id)?.imdb },
+            fallbackImdbId = fallbackImdbId,
         ) ?: return emptyList()
         val cacheKey = "movie:$imdbId"
         cache[cacheKey]?.let { return it }
@@ -154,12 +156,13 @@ object SkipIntroRepository {
 
         var introDb = emptyList<SkipInterval>()
         var animeSkip = emptyList<SkipInterval>()
-        val imdbId = imdbIdDeferred.await()
-        if (imdbId != null) {
-            val entries = resolveImdbEntries(imdbId)
-            val season = entries.indexOfFirst { it.myanimelist == malId.toIntOrNull() } + 1
+        val resolvedImdbId = imdbIdDeferred.await() ?: imdbId
+        if (resolvedImdbId != null) {
+            val entries = resolveImdbEntries(resolvedImdbId)
+            val season = (entries.indexOfFirst { it.myanimelist == malId.toIntOrNull() } + 1)
+                .takeIf { it > 0 } ?: imdbSeason ?: 1
             val introDbDeferred = async {
-                if (introDbConfigured) fetchFromIntroDb(imdbId, season, episode) else emptyList()
+                if (introDbConfigured) fetchFromIntroDb(resolvedImdbId, season, episode) else emptyList()
             }
             val animeSkipDeferred = async { fetchAnimeSkipForEntries(entries, season, episode) }
             introDb = introDbDeferred.await()
@@ -219,12 +222,13 @@ object SkipIntroRepository {
 
         var introDb = emptyList<SkipInterval>()
         var animeSkip = emptyList<SkipInterval>()
-        val imdbId = imdbIdDeferred.await()
-        if (imdbId != null) {
-            val entries = resolveImdbEntries(imdbId)
-            val season = entries.indexOfFirst { it.kitsu == kitsuId.toIntOrNull() } + 1
+        val resolvedImdbId = imdbIdDeferred.await() ?: imdbId
+        if (resolvedImdbId != null) {
+            val entries = resolveImdbEntries(resolvedImdbId)
+            val season = (entries.indexOfFirst { it.kitsu == kitsuId.toIntOrNull() } + 1)
+                .takeIf { it > 0 } ?: imdbSeason ?: 1
             val introDbDeferred = async {
-                if (introDbConfigured) fetchFromIntroDb(imdbId, season, episode) else emptyList()
+                if (introDbConfigured) fetchFromIntroDb(resolvedImdbId, season, episode) else emptyList()
             }
             val animeSkipDeferred = async { fetchAnimeSkipForEntries(entries, season, episode) }
             introDb = introDbDeferred.await()
@@ -555,10 +559,12 @@ internal suspend fun resolveMovieSkipImdbId(
     videoId: String?,
     resolveTmdb: suspend (Int) -> String?,
     resolveAnime: suspend (String, String) -> String?,
+    fallbackImdbId: String? = null,
 ): String? {
     val ids = listOfNotNull(contentId, videoId).map(String::trim).distinct()
     val imdbPattern = Regex("tt[0-9]+")
     ids.map { it.substringBefore(':') }.firstOrNull { imdbPattern.matches(it) }?.let { return it }
+    fallbackImdbId?.trim()?.substringBefore(':')?.takeIf { imdbPattern.matches(it) }?.let { return it }
     return ids.firstNotNullOfOrNull { id ->
         val parts = id.split(':')
         val value = parts.getOrNull(1)?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
@@ -566,6 +572,34 @@ internal suspend fun resolveMovieSkipImdbId(
         when (parts.first().lowercase()) {
             "tmdb" -> value.toIntOrNull()?.takeIf { it > 0 }?.let { resolveTmdb(it) }
             "mal", "kitsu" -> resolveAnime(parts.first().lowercase(), value)
+            else -> null
+        }?.trim()?.takeIf { imdbPattern.matches(it) }
+    }
+}
+
+/**
+ * Resolves the series IMDb id IntroDB needs from the ids the player has. Addons such as
+ * AIOMetadata or a Jellyfin server addon key episodes by `tmdb:`/`tvdb:` (or their own) ids
+ * instead of `tt…`, so fall back to the addon meta's `imdb_id`, then to a TMDB/TVDB lookup.
+ */
+internal suspend fun resolveEpisodeSkipImdbId(
+    ids: List<String?>,
+    metaImdbId: String?,
+    resolveTmdb: suspend (Int) -> String?,
+    resolveTvdb: suspend (Int) -> String?,
+): String? {
+    val imdbPattern = Regex("tt[0-9]+")
+    val normalized = ids.filterNotNull().map(String::trim).filter(String::isNotEmpty).distinct()
+    normalized.map { it.substringBefore(':') }.firstOrNull { imdbPattern.matches(it) }?.let { return it }
+    metaImdbId?.trim()?.substringBefore(':')?.takeIf { imdbPattern.matches(it) }?.let { return it }
+    return normalized.firstNotNullOfOrNull { id ->
+        val parts = id.split(':')
+        val value = parts.getOrNull(1)?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
+            ?.toIntOrNull()?.takeIf { it > 0 }
+            ?: return@firstNotNullOfOrNull null
+        when (parts.first().lowercase()) {
+            "tmdb" -> resolveTmdb(value)
+            "tvdb" -> resolveTvdb(value)
             else -> null
         }?.trim()?.takeIf { imdbPattern.matches(it) }
     }
