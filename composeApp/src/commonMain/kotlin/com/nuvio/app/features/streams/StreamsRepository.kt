@@ -2,6 +2,7 @@ package com.nuvio.app.features.streams
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.logging.InAppLogger
+import com.nuvio.app.core.network.warmUpStreamHosts
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
@@ -154,6 +155,7 @@ object StreamsRepository {
         val embeddedStreams = MetaDetailsRepository.findEmbeddedStreams(videoId)
         if (embeddedStreams.isNotEmpty()) {
             log.d { "Using ${embeddedStreams.size} embedded streams for type=$type id=$videoId" }
+            warmUpStreamHosts(embeddedStreams.mapNotNull { it.playableDirectUrl })
             InAppLogger.info("Streams/StreamsRepository", "Using embedded streams count=${embeddedStreams.size} type=$type id=$videoId")
             val group = AddonStreamGroup(
                 addonName = embeddedStreams.first().addonName,
@@ -424,6 +426,8 @@ object StreamsRepository {
             }
 
             fun publishAddonGroup(group: AddonStreamGroup) {
+                // The listed servers are looked up now, so the stream picked does not wait for it.
+                warmUpStreamHosts(group.streams.mapNotNull { it.playableDirectUrl })
                 _uiState.update { current ->
                     val updated = StreamAutoPlaySelector.orderAddonStreams(
                         groups = current.groups.map { currentGroup ->
@@ -514,6 +518,7 @@ object StreamsRepository {
                         if (!completion.error.isNullOrBlank() && pluginFirstErrorByAddonId[completion.addonId].isNullOrBlank()) {
                             pluginFirstErrorByAddonId[completion.addonId] = completion.error
                         }
+                        warmUpStreamHosts(completion.streams.mapNotNull { it.playableDirectUrl })
 
                         _uiState.update { current ->
                             val updated = StreamAutoPlaySelector.orderAddonStreams(
