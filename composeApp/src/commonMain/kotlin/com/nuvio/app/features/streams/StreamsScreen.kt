@@ -537,33 +537,47 @@ private fun MobileStreamsLayout(
                             allState = uiState,
                             debridEnabled = debridEnabled,
                             isEpisode = isEpisode,
-                        ).also { state ->
-                            SmartStreamControls(
-                                state = state,
-                                onPlay = { stream -> onStreamSelected(stream, resumePositionMs, resumeProgressFraction) },
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            )
+                        )
+                    } else {
+                        null
+                    }
+
+                    // The smart controls and the search field scroll away with the streams (as on
+                    // tablet), so the list gets the whole screen once the user starts scrolling.
+                    val controlsHeader: (@Composable () -> Unit)? = if (smartStreams != null || showSearchField) {
+                        {
+                            Column {
+                                smartStreams?.let { state ->
+                                    SmartStreamControls(
+                                        state = state,
+                                        onPlay = { stream -> onStreamSelected(stream, resumePositionMs, resumeProgressFraction) },
+                                        modifier = Modifier.padding(bottom = 8.dp),
+                                    )
+                                }
+                                if (showSearchField) {
+                                    StreamSearchField(
+                                        query = searchQuery,
+                                        onQueryChange = onSearchQueryChange,
+                                        modifier = Modifier.padding(bottom = 8.dp),
+                                    )
+                                }
+                            }
                         }
                     } else {
                         null
                     }
 
-                    if (showSearchField) {
-                        StreamSearchField(
-                            query = searchQuery,
-                            onQueryChange = onSearchQueryChange,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        )
-                    }
-
                     val listUiState = rememberStreamSearchResult(uiState, searchQuery, showSearchField)
-                    if (listUiState.isEmptyBecauseOfSearch) {
-                        StreamSearchEmptyBlock(modifier = Modifier.weight(1f))
-                        return@Column
-                    }
-                    if (smartStreams?.result?.emptyBecauseOfFilters == true) {
-                        SmartFiltersEmptyBlock(modifier = Modifier.weight(1f))
-                        return@Column
+                    // The empty states stay inside the list, under the header, so the search field
+                    // keeps its place (and the keyboard) when a query matches nothing.
+                    val emptyContent: (@Composable () -> Unit)? = when {
+                        listUiState.isEmptyBecauseOfSearch -> {
+                            { StreamSearchEmptyBlock() }
+                        }
+                        smartStreams?.result?.emptyBecauseOfFilters == true -> {
+                            { SmartFiltersEmptyBlock() }
+                        }
+                        else -> null
                     }
 
                     StreamList(
@@ -576,6 +590,8 @@ private fun MobileStreamsLayout(
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
                         resumeProgressFraction = resumeProgressFraction,
+                        header = controlsHeader,
+                        emptyContent = emptyContent,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -813,6 +829,7 @@ internal fun StreamList(
     smartStreams: List<StreamItem>? = null,
     bestStream: StreamItem? = null,
     header: (@Composable () -> Unit)? = null,
+    emptyContent: (@Composable () -> Unit)? = null,
 ) {
     val filteredGroups = uiState.filteredGroups
     val hasGroups = filteredGroups.isNotEmpty()
@@ -886,6 +903,10 @@ internal fun StreamList(
             }
         }
         when {
+            emptyContent != null -> {
+                item(key = "empty_content", contentType = "empty_content") { emptyContent() }
+            }
+
             hasGroups && anyLoading && !hasAnyStreams -> {
                 item {
                     LoadingStateBlock(findingStreamsText = findingStreamsText)
