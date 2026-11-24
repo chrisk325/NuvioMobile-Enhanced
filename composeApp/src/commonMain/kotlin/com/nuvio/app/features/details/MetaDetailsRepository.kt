@@ -253,34 +253,39 @@ object MetaDetailsRepository {
         if (useCache) {
             cachedMetaByRequestKey[requestKey]?.let { return it.baseMeta }
         }
+        // A show listed without any episodes (a server still building its list, or TMDB's standalone fallback,
+        // which carries none) isn't kept, so the next ask, or the details screen, fetches it again.
+        fun keep(result: MetaDetails) {
+            if (cacheResult && !result.isSeriesWithoutEpisodes()) {
+                cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = result)
+            }
+        }
         ServerItemRef.parse(id)?.let { ref ->
             return runCatching { ServerCatalog.details(ref).meta }
                 .onFailure { if (it is CancellationException) throw it }
                 .getOrNull()
-                ?.also { if (cacheResult) cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = it) }
+                ?.also(::keep)
         }
 
         val metaLookupId = resolveMetaLookupId(itemId = id, itemType = type)
         val manifests = findReadyMetaManifests(type = type, id = metaLookupId)
 
         for (manifest in manifests) {
-            val result = withTimeoutOrNull(FETCH_TIMEOUT_MS) {
-                tryFetchMeta(manifest, type, metaLookupId, includeMdbList = false)
-            }
-            if (result != null) {
-                if (cacheResult) {
-                    cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = result)
-                }
-                return result
-            }
+            // Same allowance as the details screen: slow addons such as AIOMetadata take longer than a few seconds
+            // on their first requests after a cold start. Enrichment has its own timeouts, so it isn't counted here.
+            val meta = withTimeoutOrNull(ADDON_META_TIMEOUT_MS) {
+                fetchAddonMeta(manifest, type, metaLookupId)
+            } ?: continue
+            val result = enrichFetchedMeta(manifest, meta, metaLookupId, includeMdbList = false)
+            keep(result)
+            return result
         }
 
-        return tryFetchTmdbFallbackMeta(type = type, id = id)?.also { result ->
-            if (cacheResult) {
-                cachedMetaByRequestKey[requestKey] = CachedMetaEntry(baseMeta = result)
-            }
-        }
+        return tryFetchTmdbFallbackMeta(type = type, id = id)?.also(::keep)
     }
+
+    private fun MetaDetails.isSeriesWithoutEpisodes(): Boolean =
+        normalizeMoreLikeThisType(type) == "series" && videos.none { it.season != null || it.episode != null }
 
     private val backgroundBackoffUntilByHost = mutableMapOf<String, Long>()
 
@@ -478,16 +483,6 @@ object MetaDetailsRepository {
         val enriched = enrichFetchedMeta(manifest, meta, id, includeMdbList = false, tmdbWarmup = tmdbWarmup)
         tmdbWarmup.cancel()
         enriched
-    }
-
-    private suspend fun tryFetchMeta(
-        manifest: AddonManifest,
-        type: String,
-        id: String,
-        includeMdbList: Boolean,
-    ): MetaDetails? {
-        val meta = fetchAddonMeta(manifest, type, id) ?: return null
-        return enrichFetchedMeta(manifest, meta, id, includeMdbList)
     }
 
     private suspend fun fetchAddonMeta(
