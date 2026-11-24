@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.23",
+          "buildVersion": "240",
+          "date": "2026-11-24T10:31:11Z",
+          "localizedDescription": "- [Scroll smart stream controls and search with the stream list on phones (#105)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/105) @chrisk325  \n- [build fixes (#104)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/104) @chrisk325  \n- [smart stream sorting , filters . perf fixes (#103)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/103) @chrisk325  \n- [Refresh media server streams every time the streams screen opens (#102)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/102) @chrisk325  \n- [upstream (#101)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/101) @chrisk325  \n- [add a customisable formatter font size (#100)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/100) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.23-beta/nuvio-1.0.23-enhanced-release.ipa",
+          "size": 77397811,
+          "sha256": "6969abd6f244e2cfdf1e5f6b072af7b387bc4c42800a34aba47e427683abd769",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.18",
           "buildVersion": "235",
           "date": "2026-11-20T00:34:55Z",
