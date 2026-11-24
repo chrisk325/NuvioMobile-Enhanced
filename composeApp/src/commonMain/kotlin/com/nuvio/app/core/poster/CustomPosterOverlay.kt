@@ -139,6 +139,7 @@ fun com.nuvio.app.features.watchprogress.ContinueWatchingItem.withCustomPosterUr
     return copy(
         poster = resolvedPoster ?: poster,
         background = resolvedLandscape ?: background,
+        landscapePoster = resolvedLandscape ?: landscapePoster,
         imageUrl = if (imageUrl == originalPoster && resolvedPoster != null) resolvedPoster else imageUrl,
         rawPosterUrl = rawPosterUrl ?: originalPoster,
         rawBackgroundUrl = if (resolvedLandscape != null) (rawBackgroundUrl ?: originalBackground) else rawBackgroundUrl,

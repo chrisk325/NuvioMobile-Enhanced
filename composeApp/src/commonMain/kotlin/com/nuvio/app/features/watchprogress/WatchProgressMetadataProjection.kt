@@ -26,6 +26,11 @@ internal fun enrichWatchProgressEntry(
     } else {
         null
     }
+    val keepArtwork = current.hasMediaServerArtwork()
+    val metaPoster = meta.poster?.takeIf(String::isNotBlank)
+    val metaBackground = meta.background?.takeIf(String::isNotBlank)
+    val metaLandscape = meta.landscapePoster?.takeIf(String::isNotBlank)
+    val metaLogo = meta.logo?.takeIf(String::isNotBlank)
     return current.copy(
         videoId = if (current.source != WatchProgressSourceLocal && episodeVideo != null) {
             episodeVideo.id.takeIf(String::isNotBlank) ?: current.videoId
@@ -33,9 +38,11 @@ internal fun enrichWatchProgressEntry(
             current.videoId
         },
         title = meta.name.takeIf(String::isNotBlank) ?: current.title,
-        poster = meta.poster?.takeIf(String::isNotBlank) ?: current.poster,
-        background = meta.background?.takeIf(String::isNotBlank) ?: current.background,
-        logo = meta.logo?.takeIf(String::isNotBlank) ?: current.logo,
+        // A media server's own artwork is kept; metadata only fills what it lacks.
+        poster = if (keepArtwork) current.poster ?: metaPoster else metaPoster ?: current.poster,
+        background = if (keepArtwork) current.background ?: metaBackground else metaBackground ?: current.background,
+        landscapePoster = if (keepArtwork) current.landscapePoster ?: metaLandscape else metaLandscape ?: current.landscapePoster,
+        logo = if (keepArtwork) current.logo ?: metaLogo else metaLogo ?: current.logo,
         episodeTitle = episodeVideo?.title?.takeIf(String::isNotBlank) ?: current.episodeTitle,
         episodeThumbnail = episodeVideo?.thumbnail?.takeIf(String::isNotBlank) ?: current.episodeThumbnail,
         pauseDescription = episodeVideo?.overview?.takeIf(String::isNotBlank)

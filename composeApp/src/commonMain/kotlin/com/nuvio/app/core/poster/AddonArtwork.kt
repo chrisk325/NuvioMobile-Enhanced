@@ -211,22 +211,22 @@ fun MetaPreview.withAddonArtwork(
 }
 
 /**
- * Shows the addon's poster on Continue Watching, and its landscape poster (else its backdrop) as
- * the wide artwork. Episode thumbnails keep their place when the user prefers them, and artwork
- * from a custom poster URL pattern is left as is.
+ * Shows the addon's poster on Continue Watching, and its landscape poster as the wide card artwork.
+ * Episode thumbnails keep their place when the user prefers them, artwork from a custom poster URL
+ * pattern is left as is, and a media server's own artwork is kept, with the addon only filling gaps.
  */
 fun ContinueWatchingItem.withAddonArtwork(artwork: AddonArtwork?): ContinueWatchingItem {
     if (artwork == null || artwork.isEmpty) return this
-    val customPosterApplied = rawPosterUrl != null
+    val fillOnly = mediaServerArtwork
     val customLandscapeApplied = rawBackgroundUrl != null
-    val newPoster = if (customPosterApplied) poster else artwork.poster ?: poster
-    val newBackground = if (customLandscapeApplied) {
-        background
-    } else {
-        artwork.landscapePoster ?: artwork.background ?: background
-    }
+    val keepPoster = rawPosterUrl != null || (fillOnly && !poster.isNullOrBlank())
+    val keepLandscape = customLandscapeApplied || (fillOnly && !landscapePoster.isNullOrBlank())
+    val keepBackground = customLandscapeApplied || (fillOnly && !background.isNullOrBlank())
+    val newPoster = if (keepPoster) poster else artwork.poster ?: poster
+    val newLandscape = if (keepLandscape) landscapePoster else artwork.landscapePoster ?: landscapePoster
+    val newBackground = if (keepBackground) background else artwork.background ?: background
     val newImageUrl = when (imageUrl) {
-        null -> newBackground ?: newPoster
+        null -> newLandscape ?: newBackground ?: newPoster
         background -> newBackground
         poster -> newPoster
         else -> imageUrl
@@ -234,7 +234,8 @@ fun ContinueWatchingItem.withAddonArtwork(artwork: AddonArtwork?): ContinueWatch
     return copy(
         poster = newPoster,
         background = newBackground,
+        landscapePoster = newLandscape,
         imageUrl = newImageUrl,
-        logo = artwork.logo ?: logo,
+        logo = if (fillOnly) logo ?: artwork.logo else artwork.logo ?: logo,
     )
 }

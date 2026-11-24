@@ -40,6 +40,7 @@ internal object MetaDetailsParser {
             },
             poster = meta.string("poster"),
             background = meta.string("background") ?: meta.string("landscapePoster")?.takeIf(String::isNotBlank),
+            landscapePoster = meta.string("landscapePoster")?.takeIf(String::isNotBlank),
             logo = meta.string("logo"),
             description = meta.string("description"),
             releaseInfo = meta.string("releaseInfo"),

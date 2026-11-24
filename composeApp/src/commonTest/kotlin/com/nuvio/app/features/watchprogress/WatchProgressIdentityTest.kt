@@ -173,6 +173,32 @@ class WatchProgressIdentityTest {
     }
 
     @Test
+    fun `metadata enrichment keeps a media server's own artwork`() {
+        val current = entry().copy(
+            poster = "server-poster",
+            background = null,
+            landscapePoster = "server-thumb",
+            providerAddonId = "${MEDIA_SERVER_PROVIDER_PREFIX}conn",
+        )
+
+        val enriched = enrichWatchProgressEntry(
+            current = current,
+            meta = MetaDetails(
+                id = "show",
+                type = "series",
+                name = "Show",
+                poster = "addon-poster",
+                background = "addon-background",
+                landscapePoster = "addon-landscape",
+            ),
+        )
+
+        assertEquals("server-poster", enriched.poster)
+        assertEquals("server-thumb", enriched.landscapePoster)
+        assertEquals("addon-background", enriched.background)
+    }
+
+    @Test
     fun `partial metadata enrichment keeps existing nonblank artwork`() {
         val current = entry().copy(
             title = "Existing title",

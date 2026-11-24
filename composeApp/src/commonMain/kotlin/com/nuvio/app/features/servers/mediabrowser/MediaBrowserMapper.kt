@@ -73,6 +73,7 @@ internal class MediaBrowserMapper(
             imdbId = item.externalIds().imdb,
             poster = item.primaryImage(),
             background = item.backdropImage(),
+            landscapePoster = item.thumbImage(),
             logo = item.logoImage(),
             description = item.overview,
             releaseInfo = item.releaseInfo(kind),

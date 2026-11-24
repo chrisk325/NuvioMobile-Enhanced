@@ -2061,6 +2061,8 @@ private fun saveContinueWatchingSnapshots(
             seedEpisode = item.nextUpSeedEpisodeNumber,
             isReleaseAlert = item.isReleaseAlert,
             isNewSeasonRelease = item.isNewSeasonRelease,
+            landscapePoster = item.landscapePoster,
+            mediaServerArtwork = item.mediaServerArtwork,
         )
     }
     val inProgressCache = buildHomeInProgressCacheSnapshot(
@@ -2109,6 +2111,8 @@ internal fun buildHomeInProgressCacheSnapshot(
             lastWatched = entry.lastUpdatedEpochMs,
             progressPercent = entry.progressPercent,
             progressKey = entry.resolvedProgressKey(),
+            landscapePoster = item.landscapePoster,
+            mediaServerArtwork = item.mediaServerArtwork,
         )
     }
 }
@@ -2123,6 +2127,7 @@ internal fun CompletedSeriesCandidate.toContinueWatchingSeed(meta: com.nuvio.app
         logo = meta.logo,
         poster = meta.poster,
         background = meta.background,
+        landscapePoster = meta.landscapePoster,
         seasonNumber = seasonNumber,
         episodeNumber = episodeNumber,
         lastPositionMs = 0L,
@@ -2178,6 +2183,8 @@ private fun CachedNextUpItem.toContinueWatchingItem(
         progressFraction = 0f,
         isReleaseAlert = alertState.isReleaseAlert,
         isNewSeasonRelease = alertState.isNewSeasonRelease,
+        landscapePoster = landscapePoster.nonBlankOrNull(),
+        mediaServerArtwork = mediaServerArtwork,
     )
 }
 
@@ -2222,6 +2229,8 @@ private fun CachedInProgressItem.toContinueWatchingItem(): ContinueWatchingItem 
         resumeProgressFraction = explicitResumeProgressFraction,
         durationMs = duration,
         progressFraction = normalizedProgressFraction,
+        landscapePoster = landscapePoster.nonBlankOrNull(),
+        mediaServerArtwork = mediaServerArtwork,
     )
 }
 
@@ -2249,6 +2258,8 @@ private fun ContinueWatchingItem.withFallbackMetadata(
         logo = logo.orNonBlank(fallback?.logo),
         poster = poster.orNonBlank(fallback?.poster),
         background = background.orNonBlank(fallback?.background),
+        landscapePoster = landscapePoster.orNonBlank(fallback?.landscapePoster),
+        mediaServerArtwork = mediaServerArtwork || fallback?.mediaServerArtwork == true,
         videoId = if (preserveFallbackPlaybackIdentity) {
             fallback?.videoId?.takeIf { it.isNotBlank() } ?: videoId
         } else {

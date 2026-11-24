@@ -4,6 +4,7 @@ import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.tracking.TrackingExternalIds
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
+import com.nuvio.app.features.watchprogress.toContinueWatchingItem
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -220,6 +221,33 @@ class ServerResumeImportTest {
         assertTrue(item.isNextUp)
         assertEquals("https://server/ep5.jpg", item.imageUrl)
         assertEquals("The Man Who Will Become King", item.episodeTitle)
+    }
+
+    @Test
+    fun serverArtworkIncludingItsThumbReachesContinueWatching() {
+        val connection = installFakeServer()
+        val title = show(connection.id).let { title ->
+            title.copy(
+                preview = title.preview.copy(
+                    poster = "https://server/poster.jpg",
+                    banner = "https://server/backdrop.jpg",
+                    landscapePoster = "https://server/thumb.jpg",
+                ),
+            )
+        }
+
+        val resume = ServerResumeImport.entries(connection, listOf(ServerResume(title, episodeState(connection.id)))).single()
+        val resumeItem = resume.toContinueWatchingItem()
+        assertEquals("https://server/thumb.jpg", resumeItem.landscapePoster)
+        assertEquals("https://server/poster.jpg", resumeItem.poster)
+        assertTrue(resumeItem.mediaServerArtwork)
+
+        val nextUp = ServerResumeImport.nextUpEntries(
+            connection,
+            listOf(ServerNextUp(title, nextEpisode(connection.id))),
+        ).single().toContinueWatchingItem()
+        assertEquals("https://server/thumb.jpg", nextUp.landscapePoster)
+        assertTrue(nextUp.mediaServerArtwork)
     }
 
     @Test
