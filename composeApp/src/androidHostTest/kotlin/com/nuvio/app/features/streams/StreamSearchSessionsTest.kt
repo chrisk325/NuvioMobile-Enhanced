@@ -24,8 +24,8 @@ class StreamSearchSessionsTest {
 
     @Test
     fun aSecondSearchForTheSameEpisodeReusesTheResults() = runBlocking {
-        val first = StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false).toList()
-        val second = StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false).toList()
+        val first = StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false, refreshServerSources = false).toList()
+        val second = StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false, refreshServerSources = false).toList()
 
         assertEquals(1, loads)
         assertEquals(first, second)
@@ -33,34 +33,43 @@ class StreamSearchSessionsTest {
 
     @Test
     fun forceRefreshStartsANewSearch() = runBlocking {
-        StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false).toList()
-        StreamSearchSessions.search(PROFILE, targets(), forceRefresh = true).toList()
+        StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false, refreshServerSources = false).toList()
+        StreamSearchSessions.search(PROFILE, targets(), forceRefresh = true, refreshServerSources = false).toList()
 
         assertEquals(2, loads)
     }
 
     @Test
     fun anotherEpisodeIsASeparateSearch() = runBlocking {
-        StreamSearchSessions.search(PROFILE, targets(episode = 1), forceRefresh = false).toList()
-        StreamSearchSessions.search(PROFILE, targets(episode = 2), forceRefresh = false).toList()
+        StreamSearchSessions.search(PROFILE, targets(episode = 1), forceRefresh = false, refreshServerSources = false).toList()
+        StreamSearchSessions.search(PROFILE, targets(episode = 2), forceRefresh = false, refreshServerSources = false).toList()
 
         assertEquals(2, loads)
     }
 
     @Test
     fun anotherProfileIsASeparateSearch() = runBlocking {
-        StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false).toList()
-        StreamSearchSessions.search(PROFILE + 1, targets(), forceRefresh = false).toList()
+        StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false, refreshServerSources = false).toList()
+        StreamSearchSessions.search(PROFILE + 1, targets(), forceRefresh = false, refreshServerSources = false).toList()
 
         assertEquals(2, loads)
     }
 
     @Test
     fun aChangedSourceSetupIsASeparateSearch() = runBlocking {
-        StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false).toList()
-        StreamSearchSessions.search(PROFILE, targets(sourceId = "server:other"), forceRefresh = false).toList()
+        StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false, refreshServerSources = false).toList()
+        StreamSearchSessions.search(PROFILE, targets(sourceId = "server:other"), forceRefresh = false, refreshServerSources = false).toList()
 
         assertEquals(2, loads)
+    }
+
+    @Test
+    fun mediaServersAreAskedAgainOnEverySearch() = runBlocking {
+        val first = StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false).toList()
+        val second = StreamSearchSessions.search(PROFILE, targets(), forceRefresh = false).toList()
+
+        assertEquals(2, loads)
+        assertEquals(first, second)
     }
 
     private fun targets(episode: Int = 1, sourceId: String = "server:test") = StreamSearchTargets(

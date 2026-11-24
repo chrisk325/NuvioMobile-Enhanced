@@ -85,8 +85,12 @@ object StreamsRepository {
         )
         val requestKey = "$requestToken::pluginsGrouped=${pluginUiState.groupStreamsByRepository}"
         val currentState = _uiState.value
+        // Media servers (e.g. Jellyfin) are asked again every time the streams screen opens, so
+        // a title reopened from its details page shows what the server has now.
+        val servesFromMediaServer = ServerStreams.canServe(type, videoId, parentMetaId, season, episode)
         if (
             !forceRefresh &&
+            !servesFromMediaServer &&
             activeRequestKey == requestKey &&
             (currentState.groups.isNotEmpty() || currentState.emptyStateReason != null || currentState.isAnyLoading)
         ) {

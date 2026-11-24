@@ -16,6 +16,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.transformWhile
@@ -51,6 +52,19 @@ internal class StreamSearchTargets(
     /** The debrid account streams are checked with, as the checked streams are kept with the search. */
     val debridConfiguration: String = LocalDebridAvailabilityService.cacheCheckConfiguration(),
 ) {
+    /** The same search without its media servers. */
+    fun withoutServerSources(): StreamSearchTargets =
+        StreamSearchTargets(
+            type = type,
+            videoId = videoId,
+            season = season,
+            episode = episode,
+            streamAddons = streamAddons,
+            serverSources = emptyList(),
+            pluginProviderGroups = pluginProviderGroups,
+            debridConfiguration = debridConfiguration,
+        )
+
     val totalTasks: Int
         get() = streamAddons.size + serverSources.size + pluginProviderGroups.sumOf { it.scrapers.size }
 
@@ -97,8 +111,30 @@ internal object StreamSearchSessions {
      * Emits every result of the search for [targets], first the ones that already arrived and
      * then new ones, and completes when the search ends. A new search starts only when none is
      * held for the same request or [forceRefresh] is set.
+     *
+     * With [refreshServerSources] (the default) media servers such as Jellyfin are asked again on
+     * every call rather than reused from a held search, since their libraries, versions and resume
+     * points change while the app is open and asking them is cheap.
      */
     fun search(
+        profileId: Int,
+        targets: StreamSearchTargets,
+        forceRefresh: Boolean,
+        refreshServerSources: Boolean = true,
+    ): Flow<StreamLoadCompletion> {
+        if (!refreshServerSources || targets.serverSources.isEmpty()) return sessionSearch(profileId, targets, forceRefresh)
+        val sessionTargets = targets.withoutServerSources()
+        return channelFlow {
+            targets.serverSources.forEach { source ->
+                launch { send(StreamLoadCompletion.Addon(source.load())) }
+            }
+            if (sessionTargets.totalTasks > 0) {
+                sessionSearch(profileId, sessionTargets, forceRefresh).collect { send(it) }
+            }
+        }
+    }
+
+    private fun sessionSearch(
         profileId: Int,
         targets: StreamSearchTargets,
         forceRefresh: Boolean,
