@@ -48,6 +48,8 @@ data class WatchProgressEntry(
     val logo: String? = null,
     val poster: String? = null,
     val background: String? = null,
+    /** Wide artwork made for cards (e.g. a media server's Thumb image), shown ahead of [background]. */
+    val landscapePoster: String? = null,
     val seasonNumber: Int? = null,
     val episodeNumber: Int? = null,
     val episodeTitle: String? = null,
@@ -233,6 +235,10 @@ data class ContinueWatchingItem(
     val rawBackgroundUrl: String? = null,
     val shufflePlayback: Boolean = false,
     val isWatched: Boolean = false,
+    /** Wide card artwork, shown ahead of [background] where the card has no episode thumbnail to show. */
+    val landscapePoster: String? = null,
+    /** The artwork came from a media server (its own posters), so addon artwork only fills gaps. */
+    val mediaServerArtwork: Boolean = false,
 )
 
 internal fun continueWatchingItemKey(item: ContinueWatchingItem): String {
@@ -285,6 +291,8 @@ internal fun WatchProgressEntry.toContinueWatchingItem(): ContinueWatchingItem {
         logo = normalizedEntry.logo.nonBlankOrNull(),
         poster = resolvedPoster,
         background = resolvedBackground,
+        landscapePoster = normalizedEntry.landscapePoster.nonBlankOrNull(),
+        mediaServerArtwork = normalizedEntry.hasMediaServerArtwork(),
         seasonNumber = normalizedEntry.seasonNumber,
         episodeNumber = normalizedEntry.episodeNumber,
         episodeTitle = normalizedEntry.episodeTitle.nonBlankOrNull(),
@@ -302,6 +310,11 @@ internal fun WatchProgressEntry.toContinueWatchingItem(): ContinueWatchingItem {
         isNewSeasonRelease = false,
     )
 }
+
+/** Progress imported from a media server, or of one of its titles, shows the server's own artwork. */
+internal fun WatchProgressEntry.hasMediaServerArtwork(): Boolean =
+    providerAddonId?.startsWith(MEDIA_SERVER_PROVIDER_PREFIX) == true ||
+        com.nuvio.app.features.servers.ServerItemRef.isServerId(parentMetaId)
 
 private fun WatchProgressEntry.cloudLibraryPosterFallbackUrl(): String? {
     if (!contentType.equals(CloudLibraryContentType, ignoreCase = true) &&
@@ -348,6 +361,8 @@ internal fun WatchProgressEntry.toUpNextContinueWatchingItem(
         logo = logo.nonBlankOrNull(),
         poster = resolvedPoster,
         background = resolvedBackground,
+        landscapePoster = landscapePoster.nonBlankOrNull(),
+        mediaServerArtwork = hasMediaServerArtwork(),
         seasonNumber = nextEpisode.season,
         episodeNumber = nextEpisode.episode,
         episodeTitle = nextEpisode.title.nonBlankOrNull(),

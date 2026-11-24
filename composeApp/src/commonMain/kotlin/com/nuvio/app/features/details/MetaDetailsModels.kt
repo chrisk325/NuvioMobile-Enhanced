@@ -11,6 +11,8 @@ data class MetaDetails(
     val tvdbId: String? = null,
     val poster: String? = null,
     val background: String? = null,
+    /** Wide artwork made for cards: an addon's `landscapePoster`, or a media server's Thumb image. */
+    val landscapePoster: String? = null,
     val logo: String? = null,
     val description: String? = null,
     val releaseInfo: String? = null,

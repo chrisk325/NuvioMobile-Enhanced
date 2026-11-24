@@ -194,6 +194,7 @@ private fun ContinueWatchingItem.continueWatchingCardArtworkUrl(
     preferBackdropForNextUp: Boolean,
 ): String? = when {
     isNextUp && preferBackdropForNextUp -> firstNonBlank(
+        landscapePoster,
         background,
         poster,
         episodeThumbnail,
@@ -201,11 +202,13 @@ private fun ContinueWatchingItem.continueWatchingCardArtworkUrl(
     )
     isNextUp && useEpisodeThumbnails -> firstNonBlank(
         episodeThumbnail,
+        landscapePoster,
         background,
         poster,
         imageUrl,
     )
     isNextUp -> firstNonBlank(
+        landscapePoster,
         background,
         poster,
         episodeThumbnail,
@@ -213,11 +216,13 @@ private fun ContinueWatchingItem.continueWatchingCardArtworkUrl(
     )
     useEpisodeThumbnails -> firstNonBlank(
         episodeThumbnail,
+        landscapePoster,
         background,
         poster,
         imageUrl,
     )
     else -> firstNonBlank(
+        landscapePoster,
         background,
         poster,
         episodeThumbnail,
@@ -233,6 +238,7 @@ private fun ContinueWatchingItem.fallbackUrlForArtwork(artworkUrl: String?): Str
     val trimmed = artworkUrl.trim()
     if (trimmed == poster?.trim() && !rawPosterUrl.isNullOrBlank() && rawPosterUrl != poster) return rawPosterUrl
     if (trimmed == background?.trim() && !rawBackgroundUrl.isNullOrBlank() && rawBackgroundUrl != background) return rawBackgroundUrl
+    if (trimmed == landscapePoster?.trim() && !background.isNullOrBlank() && background != landscapePoster) return background
     return null
 }
 
@@ -367,6 +373,8 @@ private fun HomeContinueWatchingSectionContent(
             val addonArtwork = rememberAddonArtwork(
                 type = sourceItem.parentMetaType,
                 id = sourceItem.parentMetaId,
+                // A media server that already sent both artworks needs no addon lookup.
+                enabled = !(sourceItem.mediaServerArtwork && sourceItem.poster != null && sourceItem.landscapePoster != null),
             )
             val item = remember(sourceItem, addonArtwork) { sourceItem.withAddonArtwork(addonArtwork) }
             DisintegratingContainer(
