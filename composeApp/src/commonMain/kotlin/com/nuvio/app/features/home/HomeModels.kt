@@ -46,6 +46,10 @@ data class HomeCatalogSection(
     val items: List<MetaPreview>,
     val availableItemCount: Int = items.size,
     val hasMore: Boolean = false,
+    /** Skip offset of the next page to append when the row is scrolled to its end; null when exhausted. */
+    val nextSkip: Int? = null,
+    /** Consecutive appended pages that contained only already-shown items (guards against looping addons). */
+    val consecutiveDuplicatePages: Int = 0,
 )
 
 fun HomeCatalogSection.canOpenCatalog(previewLimit: Int): Boolean =

@@ -4,7 +4,9 @@ import com.nuvio.app.features.addons.ManagedAddon
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.catalog.CatalogTarget
+import com.nuvio.app.features.catalog.CatalogPage
 import com.nuvio.app.features.catalog.fetchCatalogPage
+import com.nuvio.app.features.catalog.nextCatalogPaginationState
 import com.nuvio.app.core.poster.CustomPosterUrlRepository
 import com.nuvio.app.core.poster.reapplyCustomPosterUrls
 import com.nuvio.app.core.poster.withCustomPosterUrls
@@ -30,7 +32,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.absoluteValue
@@ -59,6 +63,8 @@ object HomeRepository {
     private var snapshotSaveJob: Job? = null
     private var lastRefreshAddonSignature: List<String>? = null
     private var collectionHeroResolving: Boolean = false
+    private val loadMoreMutex = Mutex()
+    private val loadingMoreKeys = mutableSetOf<String>()
 
     fun preloadSnapshot() {
         val profileKey = HomeSnapshotStore.currentProfileKey() ?: return
@@ -183,6 +189,66 @@ object HomeRepository {
         }
     }
 
+    /**
+     * Appends the next page of the home row identified by [sectionKey] (the definition key exposed as
+     * [HomeCatalogSection.key]) so the row keeps scrolling. No-op while a load for the row is in flight
+     * or when the catalog has no further pages.
+     */
+    fun loadMoreSection(sectionKey: String) {
+        val definition = currentDefinitions.firstOrNull { it.key == sectionKey } ?: return
+        val cacheKey = definition.cacheKey
+        val base = cachedSections[cacheKey] ?: return
+        val requestedSkip = base.nextSkip ?: return
+        scope.launch {
+            val acquired = loadMoreMutex.withLock { loadingMoreKeys.add(cacheKey) }
+            if (!acquired) return@launch
+            try {
+                val page = runCatching {
+                    withTimeoutOrNull(HOME_CATALOG_FETCH_TIMEOUT_MS) {
+                        definition.fetchNextPage(base.target, requestedSkip)
+                    }
+                }.getOrNull() ?: return@launch
+                val applied = loadMoreMutex.withLock {
+                    val current = cachedSections[cacheKey]
+                    // A refresh replaced the row (or another load already advanced it): drop this page.
+                    if (current == null || current.nextSkip != requestedSkip || current.items.size != base.items.size) {
+                        return@withLock false
+                    }
+                    val appended = current.appendCatalogPage(
+                        page = page,
+                        requestedSkip = requestedSkip,
+                        supportsPagination = definition.supportsPagination || definition.serverConnectionId != null,
+                    )
+                    cachedSections = cachedSections + (cacheKey to appended)
+                    true
+                }
+                if (applied) {
+                    publishCurrentState(
+                        isLoading = _uiState.value.isLoading,
+                        requestKey = currentRequestKey,
+                    )
+                }
+            } finally {
+                loadMoreMutex.withLock { loadingMoreKeys.remove(cacheKey) }
+            }
+        }
+    }
+
+    private suspend fun HomeCatalogDefinition.fetchNextPage(target: CatalogTarget, skip: Int): CatalogPage {
+        if (target is CatalogTarget.Server) {
+            return ServerCatalog.page(target, skip = skip)
+        }
+        CustomPosterUrlRepository.ensureLoaded()
+        val pattern = CustomPosterUrlRepository.patternForScreen(com.nuvio.app.core.poster.CustomPosterScreen.HOME)
+        val page = fetchCatalogPage(
+            manifestUrl = manifestUrl,
+            type = type,
+            catalogId = catalogId,
+            skip = skip.takeIf { it > 0 },
+        )
+        return if (pattern.isNotBlank()) page.copy(items = page.items.withCustomPosterUrls(pattern)) else page
+    }
+
     fun applyCurrentSettings(heroSourcesChanged: Boolean = false) {
         publishCurrentState(
             isLoading = _uiState.value.isLoading,
@@ -247,7 +313,10 @@ object HomeRepository {
 
     private fun scheduleSnapshotSave() {
         val profileKey = HomeSnapshotStore.currentProfileKey() ?: return
-        val entries = lastPublishedEntries
+        // Rows grow as the user scrolls them; persist only the preview so snapshots stay small.
+        val entries = lastPublishedEntries.map { (cacheKey, section) ->
+            cacheKey to section.copy(items = section.items.take(HOME_CATALOG_PREVIEW_FETCH_LIMIT), nextSkip = null)
+        }
         if (entries.isEmpty()) return
         val heroItems = _uiState.value.heroItems
         snapshotSaveJob?.cancel()
@@ -315,6 +384,8 @@ object HomeRepository {
             currentDefinitions
                 .filter { definition -> preferences[definition.key]?.heroSourceEnabled != false }
                 .mapNotNull { definition -> cachedSections[definition.cacheKey] }
+                // Only the preview page feeds the hero so appending pages never reshuffles it.
+                .map { section -> section.copy(items = section.items.take(HOME_CATALOG_PREVIEW_FETCH_LIMIT)) }
                 .map { section -> section.withPosterOverlay().withReleaseFilter() }
                 .flatMap { section -> section.items }
                 .distinctBy { item -> "${item.type}:${item.id}" }
@@ -403,6 +474,11 @@ object HomeRepository {
             items = items,
             availableItemCount = page.rawItemCount,
             hasMore = supportsPagination && page.nextSkip != null,
+            nextSkip = initialHomeNextSkip(
+                previewItemCount = page.items.size,
+                page = page,
+                supportsPagination = supportsPagination,
+            ),
         )
     }
 
@@ -418,6 +494,7 @@ object HomeRepository {
             items = page.items,
             availableItemCount = page.rawItemCount,
             hasMore = page.nextSkip != null,
+            nextSkip = page.nextSkip,
         )
     }
 
@@ -609,4 +686,40 @@ private fun prioritizeDefinitions(
         }
     }
     return priority + remainder
+}
+
+/**
+ * Where the first "load more" of a freshly fetched addon row should start. The preview fetch truncates
+ * the first page, so when items were cut off the full first page is re-read (skip 0) before moving on.
+ */
+internal fun initialHomeNextSkip(
+    previewItemCount: Int,
+    page: CatalogPage,
+    supportsPagination: Boolean,
+): Int? = when {
+    page.rawItemCount > previewItemCount -> 0
+    supportsPagination -> page.nextSkip
+    else -> null
+}
+
+/** Appends [page] to the row, skipping items it already shows, and advances its pagination cursor. */
+internal fun HomeCatalogSection.appendCatalogPage(
+    page: CatalogPage,
+    requestedSkip: Int,
+    supportsPagination: Boolean,
+): HomeCatalogSection {
+    val seenKeys = items.mapTo(HashSet()) { it.stableKey() }
+    val newItems = page.items.filter { item -> seenKeys.add(item.stableKey()) }
+    val pagination = nextCatalogPaginationState(
+        supportsPagination = supportsPagination,
+        requestedSkip = requestedSkip,
+        page = page,
+        loadedNewItems = newItems.isNotEmpty(),
+        consecutiveDuplicatePages = consecutiveDuplicatePages,
+    )
+    return copy(
+        items = items + newItems,
+        nextSkip = pagination.nextSkip,
+        consecutiveDuplicatePages = pagination.consecutiveDuplicatePages,
+    )
 }

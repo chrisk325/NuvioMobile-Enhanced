@@ -5,7 +5,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import com.nuvio.app.core.ui.NuvioShelfSection
@@ -16,6 +20,8 @@ import com.nuvio.app.features.home.HomeCatalogSection
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.home.stableKey
 import com.nuvio.app.features.watching.application.WatchingState
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 
 @Composable
 fun HomeCatalogRowSection(
@@ -29,6 +35,7 @@ fun HomeCatalogRowSection(
     onPosterClick: ((MetaPreview) -> Unit)? = null,
     onPosterLongClick: ((MetaPreview) -> Unit)? = null,
     usePosterCache: Boolean = false,
+    onLoadMore: (() -> Unit)? = null,
 ) {
     if (sectionPadding != null) {
         HomeCatalogRowSectionContent(
@@ -42,6 +49,7 @@ fun HomeCatalogRowSection(
             onPosterClick = onPosterClick,
             onPosterLongClick = onPosterLongClick,
             usePosterCache = usePosterCache,
+            onLoadMore = onLoadMore,
         )
     } else {
         BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
@@ -56,6 +64,7 @@ fun HomeCatalogRowSection(
                 onPosterClick = onPosterClick,
                 onPosterLongClick = onPosterLongClick,
                 usePosterCache = usePosterCache,
+                onLoadMore = onLoadMore,
             )
         }
     }
@@ -73,6 +82,7 @@ private fun HomeCatalogRowSectionContent(
     onPosterClick: ((MetaPreview) -> Unit)?,
     onPosterLongClick: ((MetaPreview) -> Unit)?,
     usePosterCache: Boolean,
+    onLoadMore: (() -> Unit)?,
 ) {
     val posterCardStyle = rememberPosterCardStyleUiState()
     val rowState = rememberLazyListState()
@@ -83,6 +93,21 @@ private fun HomeCatalogRowSectionContent(
         }
     }
     PosterRowImagePrefetchEffect(state = rowState, targets = prefetchTargets, usePosterCache = usePosterCache)
+    if (onLoadMore != null) {
+        val currentOnLoadMore by rememberUpdatedState(onLoadMore)
+        // Restarts whenever a page is appended (or the cursor moves past a fully filtered page),
+        // so a user parked at the end keeps pulling pages.
+        LaunchedEffect(rowState, entries.size, section.nextSkip) {
+            snapshotFlow {
+                val layoutInfo = rowState.layoutInfo
+                val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@snapshotFlow false
+                lastVisibleIndex >= layoutInfo.totalItemsCount - HOME_ROW_LOAD_MORE_THRESHOLD
+            }
+                .distinctUntilChanged()
+                .filter { nearEnd -> nearEnd }
+                .collect { currentOnLoadMore() }
+        }
+    }
 
     NuvioShelfSection(
         title = section.title,
@@ -109,3 +134,6 @@ private fun HomeCatalogRowSectionContent(
         )
     }
 }
+
+/** Start fetching the next page while this many posters are still ahead of the viewport. */
+private const val HOME_ROW_LOAD_MORE_THRESHOLD = 6
