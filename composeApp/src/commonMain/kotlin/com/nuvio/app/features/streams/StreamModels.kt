@@ -327,6 +327,7 @@ data class StreamsUiState(
     val isDirectAutoPlayFlow: Boolean = false,
     val showDirectAutoPlayOverlay: Boolean = false,
     val overlayMessage: String? = null,
+    val smartAutoPlaySearch: SmartAutoPlaySearch? = null,
 ) {
     val filteredGroups: List<AddonStreamGroup>
         get() = if (selectedFilter == null) groups
@@ -338,3 +339,9 @@ data class StreamsUiState(
     val hasAnyStreams: Boolean
         get() = groups.any { it.streams.isNotEmpty() }
 }
+
+data class SmartAutoPlaySearch(
+    val loadedSources: Int,
+    val totalSources: Int,
+    val candidateSummary: String?,
+)

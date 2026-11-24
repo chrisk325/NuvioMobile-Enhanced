@@ -347,6 +347,7 @@ fun StreamsScreen(
                 },
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
                 onRefresh = reloadStreams,
+                backgroundMode = streamDisplaySettings.backgroundMode,
             )
         } else {
             MobileStreamsLayout(
@@ -529,6 +530,23 @@ private fun MobileStreamsLayout(
                         onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
                         onRefresh = onRefresh,
                     )
+                    val smartSettings by SmartStreamSettingsRepository.state.collectAsStateWithLifecycle()
+                    val smartStreams = if (smartSettings.smartSorting) {
+                        rememberSmartStreams(
+                            listState = rememberStreamSearchResult(uiState, searchQuery, showSearchField).uiState,
+                            allState = uiState,
+                            debridEnabled = debridEnabled,
+                            isEpisode = isEpisode,
+                        ).also { state ->
+                            SmartStreamControls(
+                                state = state,
+                                onPlay = { stream -> onStreamSelected(stream, resumePositionMs, resumeProgressFraction) },
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                    } else {
+                        null
+                    }
 
                     if (showSearchField) {
                         StreamSearchField(
@@ -543,9 +561,15 @@ private fun MobileStreamsLayout(
                         StreamSearchEmptyBlock(modifier = Modifier.weight(1f))
                         return@Column
                     }
+                    if (smartStreams?.result?.emptyBecauseOfFilters == true) {
+                        SmartFiltersEmptyBlock(modifier = Modifier.weight(1f))
+                        return@Column
+                    }
 
                     StreamList(
-                        uiState = listUiState.uiState,
+                        uiState = smartStreams?.result?.listState ?: listUiState.uiState,
+                        smartStreams = smartStreams?.result?.sortedStreams,
+                        bestStream = smartStreams?.result?.best?.stream,
                         debridEnabled = debridEnabled,
                         appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                         onStreamSelected = onStreamSelected,
@@ -786,6 +810,9 @@ internal fun StreamList(
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
     modifier: Modifier = Modifier,
+    smartStreams: List<StreamItem>? = null,
+    bestStream: StreamItem? = null,
+    header: (@Composable () -> Unit)? = null,
 ) {
     val filteredGroups = uiState.filteredGroups
     val hasGroups = filteredGroups.isNotEmpty()
@@ -802,8 +829,12 @@ internal fun StreamList(
         StreamBadgeSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
     val pinnedSourceIds by rememberPinnedStreamSourceIds()
-    val pinnedFirst = remember(filteredGroups, pinnedSourceIds) {
-        splitPinnedSources(filteredGroups, pinnedSourceIds)
+    val pinnedFirst = remember(filteredGroups, pinnedSourceIds, smartStreams) {
+        if (smartStreams != null) {
+            PinnedFirstStreamGroups(emptyList(), emptyList())
+        } else {
+            splitPinnedSources(filteredGroups, pinnedSourceIds)
+        }
     }
 
     val listState = rememberLazyListState()
@@ -826,6 +857,9 @@ internal fun StreamList(
         ),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
+        header?.let { listHeader ->
+            item(key = "list_header", contentType = "list_header") { listHeader() }
+        }
         sharedStream?.let { shared ->
             item(key = "shared_stream") {
                 Column {
@@ -897,6 +931,22 @@ internal fun StreamList(
                         badgePlacement = streamBadgeSettings.badgePlacement,
                         torrentNotSupportedText = torrentNotSupportedText,
                         fetchingText = fetchingText,
+                        onStreamSelected = onStreamSelected,
+                        onStreamLongPress = onStreamLongPress,
+                        resumePositionMs = resumePositionMs,
+                        resumeProgressFraction = resumeProgressFraction,
+                    )
+                }
+                if (smartStreams != null) {
+                    smartSortedStreamSection(
+                        streams = smartStreams,
+                        bestStream = bestStream,
+                        debridEnabled = debridEnabled,
+                        appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                        showFileSizeBadges = streamBadgeSettings.showFileSizeBadges,
+                        showAddonLogo = streamBadgeSettings.showAddonLogo,
+                        badgePlacement = streamBadgeSettings.badgePlacement,
+                        torrentNotSupportedText = torrentNotSupportedText,
                         onStreamSelected = onStreamSelected,
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
