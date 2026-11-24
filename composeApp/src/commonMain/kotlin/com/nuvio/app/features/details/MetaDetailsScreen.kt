@@ -45,6 +45,7 @@ import com.nuvio.app.features.ratings.seasonUserRatingTarget
 import com.nuvio.app.features.ratings.userRatingTarget
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAddCheckCircle
@@ -120,6 +121,7 @@ import com.nuvio.app.features.details.components.DetailCommentsSection
 import com.nuvio.app.features.details.components.DetailEpisodeRatingMap
 import com.nuvio.app.features.details.components.hasEpisodeRatingMap
 import com.nuvio.app.features.details.components.CinematicHeaderBackdrop
+import com.nuvio.app.features.details.components.EpisodeDescriptionOverlay
 import com.nuvio.app.features.details.components.DetailFloatingHeader
 import com.nuvio.app.features.details.components.DetailHero
 import com.nuvio.app.features.details.components.DetailMetaInfo
@@ -272,6 +274,7 @@ fun MetaDetailsScreen(
     var observedOfflineState by remember(type, id) { mutableStateOf(false) }
     var selectedEpisodeForActions by remember(type, id) { mutableStateOf<MetaVideo?>(null) }
     var selectedEpisodeZoomAnchor by remember(type, id) { mutableStateOf<PosterZoomAnchor?>(null) }
+    var selectedEpisodeForDescription by remember(type, id) { mutableStateOf<MetaVideo?>(null) }
     val episodeOverlayBackdrop = rememberNuvioBackdrop()
     val cinematicArtworkBackdrop = rememberNuvioBackdrop()
     val cinematicContentBackdrop = rememberNuvioBackdrop()
@@ -445,7 +448,7 @@ fun MetaDetailsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (selectedEpisodeZoomAnchor != null) {
+                    if (selectedEpisodeZoomAnchor != null || selectedEpisodeForDescription != null) {
                         Modifier.nuvioBackdropSource(episodeOverlayBackdrop)
                     } else {
                         Modifier
@@ -1570,6 +1573,9 @@ fun MetaDetailsScreen(
                                 arePreviousEpisodesWatched = arePreviousEpisodesWatched,
                                 isSeasonWatched = isSeasonWatched,
                                 onDismiss = { selectedEpisodeForActions = null },
+                                onViewDescription = {
+                                    selectedEpisodeForDescription = selectedEpisode
+                                },
                                 onToggleWatched = {
                                     WatchingActions.toggleEpisodeWatched(
                                         meta = meta,
@@ -1912,6 +1918,15 @@ fun MetaDetailsScreen(
                 actions = buildList {
                     add(
                         PosterZoomOverlayAction(
+                            icon = Icons.Default.Description,
+                            label = stringResource(Res.string.episode_view_full_description),
+                            onSelected = {
+                                selectedEpisodeForDescription = selectedEpisode
+                            },
+                        ),
+                    )
+                    add(
+                        PosterZoomOverlayAction(
                             icon = Icons.Default.CheckCircle,
                             label = if (isSelectedEpisodeWatched) {
                                 stringResource(Res.string.episode_mark_unwatched)
@@ -2030,6 +2045,29 @@ fun MetaDetailsScreen(
                     selectedEpisodeForActions = null
                     selectedEpisodeZoomAnchor = null
                 },
+            )
+        }
+
+        val descriptionMeta = displayedMeta
+        val descriptionEpisode = selectedEpisodeForDescription
+        if (descriptionMeta != null && descriptionEpisode != null) {
+            val isDescriptionEpisodeWatched = remember(descriptionMeta, descriptionEpisode, watchedUiState.watchedKeys, progressByVideoId) {
+                isEpisodeWatchedForActions(
+                    meta = descriptionMeta,
+                    episode = descriptionEpisode,
+                    watchedKeys = watchedUiState.watchedKeys,
+                    progressByVideoId = progressByVideoId,
+                )
+            }
+            EpisodeDescriptionOverlay(
+                episode = descriptionEpisode,
+                seasonLabel = descriptionEpisode.season?.let {
+                    stringResource(Res.string.episodes_season, it)
+                } ?: stringResource(Res.string.episodes_specials),
+                fallbackImageUrl = descriptionMeta.background ?: descriptionMeta.poster,
+                blurArtwork = metaScreenSettingsUiState.blurUnwatchedEpisodes && !isDescriptionEpisodeWatched,
+                backdrop = episodeOverlayBackdrop,
+                onDismissed = { selectedEpisodeForDescription = null },
             )
         }
 

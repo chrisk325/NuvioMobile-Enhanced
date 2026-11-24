@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlaylistAddCheckCircle
@@ -51,6 +52,7 @@ fun EpisodeWatchedActionSheet(
     onPlayManually: (() -> Unit)? = null,
     userRating: Int? = null,
     onRate: (() -> Unit)? = null,
+    onViewDescription: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
@@ -73,6 +75,21 @@ fun EpisodeWatchedActionSheet(
                 seasonLabel = seasonLabel,
             )
             NuvioBottomSheetDivider()
+            if (onViewDescription != null) {
+                NuvioBottomSheetActionRow(
+                    icon = Icons.Default.Description,
+                    title = stringResource(Res.string.episode_view_full_description),
+                    onClick = {
+                        // Open only once the sheet is gone so the overlay isn't drawn under it.
+                        coroutineScope.launch {
+                            dismissNuvioBottomSheet(sheetState = sheetState) {
+                                onDismiss()
+                                onViewDescription()
+                            }
+                        }
+                    },
+                )
+            }
             NuvioBottomSheetActionRow(
                 icon = Icons.Default.CheckCircle,
                 title = if (isEpisodeWatched) {

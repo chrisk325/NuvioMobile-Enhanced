@@ -1955,6 +1955,9 @@
     <string name="episode_mark_previous_seasons_watched">Mark previous seasons as watched</string>
     <string name="episode_mark_unwatched">Mark as unwatched</string>
     <string name="episode_mark_watched">Mark as watched</string>
+    <string name="episode_view_full_description">View full description</string>
+    <string name="episode_description_title">Description</string>
+    <string name="episode_description_unavailable">No description available for this episode.</string>
     <string name="home_continue_watching_up_next">Next Up</string>
     <string name="home_continue_watching_watched">%1$s watched</string>
     <string name="home_continue_watching_hours_minutes_left">%1$dh %2$dm left</string>
