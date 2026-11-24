@@ -1,6 +1,8 @@
 package com.nuvio.app.features.library
 
 import androidx.compose.material.icons.rounded.CalendarMonth
+import com.nuvio.app.core.ui.rememberGlideFlingBehavior
+import com.nuvio.app.core.ui.rememberRowGlideFlingBehavior
 import com.nuvio.app.core.ui.background.isGlassUiActive
 import com.nuvio.app.core.ui.background.appGlassBackdrop
 import com.nuvio.app.core.ui.background.appBackgroundCover
@@ -601,6 +603,7 @@ fun LibraryScreen(
                 topPadding = 0.dp,
                 listState = listState,
                 autoHidesNativeTabBar = true,
+                flingBehavior = rememberGlideFlingBehavior(),
             ) {
 
             if (sourceMode == LibraryViewMode.Cloud) {
@@ -2062,6 +2065,7 @@ private fun LazyListScope.librarySections(
             modifier = libraryContentTransitionModifier(),
             headerHorizontalPadding = 16.dp,
             rowContentPadding = PaddingValues(horizontal = 16.dp),
+            flingBehavior = rememberRowGlideFlingBehavior(),
             onViewAllClick = section.source
                 ?.takeIf { it.items.size > LIBRARY_SECTION_PREVIEW_LIMIT }
                 ?.let { source -> onSectionViewAllClick?.let { { it(source, sortOption) } } },

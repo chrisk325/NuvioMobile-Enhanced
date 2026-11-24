@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.DisintegratingContainer
-import com.nuvio.app.core.ui.rememberGlideFlingBehavior
+import com.nuvio.app.core.ui.rememberRowGlideFlingBehavior
 import com.nuvio.app.core.ui.DisintegrationRequest
 import com.nuvio.app.core.ui.NuvioCardDepthSurface
 import com.nuvio.app.core.ui.NuvioProgressBar
@@ -352,7 +352,7 @@ private fun HomeContinueWatchingSectionContent(
             modifier = modifier,
             headerHorizontalPadding = sectionPadding,
             rowContentPadding = PaddingValues(horizontal = sectionPadding),
-            flingBehavior = rememberGlideFlingBehavior(),
+            flingBehavior = rememberRowGlideFlingBehavior(),
             itemSpacing = layout.itemGap,
             key = { entry -> entry.key },
             animatePlacement = true,
