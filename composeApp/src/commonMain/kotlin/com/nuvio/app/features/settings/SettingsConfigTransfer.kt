@@ -784,6 +784,7 @@ internal object SettingsConfigTransfer {
         PlayerSettingsStorage.loadUseLibass()?.let { put("use_libass", encodeSyncBoolean(it)) }
         PlayerSettingsStorage.loadLibassRenderType()?.let { put("libass_render_type", encodeSyncString(it)) }
         PlayerSettingsStorage.loadUseLibmpvAss()?.let { put("use_libmpv_ass", encodeSyncBoolean(it)) }
+        PlayerSettingsStorage.loadLibmpvAssGpu()?.let { put("libmpv_ass_gpu", encodeSyncBoolean(it)) }
         PlayerSettingsStorage.loadIosVideoOutputPreset()?.let { put("ios_video_output_preset", encodeSyncString(it)) }
         PlayerSettingsStorage.loadIosToneMappingMode()?.let { put("ios_tone_mapping_mode", encodeSyncString(it)) }
         PlayerSettingsStorage.loadIosTargetPrimaries()?.let { put("ios_target_primaries", encodeSyncString(it)) }
@@ -923,6 +924,7 @@ internal object SettingsConfigTransfer {
         payload.decodeSyncBoolean("use_libass")?.let { PlayerSettingsStorage.saveUseLibass(it) }
         payload.decodeSyncString("libass_render_type")?.let { PlayerSettingsStorage.saveLibassRenderType(it) }
         payload.decodeSyncBoolean("use_libmpv_ass")?.let { PlayerSettingsStorage.saveUseLibmpvAss(it) }
+        payload.decodeSyncBoolean("libmpv_ass_gpu")?.let { PlayerSettingsStorage.saveLibmpvAssGpu(it) }
         payload.decodeSyncString("ios_video_output_preset")?.let { PlayerSettingsStorage.saveIosVideoOutputPreset(it) }
         payload.decodeSyncString("ios_tone_mapping_mode")?.let { PlayerSettingsStorage.saveIosToneMappingMode(it) }
         payload.decodeSyncString("ios_target_primaries")?.let { PlayerSettingsStorage.saveIosTargetPrimaries(it) }

@@ -1284,6 +1284,8 @@
     <string name="settings_playback_enable_libass_description">Experimental: renderização avançada de ASS/SSA (estilos, posicionamento, animações)</string>
     <string name="settings_playback_enable_libmpv_ass">Utilizar o libass do libmpv para legendas ASS/SSA</string>
     <string name="settings_playback_enable_libmpv_ass_description">Experimental: processa ASS/SSA através do libass integrado no libmpv numa camada sincronizada por fotogramas, substituindo a renderização do ExoPlayer</string>
+    <string name="settings_playback_libmpv_ass_gpu">Desenhar legendas ASS do libmpv na GPU</string>
+    <string name="settings_playback_libmpv_ass_gpu_description">Combina as legendas ASS/SSA na placa gráfica em vez do processador, o que usa menos tempo de processador. Desative se as legendas parecerem incorretas</string>
     <string name="settings_playback_external_player">Player externo</string>
     <string name="settings_playback_external_player_app">App de player externo</string>
     <string name="settings_playback_external_player_description_android">Abrir nova reprodução com o app de vídeo padrão do Android ou seletor do sistema.</string>

@@ -1436,6 +1436,10 @@ private fun ExoPlayerSurface(
         onDispose { aiostreamsAss?.unbind(exoPlayer) }
     }
 
+    LaunchedEffect(aiostreamsAss, playerSettings.libmpvAssGpu) {
+        aiostreamsAss?.setGpu(playerSettings.libmpvAssGpu)
+    }
+
     LaunchedEffect(aiostreamsAss, subtitleDelayMs) {
         aiostreamsAss?.setSubtitleDelayMs(subtitleDelayMs)
     }

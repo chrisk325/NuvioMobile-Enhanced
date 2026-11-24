@@ -129,6 +129,7 @@ data class PlayerSettingsUiState(
     val miniPlayerEnabled: Boolean = true,
     val privateViewingEnabled: Boolean = false,
     val useLibmpvAss: Boolean = false,
+    val libmpvAssGpu: Boolean = true,
     val useLibass: Boolean = true,
     val libassRenderType: String = "CUES",
     val libassRenderScale: String = "FULL",
@@ -267,6 +268,7 @@ object PlayerSettingsRepository {
     private var miniPlayerEnabled = true
     private var privateViewingEnabled = false
     private var useLibmpvAss = false
+    private var libmpvAssGpu = true
     private var useLibass = true
     private var libassRenderType = "OVERLAY_OPEN_GL"
     private var libassRenderScale = "FULL"
@@ -391,6 +393,7 @@ object PlayerSettingsRepository {
         miniPlayerEnabled = true
         privateViewingEnabled = false
         useLibmpvAss = false
+        libmpvAssGpu = true
         useLibass = true
         libassRenderType = "OVERLAY_OPEN_GL"
         libassRenderScale = "FULL"
@@ -583,6 +586,7 @@ object PlayerSettingsRepository {
         miniPlayerEnabled = PlayerSettingsStorage.loadMiniPlayerEnabled() ?: true
         privateViewingEnabled = PlayerSettingsStorage.loadPrivateViewingEnabled() ?: false
         useLibmpvAss = PlayerSettingsStorage.loadUseLibmpvAss() ?: false
+        libmpvAssGpu = PlayerSettingsStorage.loadLibmpvAssGpu() ?: true
         useLibass = PlayerSettingsStorage.loadUseLibass() ?: true
         libassRenderType = PlayerSettingsStorage.loadLibassRenderType() ?: "CUES"
         libassRenderScale = PlayerSettingsStorage.loadLibassRenderScale() ?: "FULL"
@@ -1405,6 +1409,14 @@ object PlayerSettingsRepository {
         PlayerSettingsStorage.saveUseLibmpvAss(enabled)
     }
 
+    fun setLibmpvAssGpu(enabled: Boolean) {
+        ensureLoaded()
+        if (libmpvAssGpu == enabled) return
+        libmpvAssGpu = enabled
+        publish()
+        PlayerSettingsStorage.saveLibmpvAssGpu(enabled)
+    }
+
     fun setLibassRenderScale(scale: String) {
         ensureLoaded()
         if (libassRenderScale == scale) return
@@ -1683,6 +1695,7 @@ object PlayerSettingsRepository {
             useLibass = useLibass,
             libassRenderType = libassRenderType,
             useLibmpvAss = useLibmpvAss,
+            libmpvAssGpu = libmpvAssGpu,
             libassRenderScale = libassRenderScale,
             libassRenderMode = libassRenderMode,
             iosVideoOutputPreset = iosVideoOutputPreset,

@@ -188,6 +188,15 @@ internal fun PlaybackSubtitleSettings(
                         isTablet = isTablet,
                         onCheckedChange = PlayerSettingsRepository::setUseLibmpvAss,
                     )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_playback_libmpv_ass_gpu),
+                        description = stringResource(Res.string.settings_playback_libmpv_ass_gpu_description),
+                        checked = settings.libmpvAssGpu,
+                        enabled = subtitleRenderingEnabled && settings.useLibmpvAss,
+                        isTablet = isTablet,
+                        onCheckedChange = PlayerSettingsRepository::setLibmpvAssGpu,
+                    )
                 }
             }
         }

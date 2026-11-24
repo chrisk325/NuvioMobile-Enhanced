@@ -792,6 +792,7 @@ internal fun settingsSearchEntries(
                 PlaybackSearchRow("libass-render-mode", stringResource(Res.string.settings_playback_render_mode), stringResource(Res.string.settings_playback_render_mode_description)),
                 PlaybackSearchRow("libass-render", stringResource(Res.string.settings_playback_render_scale)),
                 PlaybackSearchRow("libmpv-ass", stringResource(Res.string.settings_playback_enable_libmpv_ass), stringResource(Res.string.settings_playback_enable_libmpv_ass_description)),
+                PlaybackSearchRow("libmpv-ass-gpu", stringResource(Res.string.settings_playback_libmpv_ass_gpu), stringResource(Res.string.settings_playback_libmpv_ass_gpu_description)),
             ),
         )
     }
