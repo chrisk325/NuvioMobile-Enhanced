@@ -105,6 +105,8 @@ internal data class MediaSource(
     @SerialName("Type") val type: String? = null,
     @SerialName("Name") val name: String? = null,
     @SerialName("Path") val path: String? = null,
+    @SerialName("Protocol") val protocol: String? = null,
+    @SerialName("IsRemote") val isRemote: Boolean = false,
     @SerialName("Container") val container: String? = null,
     @SerialName("Size") val size: Long? = null,
     @SerialName("ETag") val eTag: String? = null,
@@ -116,6 +118,14 @@ internal data class MediaSource(
 ) {
     val isPlaceholder: Boolean
         get() = type.equals("Placeholder", ignoreCase = true)
+
+    /** The source's own http(s) address, when the server says it streams one from elsewhere. */
+    val remoteUrl: String?
+        get() = path?.trim()?.takeIf {
+            !isPlaceholder &&
+                (isRemote || protocol.equals("Http", ignoreCase = true)) &&
+                (it.startsWith("https://", ignoreCase = true) || it.startsWith("http://", ignoreCase = true))
+        }
 }
 
 @Serializable

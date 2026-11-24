@@ -100,6 +100,78 @@ class MediaBrowserPlaybackTest {
         assertEquals(ServerFailure.UNSUPPORTED, unsupported.failure)
     }
 
+    private val addonRequest = request.copy(
+        target = request.target.copy(remoteUrl = "https://debrid.example.com/play/abc.mkv"),
+    )
+
+    @Test
+    fun addonServerPlaysListedSourceWhenSearchComesBackEmpty() {
+        val playback = jellyfin.playbackSession(
+            session,
+            addonRequest,
+            json.decodeFromString(PlaybackInfoResult.serializer(), """{"PlaySessionId": "ps2", "MediaSources": [], "ErrorCode": "NoCompatibleStream"}"""),
+            deviceId = "d1",
+            addonBacked = true,
+        )
+        assertEquals("https://debrid.example.com/play/abc.mkv", playback.url)
+        assertEquals(ServerPlayMethod.DIRECT_PLAY, playback.playMethod)
+        assertEquals("ms1", playback.mediaSourceId)
+        assertEquals("ps2", playback.playSessionId)
+    }
+
+    @Test
+    fun addonServerKeepsPickedSourceWhenServerListsOtherFiles() {
+        val playback = jellyfin.playbackSession(
+            session,
+            addonRequest,
+            info("""{"Id": "other", "SupportsDirectPlay": true}"""),
+            deviceId = "d1",
+            addonBacked = true,
+        )
+        assertEquals("https://debrid.example.com/play/abc.mkv", playback.url)
+    }
+
+    @Test
+    fun addonServerStillUsesServerWhenSourceIsListed() {
+        val playback = jellyfin.playbackSession(session, addonRequest, info("""{"Id": "ms1", "SupportsDirectPlay": true}"""), "d1", addonBacked = true)
+        assertTrue(playback.url.startsWith("https://media.example.com/jellyfin/Videos/item1/stream?static=true&mediaSourceId=ms1"))
+    }
+
+    @Test
+    fun addonFallbackHonoursRefusalsAndPlainServers() {
+        val denied = assertFailsWith<ServerException> {
+            jellyfin.playbackSession(
+                session,
+                addonRequest,
+                json.decodeFromString(PlaybackInfoResult.serializer(), """{"ErrorCode": "NotAllowed"}"""),
+                "d1",
+                addonBacked = true,
+            )
+        }
+        assertEquals(ServerFailure.FORBIDDEN, denied.failure)
+        val plain = assertFailsWith<ServerException> {
+            jellyfin.playbackSession(
+                session,
+                addonRequest,
+                json.decodeFromString(PlaybackInfoResult.serializer(), """{"ErrorCode": "NoCompatibleStream"}"""),
+                "d1",
+                addonBacked = false,
+            )
+        }
+        assertEquals(ServerFailure.UNSUPPORTED, plain.failure)
+    }
+
+    @Test
+    fun remoteUrlOnlyForRemoteHttpSources() {
+        fun source(body: String) = json.decodeFromString(MediaSource.serializer(), body)
+        assertEquals(
+            "https://debrid.example.com/a.mkv",
+            source("""{"Id": "a", "Protocol": "Http", "IsRemote": true, "Path": "https://debrid.example.com/a.mkv"}""").remoteUrl,
+        )
+        assertEquals(null, source("""{"Id": "b", "Protocol": "File", "Path": "/media/movies/b.mkv"}""").remoteUrl)
+        assertEquals(null, source("""{"Id": "c", "Type": "Placeholder", "IsRemote": true, "Path": "https://x.example/p"}""").remoteUrl)
+    }
+
     private val embySession = ServerSession(
         connection = session.connection.copy(providerId = "emby", address = "https://media.example.com"),
         token = "secret",

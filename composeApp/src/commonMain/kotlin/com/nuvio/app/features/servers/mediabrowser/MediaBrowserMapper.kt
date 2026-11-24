@@ -136,7 +136,7 @@ internal class MediaBrowserMapper(
             // the generated media-info line beneath it.
             val namedTitle = source.name?.takeIf { it.isNotBlank() && sources.size > 1 }
             ServerCandidate(
-                target = ServerPlaybackTarget(item = itemRef, mediaSourceId = source.id),
+                target = ServerPlaybackTarget(item = itemRef, mediaSourceId = source.id, remoteUrl = source.remoteUrl),
                 title = namedTitle
                     ?: video?.let(::resolutionLabel)
                     ?: source.name.orEmpty(),

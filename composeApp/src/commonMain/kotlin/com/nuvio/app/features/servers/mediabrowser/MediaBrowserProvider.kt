@@ -624,16 +624,36 @@ internal abstract class MediaBrowserProvider(
             body = client.json.encodeToString(PlaybackInfoRequest.serializer(), body),
         )
         val info = client.json.decodeFromString(PlaybackInfoResult.serializer(), response.body)
-        return playbackSession(session, request, info, client.deviceId)
+        val addonBacked = request.target.remoteUrl != null && isAioStreams(session)
+        return playbackSession(session, request, info, client.deviceId, addonBacked)
     }
 
+    /**
+     * [addonBacked]: the server is AIOMetadata or AIOStreams, whose PlaybackInfo searches the stream addon again once
+     * its cache has lapsed. When that search times out or no longer lists the picked source, the server answers
+     * NoCompatibleStream (or with other files), so the source's own address from the listing is played instead.
+     */
     internal fun playbackSession(
         session: ServerSession,
         request: ServerPlaybackRequest,
         info: PlaybackInfoResult,
         deviceId: String,
+        addonBacked: Boolean = false,
     ): ServerPlaybackSession {
         val itemId = request.target.item.itemId
+        if (info.errorCode == "NotAllowed") throw ServerException(ServerFailure.FORBIDDEN)
+        val remoteUrl = request.target.remoteUrl?.takeIf { addonBacked }
+        if (remoteUrl != null && (info.errorCode != null || info.mediaSources.none { it.id == request.target.mediaSourceId })) {
+            return ServerPlaybackSession(
+                target = request.target,
+                mediaSourceId = request.target.mediaSourceId ?: itemId,
+                url = remoteUrl,
+                headers = emptyMap(),
+                subtitles = emptyList(),
+                playSessionId = info.playSessionId,
+                playMethod = ServerPlayMethod.DIRECT_PLAY,
+            )
+        }
         when (info.errorCode) {
             null -> Unit
             "NotAllowed" -> throw ServerException(ServerFailure.FORBIDDEN)
