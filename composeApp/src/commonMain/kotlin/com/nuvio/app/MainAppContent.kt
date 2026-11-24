@@ -1872,10 +1872,10 @@ internal fun MainAppContent(
                         )
                     }
                 }
-                entry<EntityBrowseRoute> { route ->
+                entry<EntityBrowseRoute>(metadata = PageSlideTransition.metadata) { route ->
                     EntityDestination(route = route, navController = navController)
                 }
-                entry<StreamRoute> { route ->
+                entry<StreamRoute>(metadata = PageSlideTransition.metadata) { route ->
                     OpaqueAppSurfaces {
                         StreamDestination(
                             route = route,
@@ -1943,22 +1943,22 @@ internal fun MainAppContent(
                         onPosterLongClick = openPosterActions,
                     )
                 }
-                entry<HomescreenSettingsRoute> { route ->
+                entry<HomescreenSettingsRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsDestination(route, navController) { onBack ->
                         HomescreenSettingsScreen(onBack = onBack)
                     }
                 }
-                entry<MetaScreenSettingsRoute> { route ->
+                entry<MetaScreenSettingsRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsDestination(route, navController) { onBack ->
                         MetaScreenSettingsScreen(onBack = onBack)
                     }
                 }
-                entry<ContinueWatchingSettingsRoute> { route ->
+                entry<ContinueWatchingSettingsRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsDestination(route, navController) { onBack ->
                         ContinueWatchingSettingsScreen(onBack = onBack)
                     }
                 }
-                entry<SettingsPageRoute> { route ->
+                entry<SettingsPageRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsRootDestination(
                         route = route,
                         navController = navController,
@@ -1974,7 +1974,7 @@ internal fun MainAppContent(
                         onEditProfile = pushEditProfile,
                     )
                 }
-                entry<ProfileEditRoute> { route ->
+                entry<ProfileEditRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsDestination(route, navController) { onBack ->
                         ProfileEditScreen(
                             profile = ProfileRepository.state.value.activeProfile,
@@ -1983,34 +1983,33 @@ internal fun MainAppContent(
                         )
                     }
                 }
-                entry<DownloadsRoute> { route ->
+                entry<DownloadsRoute>(metadata = PageSlideTransition.metadata) { route ->
                     DownloadsDestination(
                         route = route,
                         navController = navController,
-                        useNativeNavigation = useNativeNavigation,
                         onOpenDownload = ::openDownloadedItem,
                     )
                 }
-                entry<DownloadShowRoute> { route ->
+                entry<DownloadShowRoute>(metadata = PageSlideTransition.metadata) { route ->
                     DownloadShowDestination(
                         route = route,
                         navController = navController,
                         onOpenDownload = ::openDownloadedItem,
                     )
                 }
-                entry<AddonsSettingsRoute> { route ->
+                entry<AddonsSettingsRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsDestination(route, navController) { onBack ->
                         AddonsSettingsScreen(onBack = onBack)
                     }
                 }
                 if (AppFeaturePolicy.pluginsEnabled) {
-                    entry<PluginsSettingsRoute> { route ->
+                    entry<PluginsSettingsRoute>(metadata = PageSlideTransition.metadata) { route ->
                         SettingsDestination(route, navController) { onBack ->
                             PluginsSettingsScreen(onBack = onBack)
                         }
                     }
                 }
-                entry<PartyRoute> { route ->
+                entry<PartyRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsDestination(route, navController) { onBack ->
                         PartyScreen(
                             initialCode = route.code,
@@ -2019,12 +2018,12 @@ internal fun MainAppContent(
                         )
                     }
                 }
-                entry<AccountSettingsRoute> { route ->
+                entry<AccountSettingsRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsDestination(route, navController) { onBack ->
                         AccountSettingsScreen(onBack = onBack)
                     }
                 }
-                entry<SupportersContributorsSettingsRoute> { route ->
+                entry<SupportersContributorsSettingsRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsDestination(route, navController) { onBack ->
                         if (AppFeaturePolicy.supportersContributorsPageEnabled) {
                             SupportersContributorsSettingsScreen(onBack = onBack)
@@ -2033,31 +2032,31 @@ internal fun MainAppContent(
                         }
                     }
                 }
-                entry<LicensesAttributionsSettingsRoute> { route ->
+                entry<LicensesAttributionsSettingsRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsDestination(route, navController) { onBack ->
                         LicensesAttributionsSettingsScreen(onBack = onBack)
                     }
                 }
-                entry<WhatsNewSettingsRoute> { route ->
+                entry<WhatsNewSettingsRoute>(metadata = PageSlideTransition.metadata) { route ->
                     SettingsDestination(route, navController) { onBack ->
                         WhatsNewSettingsScreen(onBack = onBack)
                     }
                 }
-                entry<CollectionsRoute> { route ->
+                entry<CollectionsRoute>(metadata = PageSlideTransition.metadata) { route ->
                     CollectionsDestination(
                         route = route,
                         navController = navController,
                         newCollectionTitle = newCollectionTitle,
                     )
                 }
-                entry<CollectionEditorRoute> { route ->
+                entry<CollectionEditorRoute>(metadata = PageSlideTransition.metadata) { route ->
                     CollectionEditorDestination(
                         route = route,
                         navController = navController,
                         useNativeNavigation = useNativeNavigation,
                     )
                 }
-                entry<CollectionEditorPageRoute> { route ->
+                entry<CollectionEditorPageRoute>(metadata = PageSlideTransition.metadata) { route ->
                     CollectionEditorPageDestination(
                         route = route,
                         navController = navController,
