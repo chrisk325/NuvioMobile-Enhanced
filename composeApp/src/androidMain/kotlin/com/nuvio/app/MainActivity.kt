@@ -10,6 +10,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.compositionContext
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.nuvio.app.core.auth.AuthStorage
 import com.nuvio.app.core.network.ServerConfigurationStorage
@@ -19,6 +21,7 @@ import com.nuvio.app.core.poster.CustomPosterUrlStorage
 import com.nuvio.app.core.storage.PlatformLocalAccountDataCleaner
 import com.nuvio.app.core.startup.StartupPreloader
 import com.nuvio.app.core.sync.SyncClientIdentityStorage
+import com.nuvio.app.core.ui.AppMotionDurationScale
 import com.nuvio.app.core.ui.CardDepthStyleStorage
 import com.nuvio.app.core.ui.NuvioSheetBackdrop
 import com.nuvio.app.core.ui.NuvioSheetBackdropHost
@@ -210,7 +213,14 @@ open class MainActivity : AppCompatActivity() {
 
     private fun showContent() {
         handleIncomingAppIntent(intent)
-        setContent {
+        // Recomposer with the app-wide animation slowdown. Compose dialogs/popups inherit it, and
+        // registering it on the decor view covers any other ComposeView in this window.
+        val recomposer = window.decorView.createLifecycleAwareWindowRecomposer(
+            coroutineContext = AppMotionDurationScale.get(applicationContext),
+            lifecycle = lifecycle,
+        )
+        window.decorView.compositionContext = recomposer
+        setContent(parent = recomposer) {
             val sheetBackdropSource = rememberNuvioBackdrop()
             val sheetBackdrop = remember(sheetBackdropSource) { NuvioSheetBackdrop(sheetBackdropSource) }
             NuvioSheetBackdropHost(sheetBackdrop = sheetBackdrop) {

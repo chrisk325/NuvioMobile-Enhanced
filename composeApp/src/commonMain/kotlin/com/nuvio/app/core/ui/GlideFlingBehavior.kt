@@ -29,34 +29,54 @@ internal expect val nuvioPlatformUsesGlideFling: Boolean
 private const val GlideVelocityBoost = 1.35f
 
 /**
- * Exponential decay rate in 1/s: velocity follows v(t) = v0 * e^(-rate * t).
+ * Exponential decay rate in 1/s for vertical page lists: velocity follows v(t) = v0 * e^(-rate * t).
  * Lower values glide longer. ~2.0 matches UIScrollView's "normal" deceleration.
  */
 private const val GlideDecayRatePerSecond = 2.5f
+
+/**
+ * Decay rate for horizontal title rows. Rows are only a few screens wide, so they brake
+ * harder than page lists; otherwise a normal flick runs straight into the end of the row.
+ * Distance is boost * v / rate, so 4.0 travels ~40% as far as the page glide's 2.5 at
+ * the same flick speed, and settles in roughly half the time.
+ */
+private const val RowGlideDecayRatePerSecond = 4.0f
 
 /** The glide ends once it slows below this speed (per second); below it motion is sub-pixel per frame. */
 private val GlideStopVelocity = 12.dp
 
 /**
- * Fling with an iOS-style exponential glide: a velocity boost on release, then an
- * ease-out where speed decays exponentially, so the list coasts and settles gently
- * instead of braking hard.
+ * Fling with an iOS-style exponential glide for vertical page lists: a velocity boost on
+ * release, then an ease-out where speed decays exponentially, so the list coasts and
+ * settles gently instead of braking hard.
  *
  * Falls back to [ScrollableDefaults.flingBehavior] on platforms where
  * [nuvioPlatformUsesGlideFling] is false.
  */
 @Composable
-fun rememberGlideFlingBehavior(): FlingBehavior {
+fun rememberGlideFlingBehavior(): FlingBehavior =
+    rememberGlideFlingBehavior(GlideVelocityBoost, GlideDecayRatePerSecond)
+
+/**
+ * The same glide as [rememberGlideFlingBehavior], tuned with a stronger slow-down for
+ * horizontal title rows.
+ */
+@Composable
+fun rememberRowGlideFlingBehavior(): FlingBehavior =
+    rememberGlideFlingBehavior(GlideVelocityBoost, RowGlideDecayRatePerSecond)
+
+@Composable
+private fun rememberGlideFlingBehavior(velocityBoost: Float, decayRatePerSecond: Float): FlingBehavior {
     if (!nuvioPlatformUsesGlideFling) return ScrollableDefaults.flingBehavior()
     val density = LocalDensity.current
-    return remember(density) {
+    return remember(density, velocityBoost, decayRatePerSecond) {
         val stopVelocityPx = with(density) { GlideStopVelocity.toPx() }
         GlideFlingBehavior(
             decay = ExponentialGlideDecaySpec(
-                ratePerSecond = GlideDecayRatePerSecond,
+                ratePerSecond = decayRatePerSecond,
                 absVelocityThreshold = stopVelocityPx,
             ).generateDecayAnimationSpec(),
-            velocityBoost = GlideVelocityBoost,
+            velocityBoost = velocityBoost,
         )
     }
 }

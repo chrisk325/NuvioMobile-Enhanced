@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.RectangleShape
+import com.nuvio.app.core.ui.nuvioAnimationSlowdown
 import com.nuvio.app.core.ui.background.appGlassBackdrop
 import com.nuvio.app.features.whatsnew.WhatsNewSettingsScreen
 import com.nuvio.app.navigation.LocalUseNativeNavigation
@@ -608,7 +609,7 @@ private fun MobileSettingsScreen(
             rootSearchVisible = true
             rootSearchRevealAnimating = true
             hapticScope.launch {
-                delay(SettingsSearchRevealHapticDelayMillis)
+                delay((SettingsSearchRevealHapticDelayMillis * nuvioAnimationSlowdown).toLong())
                 hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             }
         }
@@ -643,7 +644,7 @@ private fun MobileSettingsScreen(
 
         LaunchedEffect(rootSearchRevealAnimating) {
             if (rootSearchRevealAnimating) {
-                delay(SettingsSearchRevealAnimationMillis)
+                delay((SettingsSearchRevealAnimationMillis * nuvioAnimationSlowdown).toLong())
                 rootSearchRevealAnimating = false
             }
         }
@@ -1088,13 +1089,13 @@ private fun TabletSettingsScreen(
                 rootSearchVisible = true
                 rootSearchRevealAnimating = true
                 hapticScope.launch {
-                    delay(SettingsSearchRevealHapticDelayMillis)
+                    delay((SettingsSearchRevealHapticDelayMillis * nuvioAnimationSlowdown).toLong())
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 }
             }
             LaunchedEffect(rootSearchRevealAnimating) {
                 if (rootSearchRevealAnimating) {
-                    delay(SettingsSearchRevealAnimationMillis)
+                    delay((SettingsSearchRevealAnimationMillis * nuvioAnimationSlowdown).toLong())
                     rootSearchRevealAnimating = false
                 }
             }
