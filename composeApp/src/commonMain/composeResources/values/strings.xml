@@ -1175,6 +1175,9 @@
     <string name="settings_stream_addon_logo_title">Addon logo</string>
     <string name="settings_stream_addon_logo_description">Show addon logo and name next to stream sources.</string>
     <string name="settings_stream_search_title">Search bar</string>
+    <string name="settings_stream_card_text_size_title">Stream card text size</string>
+    <string name="settings_stream_card_text_size_description">Resize the formatted name and description text on stream cards.</string>
+    <string name="settings_stream_card_text_size_value">%1$d%</string>
     <string name="settings_stream_search_description">Show a filter field above the stream list to search by language, quality, codec or release group.</string>
     <string name="settings_stream_display_section">DISPLAY</string>
     <string name="streams_search_placeholder">Filter streams</string>

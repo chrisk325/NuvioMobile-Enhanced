@@ -988,6 +988,7 @@ internal object SettingsConfigTransfer {
         StreamBadgeSettingsStorage.loadShowInPlayer()?.let { put("show_in_player", encodeSyncBoolean(it)) }
         StreamBadgeSettingsStorage.loadStreamBackgroundMode()?.let { put("stream_background_mode", encodeSyncString(it)) }
         StreamBadgeSettingsStorage.loadStreamBadgePlacement()?.let { put("stream_badge_placement", encodeSyncString(it)) }
+        StreamBadgeSettingsStorage.loadStreamCardTextScale()?.let { put("stream_card_text_scale", encodeSyncInt(it)) }
         StreamBadgeSettingsStorage.loadPinnedStreamSources()?.let { put("pinned_stream_sources", encodeSyncString(it)) }
     }
 
@@ -998,6 +999,7 @@ internal object SettingsConfigTransfer {
         payload.decodeSyncBoolean("show_stream_search")?.let { StreamBadgeSettingsStorage.saveShowStreamSearch(it) }
         payload.decodeSyncBoolean("show_in_player")?.let { StreamBadgeSettingsStorage.saveShowInPlayer(it) }
         payload.decodeSyncString("stream_background_mode")?.let { StreamBadgeSettingsStorage.saveStreamBackgroundMode(it) }
+        payload.decodeSyncInt("stream_card_text_scale")?.let { StreamBadgeSettingsStorage.saveStreamCardTextScale(it) }
         payload.decodeSyncString("stream_badge_placement")?.let { StreamBadgeSettingsStorage.saveStreamBadgePlacement(it) }
         payload.decodeSyncString("pinned_stream_sources")?.let { StreamBadgeSettingsStorage.savePinnedStreamSources(it) }
     }

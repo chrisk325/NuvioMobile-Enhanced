@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -39,7 +40,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.SkeletonBlock
 import com.nuvio.app.isIos
@@ -75,6 +78,7 @@ internal fun StreamCard(
     outlined: Boolean = false,
 ) {
     val partyLabel = if (isCurrent) null else LocalStreamHighlight.current(stream)
+    val cardText = rememberStreamCardText()
     val cardShape = RoundedCornerShape(12.dp)
     val badgeImages = stream.badges.filter { it.imageURL.isNotBlank() }
     val hasBadges = badgeImages.isNotEmpty() || (showFileSizeBadges && stream.behaviorHints.videoSize != null)
@@ -137,17 +141,18 @@ internal fun StreamCard(
             StreamNameWithInstantService(
                 stream = stream,
                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                cardText = cardText,
             ) {
                 if (isCurrent && !currentLabel.isNullOrBlank()) {
                     Spacer(modifier = Modifier.width(8.dp))
-                    CurrentStreamBadge(label = currentLabel)
+                    CurrentStreamBadge(label = currentLabel, cardText = cardText)
                 }
                 if (partyLabel != null) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = partyLabel,
                         color = MaterialTheme.colorScheme.primary,
-                        fontSize = StreamCardText.subtitle,
+                        fontSize = cardText.subtitle,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -161,8 +166,8 @@ internal fun StreamCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = StreamCardText.subtitle,
-                        lineHeight = StreamCardText.subtitleLineHeight,
+                        fontSize = cardText.subtitle,
+                        lineHeight = cardText.subtitleLineHeight,
                         shadow = streamGlassTextShadow(),
                     ),
                     color = Color.White,
@@ -197,7 +202,7 @@ internal fun StreamCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = stream.addonName,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = StreamCardText.addon, shadow = streamGlassTextShadow()),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = cardText.addon, shadow = streamGlassTextShadow()),
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -248,12 +253,13 @@ private fun StreamCardBadgeRow(
 private fun StreamNameWithInstantService(
     stream: StreamItem,
     appendInstantServiceToDefaultName: Boolean,
+    cardText: StreamCardText,
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) {
     val nameStyle = MaterialTheme.typography.bodyMedium.copy(
-        fontSize = StreamCardText.name,
+        fontSize = cardText.name,
         fontWeight = FontWeight.Bold,
-        lineHeight = StreamCardText.nameLineHeight,
+        lineHeight = cardText.nameLineHeight,
         letterSpacing = 0.sp,
         shadow = streamGlassTextShadow(),
     )
@@ -303,7 +309,7 @@ private fun StreamNameWithInstantService(
 }
 
 @Composable
-private fun CurrentStreamBadge(label: String) {
+private fun CurrentStreamBadge(label: String, cardText: StreamCardText) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
@@ -313,7 +319,7 @@ private fun CurrentStreamBadge(label: String) {
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onPrimary,
-            fontSize = StreamCardText.badge,
+            fontSize = cardText.badge,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -321,15 +327,28 @@ private fun CurrentStreamBadge(label: String) {
     }
 }
 
-/** Stream card text sizes; on iOS the list reads a step larger. */
-private object StreamCardText {
+/**
+ * Stream card text sizes, scaled by the user's stream card text size setting. On iOS the list reads a step larger.
+ */
+internal class StreamCardText(scale: Float) {
     private val step = if (isIos) 1.5f else 0f
-    val name = (14f + step).sp
-    val nameLineHeight = (20f + step).sp
-    val subtitle = (12f + step).sp
-    val subtitleLineHeight = (18f + step).sp
-    val addon = (10f + step).sp
-    val badge = (11f + step).sp
+    private fun size(base: Float): TextUnit = ((base + step) * scale).sp
+    val name = size(14f)
+    val nameLineHeight = size(20f)
+    val subtitle = size(12f)
+    val subtitleLineHeight = size(18f)
+    val addon = size(10f)
+    val badge = size(11f)
+}
+
+@Composable
+private fun rememberStreamCardText(): StreamCardText {
+    val settings by remember {
+        StreamBadgeSettingsRepository.ensureLoaded()
+        StreamBadgeSettingsRepository.uiState
+    }.collectAsStateWithLifecycle()
+    val percent = settings.cardTextScalePercent
+    return remember(percent) { StreamCardText(percent / 100f) }
 }
 
 internal const val StreamGlassTintAlpha = 0.45f

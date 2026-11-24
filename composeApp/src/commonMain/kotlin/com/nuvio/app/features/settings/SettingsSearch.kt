@@ -597,6 +597,14 @@ internal fun settingsSearchEntries(
         pageLabel = streamsPage,
         section = stringResource(Res.string.settings_stream_display_section),
     )
+    addRow(
+        page = SettingsPage.Streams,
+        key = "stream-card-text-size",
+        title = stringResource(Res.string.settings_stream_card_text_size_title),
+        description = stringResource(Res.string.settings_stream_card_text_size_description),
+        pageLabel = streamsPage,
+        section = stringResource(Res.string.settings_stream_display_section),
+    )
     if (!isTablet) {
         addRow(
             page = SettingsPage.Streams,
