@@ -374,7 +374,7 @@ object StreamsRepository {
 
                 if (smartAutoPlay) {
                     val ranking = smartRanking() ?: return
-                    val groups = _uiState.value.groups.filterNot { it.isLocalDownload }
+                    val groups = _uiState.value.groups
                     _uiState.update { current ->
                         current.copy(
                             smartAutoPlaySearch = SmartAutoPlaySearch(
