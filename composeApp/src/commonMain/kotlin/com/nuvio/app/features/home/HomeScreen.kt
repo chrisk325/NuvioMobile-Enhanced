@@ -28,6 +28,7 @@ import com.nuvio.app.core.network.NetworkCondition
 import com.nuvio.app.core.network.NetworkStatusRepository
 import com.nuvio.app.core.ui.LocalNuvioBottomNavigationOverlayPadding
 import com.nuvio.app.core.ui.DynamicArtworkBackground
+import com.nuvio.app.core.ui.rememberGlideFlingBehavior
 import com.nuvio.app.core.ui.LocalVerticalBarPadding
 import com.nuvio.app.core.ui.nuvioHorizontalScrollBleed
 import com.nuvio.app.core.ui.ScreenActivityEffect
@@ -1109,6 +1110,7 @@ fun HomeScreen(
                 topPadding = if (showHeroSlot) 0.dp else null,
                 listState = homeListState,
                 autoHidesNativeTabBar = true,
+                flingBehavior = rememberGlideFlingBehavior(),
             ) {
                 if (showHeroSlot) {
                     item(key = "home_hero", contentType = "hero") {
