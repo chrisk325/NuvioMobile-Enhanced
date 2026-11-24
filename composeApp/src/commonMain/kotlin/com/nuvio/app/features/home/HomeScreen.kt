@@ -1316,7 +1316,7 @@ fun HomeScreen(
                                     item(key = keyedSettingsItem.lazyKey, contentType = HOME_CATALOG_ROW_CONTENT_TYPE) {
                                         HomeCatalogRowSection(
                                             section = section,
-                                            entries = section.items.take(HOME_CATALOG_PREVIEW_LIMIT),
+                                            entries = section.items,
                                             modifier = Modifier.padding(bottom = 12.dp),
                                             sectionPadding = homeSectionPadding,
                                             onViewAllClick = if (section.canOpenCatalog(HOME_CATALOG_PREVIEW_LIMIT)) {
@@ -1329,6 +1329,11 @@ fun HomeScreen(
                                             onPosterClick = onPosterClick,
                                             onPosterLongClick = onPosterLongClick,
                                             usePosterCache = true,
+                                            onLoadMore = if (section.nextSkip != null) {
+                                                { HomeRepository.loadMoreSection(section.key) }
+                                            } else {
+                                                null
+                                            },
                                         )
                                     }
                                 }
