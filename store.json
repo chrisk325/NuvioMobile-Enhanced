@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.32",
+          "buildVersion": "249",
+          "date": "2026-11-24T21:49:27Z",
+          "localizedDescription": "- [Port AIOStreams' GPU subtitle blending for libmpv's libass (#117)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/117) @chrisk325  \n- [Fix IntroDB skip popups for AIOMetadata / Jellyfin addon content (#116)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/116) @chrisk325  \n- [Keep Upcoming across restarts with slow metadata (AIOMetadata) (#115)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/115) @chrisk325  \n- [Look up a stream list's servers in the background (#114)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/114) @chrisk325  \n- [Port Nuvio TV's fast DNS to the Android player (#113)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/113) @chrisk325  \n- [Play AIOMetadata sources directly when PlaybackInfo can't find them (#112)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/112) @chrisk325  \n- [Show media server posters and Thumb art in Continue Watching, Next Up… (#111)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/111) @chrisk325  \n- 8fd89ce6f Delete .github/workflows/pr-full-debug-build.yml @chrisk325  \n- [Show addon posters in the library, Continue Watching and recommendations (#110)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/110) @chrisk325  \n- [Smooth home rows (#109)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/109) @chrisk325  \n- [Load more catalog pages as home rows are scrolled (#108)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/108) @chrisk325  \n- [Add \"View full description\" to the episode long-press menu (#107)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/107) @chrisk325  \n- [scrolling perf (#106)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/106) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.32-beta/nuvio-1.0.32-enhanced-release.ipa",
+          "size": 77489876,
+          "sha256": "9b31b1f65e2358e796b177541bd2d33aa4ed56cf1a1cc1c4aff6ae5ff11d937c",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.23",
           "buildVersion": "240",
           "date": "2026-11-24T10:31:11Z",
