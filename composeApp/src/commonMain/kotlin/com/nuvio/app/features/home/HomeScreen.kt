@@ -55,6 +55,7 @@ import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.details.SeriesPrimaryAction
 import com.nuvio.app.features.details.seriesPrimaryAction
+import com.nuvio.app.features.details.sortedPlayableEpisodes
 import com.nuvio.app.features.home.components.HomeCatalogRowSection
 import com.nuvio.app.features.home.components.HomeContinueWatchingSection
 import com.nuvio.app.features.home.components.HomeEmptyStateCard
@@ -959,8 +960,9 @@ fun HomeScreen(
                 nextUpResolutionRetryAttempt < MAX_NEXT_UP_RESOLUTION_RETRIES &&
                 networkStatusUiState.condition == NetworkCondition.Online
             ) {
-                val retryDelayMs = NEXT_UP_RESOLUTION_RETRY_BASE_DELAY_MS *
-                    (1L shl nextUpResolutionRetryAttempt)
+                val retryDelayMs = (
+                    NEXT_UP_RESOLUTION_RETRY_BASE_DELAY_MS * (1L shl nextUpResolutionRetryAttempt)
+                ).coerceAtMost(NEXT_UP_RESOLUTION_RETRY_MAX_DELAY_MS)
                 delay(retryDelayMs)
                 withContext(Dispatchers.Main) {
                     nextUpResolutionRetryAttempt += 1
@@ -1436,8 +1438,10 @@ internal const val HomeContinueWatchingMaxRecentProgressItems = 300
 internal const val HomeNextUpInitialResolutionLimit = 32
 private const val NEXT_UP_RESOLUTION_CONCURRENCY = 4
 private val NEXT_UP_PUBLISH_INTERVAL = 400.milliseconds
-private const val MAX_NEXT_UP_RESOLUTION_RETRIES = 3
+// Enough to outlast an addon or media server that is slow for its first minute after a cold start (AIOMetadata).
+private const val MAX_NEXT_UP_RESOLUTION_RETRIES = 6
 private const val NEXT_UP_RESOLUTION_RETRY_BASE_DELAY_MS = 1_500L
+private const val NEXT_UP_RESOLUTION_RETRY_MAX_DELAY_MS = 30_000L
 
 private fun String.isHomeSeriesLikeType(): Boolean =
     trim().lowercase() in setOf("series", "show", "tv", "tvshow")
@@ -1677,7 +1681,9 @@ private suspend fun resolveHomeNextUpCandidate(
         if (error is CancellationException) throw error
         null
     }
-    if (meta == null) {
+    // No episodes means the metadata isn't ready yet (a slow addon or server right after start-up, or a
+    // fallback that lists none), not that the show has nothing next: keep what was shown and ask again.
+    if (meta == null || meta.sortedPlayableEpisodes().isEmpty()) {
         return HomeNextUpResolutionAttempt.transientFailure()
     }
 

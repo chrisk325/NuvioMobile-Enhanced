@@ -5,6 +5,7 @@ import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
 import com.nuvio.app.features.watchprogress.MEDIA_SERVER_PROVIDER_PREFIX
 import com.nuvio.app.features.watchprogress.buildContinueWatchingEpisodeSubtitle
+import com.nuvio.app.features.watchprogress.parseReleaseDateToEpochMs
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import kotlinx.atomicfu.locks.SynchronizedObject
@@ -171,7 +172,9 @@ internal object ServerResumeImport {
             // AIOMetadata answers with nothing while it is still building the list, so keep the last one and ask
             // again once it is built.
             fetched.isEmpty() -> previous.nextUp.also { retryNextUpSoon(connection) }
-            else -> fetched
+            else -> withUpcomingKept(previous.nextUp, fetched).also { kept ->
+                if (kept.size > fetched.size) retryNextUpSoon(connection)
+            }
         }
         // A full list may have cut off older items, so it can't tell what the server dropped.
         val next = next(previous, entries(connection, resume, previous), complete = resume.size < LIMIT, fetchedAtMs)
@@ -209,7 +212,8 @@ internal object ServerResumeImport {
                 val current = cache(connection.id)
                 // A full import that finished meanwhile already has the newer list.
                 if (current.nextUpFetchedAtMs > askedAtMs) return@launch
-                saveCache(connection.id, current.copy(nextUp = fetched, nextUpFetchedAtMs = askedAtMs))
+                val nextUp = if (fetched.isEmpty()) fetched else withUpcomingKept(current.nextUp, fetched)
+                saveCache(connection.id, current.copy(nextUp = nextUp, nextUpFetchedAtMs = askedAtMs))
                 show()
                 log.i { "Next up from ${connection.providerId} on a second ask: ${fetched.size}" }
             }
@@ -253,6 +257,26 @@ internal object ServerResumeImport {
                 lastActivityEpochMs = lastActivityEpochMs ?: ((seen[preview.id] ?: now) - index),
             )
         }.distinctBy { it.contentId }
+    }
+
+    /**
+     * [fetched], plus the shows of [previous] whose next episode hasn't aired yet and that [fetched] leaves out.
+     *
+     * AIOMetadata can answer Next up while it is still putting the list together, and a partial answer would
+     * otherwise drop its upcoming episodes until it is asked again. Nothing can have been watched past an episode
+     * that hasn't aired, so such a show is kept until that episode's release passes; from then on the server's own
+     * answer decides. Jellyfin and Emby don't list unaired episodes in Next up, so nothing extra is kept for them.
+     */
+    internal fun withUpcomingKept(
+        previous: List<ServerNextUpEntry>,
+        fetched: List<ServerNextUpEntry>,
+    ): List<ServerNextUpEntry> {
+        val now = nowMs()
+        val listed = fetched.mapTo(mutableSetOf()) { it.contentId }
+        val kept = previous.filter { entry ->
+            entry.contentId !in listed && (parseReleaseDateToEpochMs(entry.released) ?: return@filter false) > now
+        }
+        return if (kept.isEmpty()) fetched else fetched + kept
     }
 
     /**

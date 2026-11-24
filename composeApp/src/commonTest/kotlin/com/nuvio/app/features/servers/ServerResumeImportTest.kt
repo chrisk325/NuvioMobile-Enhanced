@@ -283,4 +283,44 @@ class ServerResumeImportTest {
 
         assertEquals(listOf("Lupin", "One Piece"), entries.sortedByDescending { it.lastActivityEpochMs }.map { it.title })
     }
+
+    @Test
+    fun aFreshNextUpKeepsShowsWhoseEpisodeHasNotAiredYet() {
+        ServerResumeImport.nowMs = { 1_767_225_600_000L } // 2026-01-01T00:00:00Z
+        fun entry(id: String, released: String?) = ServerNextUpEntry(
+            contentId = id,
+            contentType = "series",
+            videoId = "$id:1:2",
+            title = id,
+            season = 1,
+            episode = 2,
+            released = released,
+        )
+        val upcoming = entry("upcoming", "2026-02-01T00:00:00Z")
+        val aired = entry("aired", "2025-12-01T00:00:00Z")
+        val undated = entry("undated", null)
+        val listed = entry("listed", "2025-12-20T00:00:00Z")
+
+        val kept = ServerResumeImport.withUpcomingKept(
+            previous = listOf(upcoming, aired, undated, listed.copy(episode = 1)),
+            fetched = listOf(listed),
+        )
+
+        assertEquals(listOf(listed, upcoming), kept)
+    }
+
+    @Test
+    fun aFreshNextUpThatListsEveryShowIsTakenAsItIs() {
+        ServerResumeImport.nowMs = { 1_767_225_600_000L }
+        val upcoming = ServerNextUpEntry(
+            contentId = "show",
+            contentType = "series",
+            videoId = "show:2:1",
+            title = "Show",
+            released = "2026-02-01T00:00:00Z",
+        )
+        val fresh = upcoming.copy(videoId = "show:2:2", released = "2026-02-08T00:00:00Z")
+
+        assertEquals(listOf(fresh), ServerResumeImport.withUpcomingKept(listOf(upcoming), listOf(fresh)))
+    }
 }
