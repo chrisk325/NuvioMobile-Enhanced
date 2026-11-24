@@ -28,6 +28,8 @@ import com.nuvio.app.features.p2p.P2pStreamingState
 import com.nuvio.app.features.player.skip.NextEpisodeInfo
 import com.nuvio.app.features.player.skip.PlayerNextEpisodeRules
 import com.nuvio.app.features.player.skip.SkipIntroRepository
+import com.nuvio.app.features.player.skip.resolveEpisodeSkipImdbId
+import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.features.player.skip.SkipInterval
 import com.nuvio.app.features.player.skip.segmentCategory
 import com.nuvio.app.features.player.skip.shouldAutoSkip
@@ -681,9 +683,14 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         }
     }
 
+    // The addon meta (and its imdb_id) can arrive after playback starts; re-run the lookup then.
+    val skipMetaImdbId = (metaUiState.meta ?: playerMeta)
+        ?.takeIf { it.id == parentMetaId }
+        ?.imdbId
+        ?.takeIf { it.startsWith("tt") }
     LaunchedEffect(
         activeVideoId, parentMetaId, parentMetaType, contentType, activeSeasonNumber, activeEpisodeNumber,
-        playerSettingsUiState.skipIntroEnabled, networkCondition,
+        playerSettingsUiState.skipIntroEnabled, networkCondition, skipMetaImdbId,
     ) {
         skipIntervals = emptyList()
         apiSkipIntervals = emptyList()
@@ -700,8 +707,9 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         val episode = activeEpisodeNumber
         val vid = activeVideoId
         if (!playerSettingsUiState.skipIntroEnabled) return@LaunchedEffect
+        val metaImdbId = skipMetaImdbId
         if ((contentType ?: parentMetaType).equals("movie", ignoreCase = true)) {
-            val api = SkipIntroRepository.getMovieSkipIntervals(parentMetaId, vid)
+            val api = SkipIntroRepository.getMovieSkipIntervals(parentMetaId, vid, fallbackImdbId = metaImdbId)
             apiSkipIntervals = api
             recomputeMergedSkipIntervals()
             return@LaunchedEffect
@@ -713,11 +721,7 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         launch {
             // Bounded so a slow provider never stalls the player.
             val intervals = withTimeoutOrNull(SKIP_INTERVAL_RESOLVE_TIMEOUT_MS) {
-                val imdbFromContent = parentMetaId.takeIf { it.startsWith("tt") }
-                    ?: (metaUiState.meta ?: playerMeta)
-                        ?.takeIf { it.id == parentMetaId }
-                        ?.imdbId
-                        ?.takeIf { it.startsWith("tt") }
+                val imdbFromContent = parentMetaId.takeIf { it.startsWith("tt") } ?: metaImdbId
                 when {
                     vid.startsWith("mal:") -> {
                         val malId = vid.removePrefix("mal:").substringBefore(':')
@@ -728,7 +732,13 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
                         SkipIntroRepository.getSkipIntervalsForKitsu(kitsuId = kitsuId, episode = episode, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = episode)
                     }
                     else -> SkipIntroRepository.getSkipIntervals(
-                        imdbId = vid.substringBefore(':').takeIf { it.startsWith("tt") },
+                        // AIOMetadata / Jellyfin addons use tmdb:/tvdb:/custom ids, not tt ids.
+                        imdbId = resolveEpisodeSkipImdbId(
+                            ids = listOf(vid, parentMetaId),
+                            metaImdbId = metaImdbId,
+                            resolveTmdb = { TmdbService.tmdbToImdb(it, "tv") },
+                            resolveTvdb = { TmdbService.tvdbToImdb(it) },
+                        ),
                         season = season,
                         episode = episode,
                     )
