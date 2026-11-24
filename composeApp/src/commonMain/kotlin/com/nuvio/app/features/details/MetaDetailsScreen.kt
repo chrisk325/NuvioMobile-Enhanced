@@ -2664,6 +2664,7 @@ private fun ConfiguredMetaSections(
                         showHeader = showHeader,
                         horizontalScrollPadding = horizontalScrollPadding,
                         sourceLabel = sourceLabel,
+                        useAddonArtwork = true,
                         onViewAllClick = onOpenMoreLikeThis
                             ?.takeIf { meta.moreLikeThisHasMore && meta.moreLikeThisSource != null }
                             ?.let { open -> { open(meta) } },

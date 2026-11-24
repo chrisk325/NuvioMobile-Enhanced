@@ -55,6 +55,8 @@ import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.nuvioCardDepth
 import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.NuvioTokens
+import com.nuvio.app.core.poster.rememberAddonArtwork
+import com.nuvio.app.core.poster.withAddonArtwork
 import com.nuvio.app.core.ui.PosterLandscapeAspectRatio
 import com.nuvio.app.core.ui.PosterCardStyleUiState
 import com.nuvio.app.core.ui.ScopedDisintegrationTracker
@@ -358,9 +360,15 @@ private fun HomeContinueWatchingSectionContent(
             animatePlacement = true,
             state = listState,
         ) { entry ->
-            val item = entry.item
-            val onClick = if (entry.exiting) null else onItemClick?.let { { it(item) } }
-            val onLongClick = if (entry.exiting) null else onItemLongPress?.let { { it(item) } }
+            val sourceItem = entry.item
+            val onClick = if (entry.exiting) null else onItemClick?.let { { it(sourceItem) } }
+            val onLongClick = if (entry.exiting) null else onItemLongPress?.let { { it(sourceItem) } }
+            // The user's meta addon artwork: its poster, and its landscape poster for the wide cards.
+            val addonArtwork = rememberAddonArtwork(
+                type = sourceItem.parentMetaType,
+                id = sourceItem.parentMetaId,
+            )
+            val item = remember(sourceItem, addonArtwork) { sourceItem.withAddonArtwork(addonArtwork) }
             DisintegratingContainer(
                 disintegrating = entry.exiting,
                 onDisintegrated = { disintegration.onDisintegrated(entry.key) },

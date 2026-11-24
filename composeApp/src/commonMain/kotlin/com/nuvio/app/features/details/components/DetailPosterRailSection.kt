@@ -19,6 +19,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nuvio.app.core.poster.CustomPosterScreen
+import com.nuvio.app.core.poster.CustomPosterUrlRepository
+import com.nuvio.app.core.poster.rememberAddonArtwork
+import com.nuvio.app.core.poster.withAddonArtwork
 import com.nuvio.app.core.ui.nuvioHorizontalScrollBleed
 import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.PosterLandscapeAspectRatio
@@ -47,9 +51,14 @@ fun DetailPosterRailSection(
     onViewAllClick: (() -> Unit)? = null,
     onPosterClick: ((MetaPreview) -> Unit)? = null,
     onPosterLongClick: ((MetaPreview) -> Unit)? = null,
+    /** Show the posters the user's meta addons provide instead of the items' own (TMDB/Trakt/Simkl) artwork. */
+    useAddonArtwork: Boolean = false,
 ) {
     if (items.isEmpty()) return
     val posterCardStyle = rememberPosterCardStyleUiState()
+    val preserveCustomPoster = remember(useAddonArtwork) {
+        useAddonArtwork && CustomPosterUrlRepository.patternForScreen(CustomPosterScreen.DETAILS).isNotBlank()
+    }
     val tmdbSettings by remember {
         TmdbSettingsRepository.ensureLoaded()
         TmdbSettingsRepository.uiState
@@ -68,10 +77,13 @@ fun DetailPosterRailSection(
             key = { item -> item.stableKey() },
         ) { item ->
             val landscape = posterCardStyle.catalogLandscapeModeEnabled || item.posterShape == PosterShape.Landscape
+            val addonArtwork = rememberAddonArtwork(type = item.type, id = item.id, enabled = useAddonArtwork)
+            val hasAddonLandscapeArt = addonArtwork?.landscapePoster != null || addonArtwork?.background != null
             val localizedBackdrop = rememberDetailBackdrop(
                 item = item,
                 language = tmdbSettings.language,
-                enabled = landscape && (item.id.startsWith("tmdb:") || tmdbSettings.enabled && tmdbSettings.useArtwork),
+                enabled = landscape && !hasAddonLandscapeArt &&
+                    (item.id.startsWith("tmdb:") || tmdbSettings.enabled && tmdbSettings.useArtwork),
             )
             if (localizedBackdrop.isLoading) {
                 SkeletonPoster(
@@ -82,8 +94,9 @@ fun DetailPosterRailSection(
                     showDetail = false,
                 )
             } else {
-                val cardItem = remember(item, localizedBackdrop.url) {
-                    localizedBackdrop.url?.let { item.copy(banner = it) } ?: item
+                val cardItem = remember(item, localizedBackdrop.url, addonArtwork, preserveCustomPoster) {
+                    (localizedBackdrop.url?.let { item.copy(banner = it) } ?: item)
+                        .withAddonArtwork(addonArtwork, preserveCustomPoster = preserveCustomPoster)
                 }
                 HomePosterCard(
                     item = cardItem,

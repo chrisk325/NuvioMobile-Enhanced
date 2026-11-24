@@ -178,6 +178,8 @@ import kotlinx.serialization.json.Json
 import com.nuvio.app.core.poster.CustomPosterScreen
 import com.nuvio.app.core.poster.CustomPosterUrlRepository
 import com.nuvio.app.core.poster.withCustomPosterUrl
+import com.nuvio.app.core.poster.rememberAddonArtwork
+import com.nuvio.app.core.poster.withAddonArtwork
 import com.nuvio.app.core.ui.rememberScreenActiveInfiniteFloat
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -2074,9 +2076,11 @@ private fun LazyListScope.librarySections(
             animatePlacement = true,
         ) { entry ->
             val item = entry.item
-            val posterItem = remember(item, posterPattern, releaseInfoFor) {
+            val addonArtwork = rememberAddonArtwork(type = item.type, id = item.id)
+            val posterItem = remember(item, posterPattern, releaseInfoFor, addonArtwork) {
                 item.toMetaPreview()
                     .copy(releaseInfo = releaseInfoFor(item))
+                    .withAddonArtwork(addonArtwork)
                     .let { if (posterPattern.isNotBlank()) it.withCustomPosterUrl(posterPattern) else it }
             }
             val entrySource = entry.section

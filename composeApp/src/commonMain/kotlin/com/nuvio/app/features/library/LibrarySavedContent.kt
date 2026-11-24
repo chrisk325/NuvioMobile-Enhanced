@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.i18n.localizedMediaTypeLabel
 import com.nuvio.app.core.poster.withCustomPosterUrl
+import com.nuvio.app.core.poster.addonArtworkKey
+import com.nuvio.app.core.poster.rememberAddonArtworks
+import com.nuvio.app.core.poster.withAddonArtwork
 import com.nuvio.app.core.ui.NuvioDropdownChip
 import com.nuvio.app.core.ui.NuvioDropdownOption
 import com.nuvio.app.features.home.MetaPreview
@@ -197,10 +200,14 @@ internal fun LazyListScope.libraryVerticalContent(
         },
         contentType = { "library_poster_row" },
     ) { rowEntries ->
-        val resolvedItems = remember(rowEntries, posterPattern, releaseInfoFor) {
-            rowEntries.map { entry ->
-                entry.item.toMetaPreview()
+        val rowPreviews = remember(rowEntries) { rowEntries.map { entry -> entry.item.toMetaPreview() } }
+        val addonArtwork = rememberAddonArtworks(rowPreviews)
+        val resolvedItems = remember(rowEntries, posterPattern, releaseInfoFor, addonArtwork) {
+            rowEntries.mapIndexed { index, entry ->
+                val preview = rowPreviews[index]
+                preview
                     .copy(releaseInfo = releaseInfoFor(entry.item))
+                    .withAddonArtwork(addonArtwork[preview.addonArtworkKey()])
                     .let { if (posterPattern.isNotBlank()) it.withCustomPosterUrl(posterPattern) else it }
             }
         }
