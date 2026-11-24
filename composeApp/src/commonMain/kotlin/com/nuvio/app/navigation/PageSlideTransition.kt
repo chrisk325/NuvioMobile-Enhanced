@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.navigation3.ui.NavDisplay
 
 /**
- * Horizontal push/pop motion for content pages (details, cast/person, catalogs, folders).
+ * Horizontal push/pop motion for content pages (details, streams, cast/person, catalogs, folders).
  *
  * Opening a page: the new page slides in from the right edge while the screen underneath
  * (home, discover, ...) drifts a little to the left. Going back reverses it: the page slides out

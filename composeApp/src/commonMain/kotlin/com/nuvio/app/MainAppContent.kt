@@ -1875,7 +1875,7 @@ internal fun MainAppContent(
                 entry<EntityBrowseRoute> { route ->
                     EntityDestination(route = route, navController = navController)
                 }
-                entry<StreamRoute> { route ->
+                entry<StreamRoute>(metadata = PageSlideTransition.metadata) { route ->
                     OpaqueAppSurfaces {
                         StreamDestination(
                             route = route,
