@@ -5,10 +5,16 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.nuvio.app.core.diagnostics.SentryNetworkBreadcrumbInterceptor
-import com.nuvio.app.core.network.IPv4FirstDns
 import com.nuvio.app.core.network.NetworkErrorInterceptor
+import com.nuvio.app.core.network.PlaybackDns
+import okhttp3.Call
+import okhttp3.EventListener
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.URL
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
@@ -44,9 +50,23 @@ internal object PlayerPlaybackNetworking {
         }
     }
 
+    /** An address that could not be reached is looked up again next time. */
+    private val forgetUnreachable = object : EventListener() {
+        override fun connectFailed(
+            call: Call,
+            inetSocketAddress: InetSocketAddress,
+            proxy: Proxy,
+            protocol: Protocol?,
+            ioe: IOException,
+        ) {
+            PlaybackDns.forget(call.request().url.host)
+        }
+    }
+
     private val playbackHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .dns(IPv4FirstDns())
+            .dns(PlaybackDns)
+            .eventListener(forgetUnreachable)
             .sslSocketFactory(sslContext.socketFactory, trustAllManager)
             .hostnameVerifier(playbackHostnameVerifier)
             .connectTimeout(15, TimeUnit.SECONDS)
