@@ -68,10 +68,6 @@ internal object SmartStreamRanking {
         val lines = when (settings.resolutionLimit) {
             SmartResolutionLimit.AUTO -> {
                 val capable = if (device.memoryTier == SmartMemoryTier.AMPLE) device.maxComfortableLines else 1080
-                // Aim at what the screen can show, capped by what the
-                // device can play. A phone shows about 1290 lines, so a movie lands around 4-11 GB
-                // instead of a 30+ GB 4K remux whose extra detail the screen can't show. TVs and
-                // external displays report 2160 lines and still aim for 4K.
                 val aim = min(device.videoLines, capable)
                 if (saveData) min(aim, 1080) else aim
             }
@@ -229,10 +225,7 @@ internal object SmartStreamRanking {
     internal fun languageScore(languages: SmartStreamLanguages, preferred: List<String>): Double {
         val primary = preferred.firstOrNull() ?: return 0.0
         val secondary = preferred.drop(1).toSet()
-        // Release names almost never tag English audio, so an untagged single-audio release
-        // counts as English. Otherwise "Ita Eng" releases beat the plain English ones just for
-        // naming the language.
-        val codes = if (languages.codes.isEmpty() && !languages.multiAudio) setOf("en") else languages.codes
+        val codes = if (primary == "en" && languages.codes.isEmpty() && !languages.multiAudio) setOf("en") else languages.codes
         return when {
             primary in codes -> 30.0
             codes.any { it in secondary } -> 20.0
