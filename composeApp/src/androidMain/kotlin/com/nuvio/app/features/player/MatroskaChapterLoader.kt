@@ -1,6 +1,7 @@
 package com.nuvio.app.features.player
 
 import androidx.media3.common.MimeTypes
+import com.nuvio.app.core.network.PlaybackDns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -30,6 +31,7 @@ internal object MatroskaChapterLoader {
     private const val MAX_CHAPTERS_BYTES = 1024 * 1024
 
     private val httpClient = OkHttpClient.Builder()
+        .dns(PlaybackDns)
         .connectTimeout(4, TimeUnit.SECONDS)
         .readTimeout(4, TimeUnit.SECONDS)
         .followRedirects(true)
