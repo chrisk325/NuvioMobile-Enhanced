@@ -17,4 +17,22 @@ internal object PlaybackDns : Dns {
 
     /** Forgets [hostname]'s kept addresses: one of them could not be connected to. */
     fun forget(hostname: String) = FastDns.shared.forget(hostname)
+
+    /**
+     * Looks up [hostnames] in the background, so a stream picked from a list does not wait for
+     * it. With a DNS-over-HTTPS provider, that provider is asked (and keeps the answers).
+     */
+    fun prefetch(hostnames: Collection<String>) {
+        if (NuvioDns.provider == DnsProvider.SYSTEM) {
+            FastDns.shared.prefetch(hostnames)
+            return
+        }
+        val hosts = hostnames.map { it.lowercase() }.distinct().take(PREFETCH_MAX)
+        if (hosts.isEmpty()) return
+        Thread({
+            hosts.forEach { host -> runCatching { NuvioDns.lookup(host) } }
+        }, "PlaybackDnsPrefetch").apply { isDaemon = true }.start()
+    }
+
+    private const val PREFETCH_MAX = 8
 }
