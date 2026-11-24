@@ -65,6 +65,23 @@ internal object MetaDetailsParser {
         )
     }
 
+    /**
+     * Reads only the artwork an addon's meta response provides, keeping `landscapePoster` apart
+     * from `background` (the full [parse] folds it into the background).
+     */
+    fun parseArtwork(payload: String): com.nuvio.app.core.poster.AddonArtwork? {
+        val root = json.parseToJsonElement(payload).asJsonObjectOrNull() ?: return null
+        val meta = root.extractMetaObject() ?: return null
+        fun field(name: String): String? =
+            (meta[name] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotBlank)
+        return com.nuvio.app.core.poster.AddonArtwork(
+            poster = field("poster"),
+            landscapePoster = field("landscapePoster"),
+            background = field("background"),
+            logo = field("logo"),
+        )
+    }
+
     private fun JsonObject.requiredString(name: String): String =
         this[name]?.jsonPrimitive?.contentOrNull ?: error("Missing required field '$name'")
 

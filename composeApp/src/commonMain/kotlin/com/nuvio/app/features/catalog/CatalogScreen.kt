@@ -31,6 +31,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import com.nuvio.app.core.poster.CustomPosterScreen
+import com.nuvio.app.core.poster.CustomPosterUrlRepository
+import com.nuvio.app.core.poster.rememberAddonArtwork
+import com.nuvio.app.core.poster.withAddonArtwork
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -106,6 +110,17 @@ fun CatalogScreen(
     )
     var headerHeightPx by remember { mutableIntStateOf(0) }
     var observedOfflineState by remember { mutableStateOf(false) }
+    // Library lists and recommendations come from trackers/TMDB; show the user's addon posters on them.
+    val addonArtworkScreen = remember(target) {
+        when (target) {
+            is CatalogTarget.Library -> CustomPosterScreen.LIBRARY
+            is CatalogTarget.MoreLikeThis -> CustomPosterScreen.HOME
+            else -> null
+        }
+    }
+    val preserveCustomPoster = remember(addonArtworkScreen) {
+        addonArtworkScreen != null && CustomPosterUrlRepository.patternForScreen(addonArtworkScreen).isNotBlank()
+    }
 
     LaunchedEffect(target, homeCatalogSettingsUiState.hideUnreleasedContent) {
         CatalogRepository.load(
@@ -210,8 +225,16 @@ fun CatalogScreen(
                         key = { item -> item.lazyKey },
                     ) { keyedItem ->
                         val item = keyedItem.value
+                        val addonArtwork = rememberAddonArtwork(
+                            type = item.type,
+                            id = item.id,
+                            enabled = addonArtworkScreen != null,
+                        )
+                        val displayItem = remember(item, addonArtwork, preserveCustomPoster) {
+                            item.withAddonArtwork(addonArtwork, preserveCustomPoster = preserveCustomPoster)
+                        }
                         CatalogPosterTile(
-                            item = item,
+                            item = displayItem,
                             cornerRadiusDp = posterCardStyle.cornerRadiusDp,
                             hideLabels = posterCardStyle.hideLabelsEnabled,
                             isWatched = WatchingState.isPosterWatched(

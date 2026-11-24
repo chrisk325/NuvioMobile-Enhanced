@@ -352,6 +352,45 @@ object MetaDetailsRepository {
         return throttledUntil?.let { until -> MetaLookupOutcome.Throttled(until) } ?: MetaLookupOutcome.Failed
     }
 
+    /**
+     * Resolves the artwork the user's meta addons provide for an item, in the same addon order
+     * the details screen uses. Shares the details screen's [com.nuvio.app.core.cache.MetadataCache]
+     * entries (same URLs) and skips TMDB enrichment so the addon's own posters are kept.
+     */
+    internal suspend fun fetchAddonArtwork(
+        type: String,
+        id: String,
+    ): AddonArtworkLookup {
+        if (ServerItemRef.parse(id) != null) return AddonArtworkLookup.Unavailable
+        val metaLookupId = resolveMetaLookupId(itemId = id, itemType = type)
+        val manifests = findReadyMetaManifests(type = type, id = metaLookupId)
+        if (manifests.isEmpty()) return AddonArtworkLookup.Unavailable
+
+        var failed = false
+        for (manifest in manifests) {
+            val url = buildAddonResourceUrl(
+                manifestUrl = manifest.transportUrl,
+                resource = "meta",
+                type = type,
+                id = metaLookupId,
+            )
+            val artwork = try {
+                withTimeoutOrNull(ADDON_META_TIMEOUT_MS) {
+                    val payload = com.nuvio.app.core.cache.MetadataCache.fetch(url) { fetchAddonResponseText(url) }
+                    withContext(Dispatchers.Default) { MetaDetailsParser.parseArtwork(payload) }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                log.w(error) { "Addon artwork request failed url=$url" }
+                null
+            }
+            if (artwork == null) failed = true
+            if (artwork != null && !artwork.isEmpty) return AddonArtworkLookup.Loaded(artwork)
+        }
+        return if (failed) AddonArtworkLookup.Failed else AddonArtworkLookup.Unavailable
+    }
+
     private fun String.addonHost(): String =
         substringAfter("://").substringBefore('/').substringBefore('?').lowercase()
 
@@ -880,4 +919,14 @@ internal sealed interface MetaLookupOutcome {
     object Unavailable : MetaLookupOutcome
 
     object Failed : MetaLookupOutcome
+}
+
+internal sealed interface AddonArtworkLookup {
+    class Loaded(val artwork: com.nuvio.app.core.poster.AddonArtwork) : AddonArtworkLookup
+
+    /** No enabled meta addon serves this item. */
+    object Unavailable : AddonArtworkLookup
+
+    /** A request failed or timed out; worth retrying later. */
+    object Failed : AddonArtworkLookup
 }
