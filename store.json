@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.39",
+          "buildVersion": "256",
+          "date": "2026-11-25T08:17:52Z",
+          "localizedDescription": "- [Live TV: keep the channel list smooth with large playlists (#124)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/124) @chrisk325  \n- [Live TV: replace category chip row with a Categories chip that opens (#123)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/123) @chrisk325  \n- [Stream and parse the XMLTV guide while it downloads (#122)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/122) @chrisk325  \n- [Size the libmpv ASS video from the decoded frames (#121)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/121) @chrisk325  \n- [Never draw libmpv ASS subtitles outside the video (#120)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/120) @chrisk325  \n- [Clip libmpv ASS subtitles to the video, not the whole stage (#119)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/119) @chrisk325  \n- [Keep GL-drawn ASS subtitles inside the video (#118)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/118) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.39-beta/nuvio-1.0.39-enhanced-release.ipa",
+          "size": 77527228,
+          "sha256": "dc04adc199677f476e876228b56ada624eef45f0482513c4f57fb169b1427141",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.32",
           "buildVersion": "249",
           "date": "2026-11-24T21:49:27Z",
