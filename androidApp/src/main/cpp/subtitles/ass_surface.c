@@ -73,6 +73,9 @@ typedef struct {
     ANativeWindow *window;
     int window_width;
     int window_height;
+    // The GL surface's own size, which some drivers make the window's rather than the buffers asked for.
+    int surface_width;
+    int surface_height;
     Picture *shown;
     int gpu;        // draws with GlMasks rather than blending on the CPU
     // What the picture holds images on, which the next one has to clear.
@@ -307,6 +310,8 @@ static int start_gl(Surface *surface, int width, int height) {
         !eglMakeCurrent(display, surface->surface, surface->surface, surface->context)) {
         return stop_gl(surface), 0;
     }
+    // Asked for again now EGL is connected: a disconnect of the window's last surface resets the size.
+    ANativeWindow_setBuffersGeometry(surface->window, width, height, WINDOW_FORMAT_RGBA_8888);
     const char *extensions = eglQueryString(display, EGL_EXTENSIONS);
     if (extensions && strstr(extensions, "EGL_ANDROID_presentation_time")) {
         surface->presentation_time = (PFNEGLPRESENTATIONTIMEANDROIDPROC) eglGetProcAddress("eglPresentationTimeANDROID");
@@ -502,9 +507,26 @@ static int drawn_mask(const Surface *surface, const Placed *placed) {
     return placed->x + placed->mask->w <= surface->window_width && placed->y + placed->mask->h <= surface->window_height;
 }
 
+// The GL surface's size as it is now, the frame's where EGL can't say.
+static void query_surface(Surface *surface) {
+    EGLint width = 0, height = 0;
+    if (!eglQuerySurface(surface->display, surface->surface, EGL_WIDTH, &width) ||
+        !eglQuerySurface(surface->display, surface->surface, EGL_HEIGHT, &height) || width <= 0 || height <= 0) {
+        width = surface->window_width;
+        height = surface->window_height;
+    }
+    surface->surface_width = width;
+    surface->surface_height = height;
+}
+
+// A frame coordinate on the GL surface, whose size may not be the frame's.
+static int on_surface(int at, int frame, int size) {
+    return frame == size ? at : (int) (((long long) at * size + frame / 2) / frame);
+}
+
 // Blends the picture's masks into the rectangle they cover, which a texture brings to the window.
 static void draw_blended(Surface *surface, const Picture *picture, ARect next) {
-    glViewport(0, 0, surface->window_width, surface->window_height);
+    glViewport(0, 0, surface->surface_width, surface->surface_height);
     // A clear costs a tiled GPU nothing.
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -539,8 +561,12 @@ static void draw_blended(Surface *surface, const Picture *picture, ARect next) {
     }
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, surface->scratch);
     glUniform2f(surface->extent, (float) width / surface->texture_width, (float) height / surface->texture_height);
-    // GL counts rows from the bottom.
-    glViewport(next.left, surface->window_height - next.bottom, width, height);
+    // GL counts rows from the bottom; the frame stretches over the whole surface.
+    int left = on_surface(next.left, surface->window_width, surface->surface_width);
+    int right = on_surface(next.right, surface->window_width, surface->surface_width);
+    int top = on_surface(next.top, surface->window_height, surface->surface_height);
+    int bottom = on_surface(next.bottom, surface->window_height, surface->surface_height);
+    glViewport(left, surface->surface_height - bottom, right - left, bottom - top);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -582,10 +608,12 @@ JNIEXPORT jboolean JNICALL METHOD(draw)(JNIEnv *env, jclass clazz, jlong handle)
         surface->masks_gl = gl_masks_new(surface->masks, surface->cache_mb != 0);
         if (!surface->masks_gl) surface->gpu = 0;
     }
+    if (surface->context != EGL_NO_CONTEXT) query_surface(surface);
     if (surface->context == EGL_NO_CONTEXT) {
         if (!draw_window(surface, picture, next)) return JNI_FALSE;
     } else if (surface->gpu) {
-        gl_masks_draw(surface->masks_gl, picture, surface->window_width, surface->window_height);
+        gl_masks_draw(surface->masks_gl, picture, surface->window_width, surface->window_height,
+                      surface->surface_width, surface->surface_height);
     } else {
         draw_blended(surface, picture, next);
     }
