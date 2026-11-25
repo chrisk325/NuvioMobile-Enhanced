@@ -1,5 +1,6 @@
 package com.nuvio.app.features.player
 
+import android.app.Application
 import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.datasource.DataSource
@@ -20,6 +21,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -38,6 +40,7 @@ import kotlin.random.Random
  * never while a reader holds it, since reading an unmapped SharedMemory chunk would crash the app.
  */
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = Application::class)
 class ParallelRangeDataSourceTest {
 
     private class FakeChunkMemory {
