@@ -110,6 +110,13 @@ internal class AiostreamsAssEngine(
     /** The video's display aspect ratio, which places it within the content frame. */
     private var videoAspect = 0f
 
+    /** Whether the decoded frames' format gave the video's size, which the player's video size then doesn't. */
+    private var sizedByFrames = false
+
+    /** The last frame format's size, pixel aspect and rotation, checked on the playback thread. */
+    @Volatile
+    private var frameFormatKey = 0L
+
     private val preDraw = ViewTreeObserver.OnPreDrawListener {
         stage?.let(::measureStage)
         true
@@ -152,6 +159,8 @@ internal class AiostreamsAssEngine(
 
     fun reset(fontSource: DataSource.Factory) {
         this.fontSource = fontSource
+        // The next file's video may differ; its first frame tells.
+        frameFormatKey = 0L
         closeFonts()
         readBack = Extractors.ANY_TRACK
         shown = false
@@ -211,6 +220,7 @@ internal class AiostreamsAssEngine(
         this.player = player
         player.setVideoFrameMetadataListener(this)
         player.addListener(this)
+        player.videoFormat?.let(::setVideoFormat)
         onVideoSizeChanged(player.videoSize)
         onTracksChanged(player.currentTracks)
         updateClock()
@@ -303,6 +313,13 @@ internal class AiostreamsAssEngine(
     ) {
         lastFrameAtNs = System.nanoTime()
         ass.render(presentationTimeUs - delayUs, releaseTimeNs)
+        // With video effects the player reports no video size, and the effects draw the bars themselves
+        // into a screen-sized surface: the frames' own format is what tells where the video is.
+        val key = formatKey(format)
+        if (key != 0L && key != frameFormatKey) {
+            frameFormatKey = key
+            main.post { if (!released) setVideoFormat(format) }
+        }
     }
 
     override fun onRenderedFirstFrame() {
@@ -314,10 +331,27 @@ internal class AiostreamsAssEngine(
     }
 
     override fun onVideoSizeChanged(videoSize: VideoSize) {
-        if (videoSize.width == 0 || videoSize.height == 0) return
-        videoAspect = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
-        layout = layout.copy(videoWidth = videoSize.width, videoHeight = videoSize.height)
-        // The content frame takes the video's shape on its next layout.
+        if (videoSize.width == 0 || videoSize.height == 0 || sizedByFrames) return
+        setVideo(videoSize.width, videoSize.height, videoSize.pixelWidthHeightRatio)
+    }
+
+    /** The decoded video's format, before any effects; rotated, it shows the other way round. */
+    private fun setVideoFormat(format: Format) {
+        if (format.width <= 0 || format.height <= 0) return
+        sizedByFrames = true
+        val turned = format.rotationDegrees == 90 || format.rotationDegrees == 270
+        val ratio = if (format.pixelWidthHeightRatio > 0f) format.pixelWidthHeightRatio else 1f
+        if (turned) setVideo(format.height, format.width, 1f / ratio)
+        else setVideo(format.width, format.height, ratio)
+    }
+
+    private fun setVideo(width: Int, height: Int, pixelRatio: Float) {
+        val aspect = width * pixelRatio / height
+        if (aspect == videoAspect && layout.videoWidth == width && layout.videoHeight == height) return
+        InAppLogger.info(AiostreamsAss.TAG, "video=${width}x$height pixelRatio=$pixelRatio aspect=$aspect")
+        videoAspect = aspect
+        layout = layout.copy(videoWidth = width, videoHeight = height)
+        // The content frame takes the video's shape on its next layout, or never where effects draw the bars.
         stage?.let(::measureStage)
         updateLayout()
     }
@@ -508,3 +542,11 @@ internal fun shownVideo(frame: Rect, aspect: Float, resizeMode: Int): Rect {
 }
 
 private const val ASPECT_TOLERANCE = 0.01f
+
+/** A frame format's display shape as one number; 0 when it has no size. */
+private fun formatKey(format: Format): Long {
+    if (format.width <= 0 || format.height <= 0) return 0L
+    return (format.width.toLong() shl 40) or (format.height.toLong() shl 16) or
+        ((format.rotationDegrees / 90 and 3).toLong() shl 12) or
+        ((format.pixelWidthHeightRatio * 1000).roundToInt().toLong() and 0xfff)
+}
