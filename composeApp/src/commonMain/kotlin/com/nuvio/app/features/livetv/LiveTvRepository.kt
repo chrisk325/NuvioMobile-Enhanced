@@ -68,18 +68,21 @@ object LiveTvRepository {
         refreshJob = scope.launch {
             val cachedChannels = withContext(Dispatchers.Default) { LiveTvCacheStore.loadChannels() }
                 ?.takeIf { it.signature == signature && it.channels.isNotEmpty() }
-            restoredEpg = withContext(Dispatchers.Default) { LiveTvCacheStore.loadEpg() }
             if (cachedChannels != null && liveTvChannelSourceSignature(_uiState.value) == signature) {
                 detectedEpgUrls = cachedChannels.epgUrls
                 channelsSignature = signature
+                // Channels first; the saved guide, which can be large, is read after.
                 _uiState.value = _uiState.value.copy(
                     channels = cachedChannels.channels,
                     isLoading = false,
                     errorMessage = null,
+                    isEpgLoading = true,
                 )
+                restoredEpg = withContext(Dispatchers.Default) { LiveTvCacheStore.loadEpg() }
                 refreshEpg(force = false)
                 return@launch
             }
+            restoredEpg = withContext(Dispatchers.Default) { LiveTvCacheStore.loadEpg() }
             refresh()
         }
     }
@@ -474,10 +477,25 @@ object LiveTvRepository {
             return
         }
 
-        if (!force && applyRestoredEpg()) return
         val epgSignature = liveTvEpgSignature(state, requests)
+        val restored = restoredEpg?.takeIf { it.signature == epgSignature }
+        val restoredIsFresh = restored != null &&
+            Clock.System.now().toEpochMilliseconds() - restored.savedAtMillis < LIVE_TV_EPG_CACHE_TTL_MILLIS
+        if (!force && restored != null && restoredIsFresh) {
+            _uiState.value = state.copy(
+                epgPrograms = restored.programs,
+                isEpgLoading = false,
+                epgErrorMessage = null,
+            )
+            return
+        }
 
-        _uiState.value = state.copy(isEpgLoading = true, epgErrorMessage = null)
+        // A saved guide past its age is still shown while the new one downloads.
+        _uiState.value = state.copy(
+            epgPrograms = if (state.epgPrograms.isEmpty() && restored != null) restored.programs else state.epgPrograms,
+            isEpgLoading = true,
+            epgErrorMessage = null,
+        )
         epgJob = scope.launch {
             val nowMillis = Clock.System.now().toEpochMilliseconds()
             val guides = mutableListOf<LiveTvEpgGuide>()
@@ -506,6 +524,14 @@ object LiveTvRepository {
                     },
                 )
             }
+            if (guides.isEmpty()) {
+                // Every guide failed: keep the one already shown.
+                _uiState.value = _uiState.value.copy(
+                    isEpgLoading = false,
+                    epgErrorMessage = "Some guides could not be loaded: ${failedGuideNames.joinToString()}",
+                )
+                return@launch
+            }
             val channels = _uiState.value.channels
             val programs = withContext(Dispatchers.Default) { matchEpgToChannels(channels, guides) }
             _uiState.value = _uiState.value.copy(
@@ -524,22 +550,6 @@ object LiveTvRepository {
                 }
             }
         }
-    }
-
-    private fun applyRestoredEpg(): Boolean {
-        val state = _uiState.value
-        val restored = restoredEpg ?: return false
-        if (state.channels.isEmpty()) return false
-        val requests = buildEpgRequests(state)
-        if (requests.isEmpty()) return false
-        if (restored.signature != liveTvEpgSignature(state, requests)) return false
-        if (Clock.System.now().toEpochMilliseconds() - restored.savedAtMillis >= LIVE_TV_EPG_CACHE_TTL_MILLIS) return false
-        _uiState.value = state.copy(
-            epgPrograms = restored.programs,
-            isEpgLoading = false,
-            epgErrorMessage = null,
-        )
-        return true
     }
 
     private fun buildEpgRequests(state: LiveTvUiState): List<LiveTvEpgRequest> {
