@@ -35,6 +35,7 @@ import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleParser
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.nuvio.app.core.logging.InAppLogger
 import com.nuvio.app.features.addons.httpGetTextWithHeaders
 import com.nuvio.app.features.player.SubtitleStyleState
 import com.nuvio.app.features.player.replaceInnermostExtractor
@@ -232,6 +233,7 @@ internal class AiostreamsAssEngine(
             view.addOnAttachStateChangeListener(attachState)
             view.addOnLayoutChangeListener(layoutChange)
             contentFrame(view)?.addOnLayoutChangeListener(layoutChange)
+            ass.view.addOnLayoutChangeListener(layoutChange)
         }
         val overlay = ass.view
         if (overlay.parent !== view) {
@@ -372,9 +374,15 @@ internal class AiostreamsAssEngine(
 
     private fun measureStage(view: PlayerView) {
         val frame = contentFrame(view) ?: return
-        if (view.width <= 0 || view.height <= 0 || frame.width <= 0 || frame.height <= 0) return
-        val left = frame.left + frame.translationX + frame.pivotX * (1 - frame.scaleX)
-        val top = frame.top + frame.translationY + frame.pivotY * (1 - frame.scaleY)
+        // libass draws into the overlay's surface, so the video is placed relative to the overlay itself.
+        val overlay = ass.view
+        val stage: View = if (overlay.parent === view && overlay.width > 0 && overlay.height > 0) overlay else view
+        if (stage.width <= 0 || stage.height <= 0 || frame.width <= 0 || frame.height <= 0) return
+        val frameAt = IntArray(2).also(frame::getLocationInWindow)
+        val stageAt = IntArray(2).also(stage::getLocationInWindow)
+        // A location takes in the frame's own scale (a pinch zoom) and its ancestors' offsets.
+        val left = (frameAt[0] - stageAt[0]).toFloat()
+        val top = (frameAt[1] - stageAt[1]).toFloat()
         val frameBounds = Rect(
             left.roundToInt(),
             top.roundToInt(),
@@ -382,8 +390,14 @@ internal class AiostreamsAssEngine(
             (top + frame.height * frame.scaleY).roundToInt(),
         )
         val video = shownVideo(frameBounds, videoAspect, view.resizeMode)
-        if (layout.stageWidth == view.width && layout.stageHeight == view.height && layout.video == video) return
-        layout = layout.copy(stageWidth = view.width, stageHeight = view.height, video = video)
+        if (layout.stageWidth == stage.width && layout.stageHeight == stage.height && layout.video == video) return
+        InAppLogger.info(
+            AiostreamsAss.TAG,
+            "stage=${stage.width}x${stage.height} (overlay=${stage === overlay}) player=${view.width}x${view.height} " +
+                "contentFrame=${frameBounds.toShortString()} videoAspect=$videoAspect resizeMode=${view.resizeMode} " +
+                "video=${video.toShortString()}",
+        )
+        layout = layout.copy(stageWidth = stage.width, stageHeight = stage.height, video = video)
         updateLayout()
     }
 
@@ -395,6 +409,7 @@ internal class AiostreamsAssEngine(
         view.removeOnAttachStateChangeListener(attachState)
         view.removeOnLayoutChangeListener(layoutChange)
         contentFrame(view)?.removeOnLayoutChangeListener(layoutChange)
+        ass.view.removeOnLayoutChangeListener(layoutChange)
     }
 
     private fun updateLayout() {

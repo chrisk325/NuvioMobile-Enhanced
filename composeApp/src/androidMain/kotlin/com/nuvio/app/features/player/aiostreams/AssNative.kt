@@ -78,6 +78,9 @@ internal object AssNative {
     external fun stamped(handle: Long): Boolean
 
     @JvmStatic
+    external fun surfaceSize(handle: Long): Long
+
+    @JvmStatic
     external fun post(handle: Long, atNanos: Long)
 
     @JvmStatic

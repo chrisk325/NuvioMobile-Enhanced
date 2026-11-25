@@ -13,5 +13,7 @@ GlMasks *gl_masks_new(MaskStore *store, int small);
 void gl_masks_free(GlMasks *gl);
 
 // Clears the `surface_width` by `surface_height` GL surface and draws the picture over it, its `width` by
-// `height` frame stretched over the whole surface. Masks that reach past the frame aren't drawn.
-void gl_masks_draw(GlMasks *gl, Picture *picture, int width, int height, int surface_width, int surface_height);
+// `height` frame stretched over the whole surface. Masks that reach past the frame aren't drawn, and with
+// `scissor` (x, y, width, height on the surface, rows from the bottom) nothing is drawn outside it.
+void gl_masks_draw(GlMasks *gl, Picture *picture, int width, int height, int surface_width, int surface_height,
+                   const int *scissor);

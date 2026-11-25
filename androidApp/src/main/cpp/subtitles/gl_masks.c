@@ -325,8 +325,19 @@ static void flush(GlMasks *gl, GLuint texture, const float *end) {
     glDrawArrays(GL_TRIANGLES, 0, floats / FLOATS);
 }
 
-void gl_masks_draw(GlMasks *gl, Picture *picture, int width, int height, int surface_width, int surface_height) {
+static void draw_masks(GlMasks *gl, Picture *picture, int width, int height, int surface_width,
+                       int surface_height, const int *scissor);
+
+void gl_masks_draw(GlMasks *gl, Picture *picture, int width, int height, int surface_width, int surface_height,
+                   const int *scissor) {
+    draw_masks(gl, picture, width, height, surface_width, surface_height, scissor);
+    glDisable(GL_SCISSOR_TEST);
+}
+
+static void draw_masks(GlMasks *gl, Picture *picture, int width, int height, int surface_width,
+                       int surface_height, const int *scissor) {
     take_back(gl);
+    glDisable(GL_SCISSOR_TEST);
     // The frame's coordinates map onto the whole surface, whatever size the window's buffers came out.
     glViewport(0, 0, surface_width, surface_height);
     glClearColor(0, 0, 0, 0);
@@ -337,6 +348,11 @@ void gl_masks_draw(GlMasks *gl, Picture *picture, int width, int height, int sur
     gl->draws++;
     bring_in(gl, picture);
 
+    // The clear covers the whole surface; the masks only the video.
+    if (scissor) {
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
+    }
     glUseProgram(gl->program);
     glUniform2f(gl->size, width, height);
     glEnable(GL_BLEND);

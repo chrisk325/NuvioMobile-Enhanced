@@ -118,6 +118,10 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
     /** A new window, which has nothing on it yet. */
     private var mustDraw = false
 
+    /** The geometry last written to the app's log. */
+    private var lastLogged = ""
+    private var loggedSurface = -1L
+
     init {
         worker.post {
             native = AssNative.create(font().path)
@@ -332,6 +336,15 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
         if (taken < 0 || (taken == 0 && !redraw)) return
         mustDraw = false
         if (!AssNative.draw(native)) return
+        val drawnTo = AssNative.surfaceSize(native)
+        if (drawnTo != loggedSurface) {
+            loggedSurface = drawnTo
+            com.nuvio.app.core.logging.InAppLogger.info(
+                AiostreamsAss.TAG,
+                "drawing to ${if (drawnTo == 0L) "the window without GL" else "a ${drawnTo ushr 32}x${drawnTo and 0xffffffffL} GL surface"} " +
+                    "for a ${width}x$height frame, gpu=$gpu",
+            )
+        }
         val now = System.nanoTime()
         blends.add(now - rendered)
         if (AssNative.stamped(native)) {
@@ -362,10 +375,18 @@ internal class AssSurface(context: Context, font: () -> File) : SurfaceHolder.Ca
             val videoHeight = stage.video.height() * sy
             if (videoWidth >= 1) fontScale *= height / minOf(height.toDouble(), width / videoWidth * videoHeight)
         }
+        val top = (stage.video.top * sy).roundToInt()
+        val bottom = ((stage.stageHeight - stage.video.bottom) * sy).roundToInt()
+        val left = (stage.video.left * sx).roundToInt()
+        val right = ((stage.stageWidth - stage.video.right) * sx).roundToInt()
+        val logged = "frame=${width}x$height storage=${stage.videoWidth}x${stage.videoHeight} " +
+            "margins(t,b,l,r)=$top,$bottom,$left,$right useMargins=$useMargins"
+        if (logged != lastLogged) {
+            lastLogged = logged
+            com.nuvio.app.core.logging.InAppLogger.info(AiostreamsAss.TAG, logged)
+        }
         AssNative.setLayout(
-            native, stage.videoWidth, stage.videoHeight,
-            (stage.video.top * sy).roundToInt(), ((stage.stageHeight - stage.video.bottom) * sy).roundToInt(),
-            (stage.video.left * sx).roundToInt(), ((stage.stageWidth - stage.video.right) * sx).roundToInt(),
+            native, stage.videoWidth, stage.videoHeight, top, bottom, left, right,
             useMargins, fontScale.toFloat(), if (style.override == AssStyle.NONE) 0.0 else 100 - stage.position,
         )
         AssNative.setStyle(
