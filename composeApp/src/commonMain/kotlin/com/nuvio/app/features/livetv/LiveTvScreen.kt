@@ -1020,6 +1020,26 @@ private fun LiveTvChannelControls(
                 horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (categories.isNotEmpty()) {
+                    // One chip that opens a vertical list instead of a chip per category, which
+                    // was unreadable and hard to scan with large playlists.
+                    val activeCategory = selectedCategoryName
+                        ?.takeIf { filterMode == LiveTvChannelFilterMode.Category }
+                    LiveTvCategoryPanelChip(
+                        label = activeCategory ?: stringResource(Res.string.live_tv_categories),
+                        selectedGroup = activeCategory,
+                        favoritesOnly = false,
+                        groups = categories,
+                        categoryTitle = stringResource(Res.string.live_tv_categories),
+                        allLabel = allLabel,
+                        favoritesLabel = favoritesLabel,
+                        onAllSelected = onAllSelected,
+                        onFavoritesSelected = onFavoritesSelected,
+                        onGroupSelected = onGroupSelected,
+                        showQuickFilters = false,
+                        groupCounts = counts.categories,
+                    )
+                }
                 LiveTvPanelFilterChip(
                     label = allLabel,
                     selected = filterMode == LiveTvChannelFilterMode.All,
@@ -1047,15 +1067,6 @@ private fun LiveTvChannelControls(
                         selected = filterMode == LiveTvChannelFilterMode.Favorites,
                         onClick = onFavoritesSelected,
                         count = counts.favorites,
-                    )
-                }
-                categories.forEach { category ->
-                    LiveTvPanelFilterChip(
-                        label = category,
-                        selected = filterMode == LiveTvChannelFilterMode.Category &&
-                            selectedCategoryName.equals(category, ignoreCase = true),
-                        onClick = { onGroupSelected(category) },
-                        count = counts.categories[category.lowercase()] ?: 0,
                     )
                 }
             }

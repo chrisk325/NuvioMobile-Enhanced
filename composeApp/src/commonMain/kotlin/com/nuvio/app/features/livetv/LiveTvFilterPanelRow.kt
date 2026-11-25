@@ -152,9 +152,16 @@ internal fun LiveTvPanelFilterChip(
     }
 }
 
+/**
+ * A single chip that opens a vertical, searchable list of categories in a bottom sheet.
+ *
+ * @param showQuickFilters whether the sheet also offers the "All" and "Favorites" rows; turn it off
+ * when those filters already sit next to the chip as their own chips.
+ * @param groupCounts optional per-category counts keyed by the lowercased category name.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LiveTvCategoryPanelChip(
+internal fun LiveTvCategoryPanelChip(
     label: String,
     selectedGroup: String?,
     favoritesOnly: Boolean,
@@ -165,6 +172,8 @@ private fun LiveTvCategoryPanelChip(
     onAllSelected: () -> Unit,
     onFavoritesSelected: () -> Unit,
     onGroupSelected: (String) -> Unit,
+    showQuickFilters: Boolean = true,
+    groupCounts: Map<String, Int>? = null,
 ) {
     val tokens = MaterialTheme.nuvio
     var isSheetVisible by remember { mutableStateOf(false) }
@@ -189,6 +198,7 @@ private fun LiveTvCategoryPanelChip(
     ) {
         Text(
             text = label,
+            modifier = Modifier.widthIn(max = 200.dp),
             style = MaterialTheme.typography.labelLarge,
             color = if (selected) tokens.colors.accent else tokens.colors.textSecondary,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
@@ -211,6 +221,8 @@ private fun LiveTvCategoryPanelChip(
             favoritesOnly = favoritesOnly,
             allLabel = allLabel,
             favoritesLabel = favoritesLabel,
+            showQuickFilters = showQuickFilters,
+            groupCounts = groupCounts,
             sheetState = sheetState,
             onDismiss = {
                 coroutineScope.launch {
@@ -260,6 +272,8 @@ private fun LiveTvCategoryOptionsSheet(
     favoritesOnly: Boolean,
     allLabel: String,
     favoritesLabel: String,
+    showQuickFilters: Boolean,
+    groupCounts: Map<String, Int>?,
     sheetState: SheetState,
     onDismiss: () -> Unit,
     onAllSelected: () -> Unit,
@@ -342,7 +356,7 @@ private fun LiveTvCategoryOptionsSheet(
                 )
                 LiveTvFilterSheetDivider()
             }
-            if (!isSearchingCategories) {
+            if (showQuickFilters && !isSearchingCategories) {
                 item(key = "live_tv_filter_all") {
                     LiveTvFilterSheetRow(
                         title = allLabel,
@@ -362,18 +376,20 @@ private fun LiveTvCategoryOptionsSheet(
                     LiveTvFilterSheetDivider()
                 }
             }
-            item(key = "live_tv_filter_categories_header") {
-                Text(
-                    text = stringResource(Res.string.live_tv_categories),
-                    modifier = Modifier.padding(
-                        horizontal = tokens.spacing.screenHorizontal,
-                        vertical = NuvioTokens.Space.s10,
-                    ),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = tokens.colors.textMuted,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                LiveTvFilterSheetDivider()
+            if (showQuickFilters) {
+                item(key = "live_tv_filter_categories_header") {
+                    Text(
+                        text = stringResource(Res.string.live_tv_categories),
+                        modifier = Modifier.padding(
+                            horizontal = tokens.spacing.screenHorizontal,
+                            vertical = NuvioTokens.Space.s10,
+                        ),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = tokens.colors.textMuted,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    LiveTvFilterSheetDivider()
+                }
             }
             if (filteredGroups.isEmpty() && isSearchingCategories) {
                 item(key = "live_tv_filter_no_matching_categories") {
@@ -394,8 +410,9 @@ private fun LiveTvCategoryOptionsSheet(
             ) { group ->
                 LiveTvFilterSheetRow(
                     title = group,
-                    selected = group == selectedGroup,
+                    selected = group.equals(selectedGroup, ignoreCase = true),
                     onClick = { onGroupSelected(group) },
+                    count = groupCounts?.let { it[group.lowercase()] ?: 0 },
                 )
                 if (group != filteredGroups.lastOrNull()) {
                     LiveTvFilterSheetDivider()
@@ -411,6 +428,7 @@ private fun LiveTvFilterSheetRow(
     selected: Boolean,
     onClick: () -> Unit,
     icon: ImageVector? = null,
+    count: Int? = null,
 ) {
     val tokens = MaterialTheme.nuvio
     Row(
@@ -437,6 +455,14 @@ private fun LiveTvFilterSheetRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        if (count != null) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selected) tokens.colors.accent.copy(alpha = 0.75f) else tokens.colors.textMuted,
+                maxLines = 1,
+            )
+        }
         if (selected) {
             Icon(
                 imageVector = Icons.Rounded.Check,
