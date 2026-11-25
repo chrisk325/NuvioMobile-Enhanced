@@ -94,6 +94,13 @@ class ParallelPlaybackPolicyTest {
     }
 
     @Test
+    fun `an unexpected loader failure does not step down`() {
+        assertFalse(ParallelPlaybackPolicy.shouldStepDownFor(null, unexpectedLoaderFailure = true))
+        assertFalse(ParallelPlaybackPolicy.shouldStepDownFor(503, unexpectedLoaderFailure = true))
+        assertTrue(ParallelPlaybackPolicy.shouldStepDownFor(503, unexpectedLoaderFailure = false))
+    }
+
+    @Test
     fun `public addresses count as remote`() {
         assertTrue(ParallelPlaybackPolicy.isRemoteHttps("https://203.0.113.7/movie.mkv"))
         assertTrue(ParallelPlaybackPolicy.isRemoteHttps("https://172.32.0.1/movie.mkv"))

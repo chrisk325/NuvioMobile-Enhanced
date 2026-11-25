@@ -38,10 +38,11 @@ internal fun ExoPlayer.Builder.buildWithAssSupportCompat(
 ): ExoPlayer {
     val assHandler = AssHandler()
     val assSubtitleParserFactory = CompatAssSubtitleParserFactory(assHandler)
+    // The resync goes last: the ASS extractor replaces Media3's, and with it the patched reader.
     val assExtractorsFactory = extractorsFactory.withAssMkvSupportCompat(
         subtitleParserFactory = assSubtitleParserFactory,
         assHandler = assHandler
-    )
+    ).withMatroskaResync()
 
     val mediaSourceFactory = DefaultMediaSourceFactory(
         dataSourceFactory,

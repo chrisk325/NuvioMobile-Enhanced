@@ -1,11 +1,13 @@
 package com.nuvio.app.features.player
 
 import android.net.Uri
+import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
+import androidx.media3.exoplayer.upstream.Loader
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** How the main video url of one playback is fetched over parallel connections. */
@@ -37,8 +39,16 @@ internal object ParallelPlaybackPolicy {
     /** Connections to retry with after a source error on [current]: 4 to 2, then 1 (no parallel). */
     fun stepDown(current: Int): Int = if (current > FALLBACK_CONNECTIONS) FALLBACK_CONNECTIONS else 1
 
-    /** 404/410 say the file is gone, not that the server refused the connections. */
-    fun shouldStepDownFor(httpStatus: Int?): Boolean = httpStatus != 404 && httpStatus != 410
+    /**
+     * Whether a source error on parallel connections should replay the stream with fewer.
+     *
+     * 404/410 say the file is gone, not that the server refused the connections. An unexpected
+     * failure (a runtime exception in the loading code, such as the parser rejecting the data,
+     * which Media3 reports as an I/O error) is not a network problem either: fewer connections
+     * fetch the same bytes, so replaying would only restart playback and fail at the same spot.
+     */
+    fun shouldStepDownFor(httpStatus: Int?, unexpectedLoaderFailure: Boolean = false): Boolean =
+        !unexpectedLoaderFailure && httpStatus != 404 && httpStatus != 410
 
     fun plan(
         manualEnabled: Boolean,
@@ -198,4 +208,17 @@ internal fun Throwable.invalidResponseCode(): Int? {
         depth++
     }
     return null
+}
+
+/** True when this error's cause chain holds a runtime exception thrown inside a Media3 loader. */
+@OptIn(UnstableApi::class)
+internal fun Throwable.isUnexpectedLoaderFailure(): Boolean {
+    var current: Throwable? = this
+    var depth = 0
+    while (current != null && depth < 8) {
+        if (current is Loader.UnexpectedLoaderException) return true
+        current = current.cause
+        depth++
+    }
+    return false
 }
