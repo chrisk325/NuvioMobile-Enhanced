@@ -169,6 +169,14 @@ internal expect object PlayerSettingsStorage {
     fun savePlaybackTargetBufferMb(value: Int)
     fun loadVodDiskCacheSizeMb(): Int?
     fun saveVodDiskCacheSizeMb(value: Int)
+    fun loadParallelConnectionsEnabled(): Boolean?
+    fun saveParallelConnectionsEnabled(value: Boolean)
+    fun loadParallelConnectionCount(): Int?
+    fun saveParallelConnectionCount(value: Int)
+    fun loadParallelChunkSizeMb(): Int?
+    fun saveParallelChunkSizeMb(value: Int)
+    fun loadAutoParallelConnectionsEnabled(): Boolean?
+    fun saveAutoParallelConnectionsEnabled(value: Boolean)
     fun loadStreamAutoPlayMode(): String?
     fun saveStreamAutoPlayMode(mode: String)
     fun loadStreamAutoPlaySource(): String?

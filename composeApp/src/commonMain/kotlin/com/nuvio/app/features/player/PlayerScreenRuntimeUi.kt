@@ -343,6 +343,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
                     animeContent = animeContentState.value,
                     discPlaybackEnabled = !isLiveTvPlayback && !parentMetaType.equals("live", ignoreCase = true),
                     liveStream = isLiveTvPlayback,
+                    sourceFileSizeBytes = activeStream?.behaviorHints?.videoSize,
                     onInitialPositionHandled = { key, handled ->
                         if (active.value && playbackKey == activePlaybackKey && key == currentInitialPositionRequestKey()) {
                             initialSeekApplied = handled

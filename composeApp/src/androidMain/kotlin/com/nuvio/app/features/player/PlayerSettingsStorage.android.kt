@@ -158,6 +158,10 @@ actual object PlayerSettingsStorage {
     private const val vodDiskCacheAutoSizeKey = "vod_disk_cache_auto_size"
     private const val vodDiskCacheEnabledKey = "vod_disk_cache_enabled"
     private const val vodDiskCacheSizeMbKey = "vod_disk_cache_size_mb"
+    private const val parallelConnectionsEnabledKey = "parallel_connections_enabled"
+    private const val parallelConnectionCountKey = "parallel_connection_count"
+    private const val parallelChunkSizeMbKey = "parallel_chunk_size_mb"
+    private const val autoParallelConnectionsEnabledKey = "auto_parallel_connections_enabled"
     private val syncKeys = listOf(
         showPlayerTitleLogoKey,
         showLoadingOverlayKey,
@@ -1446,6 +1450,74 @@ actual object PlayerSettingsStorage {
         preferences
             ?.edit()
             ?.putInt(ProfileScopedKey.of(vodDiskCacheSizeMbKey), value)
+            ?.apply()
+    }
+
+    actual fun loadParallelConnectionsEnabled(): Boolean? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(parallelConnectionsEnabledKey)
+            if (sharedPreferences.contains(key)) {
+                sharedPreferences.getBoolean(key, false)
+            } else {
+                null
+            }
+        }
+
+    actual fun saveParallelConnectionsEnabled(value: Boolean) {
+        preferences
+            ?.edit()
+            ?.putBoolean(ProfileScopedKey.of(parallelConnectionsEnabledKey), value)
+            ?.apply()
+    }
+
+    actual fun loadParallelConnectionCount(): Int? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(parallelConnectionCountKey)
+            if (sharedPreferences.contains(key)) {
+                sharedPreferences.getInt(key, 2)
+            } else {
+                null
+            }
+        }
+
+    actual fun saveParallelConnectionCount(value: Int) {
+        preferences
+            ?.edit()
+            ?.putInt(ProfileScopedKey.of(parallelConnectionCountKey), value)
+            ?.apply()
+    }
+
+    actual fun loadParallelChunkSizeMb(): Int? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(parallelChunkSizeMbKey)
+            if (sharedPreferences.contains(key)) {
+                sharedPreferences.getInt(key, 16)
+            } else {
+                null
+            }
+        }
+
+    actual fun saveParallelChunkSizeMb(value: Int) {
+        preferences
+            ?.edit()
+            ?.putInt(ProfileScopedKey.of(parallelChunkSizeMbKey), value)
+            ?.apply()
+    }
+
+    actual fun loadAutoParallelConnectionsEnabled(): Boolean? =
+        preferences?.let { sharedPreferences ->
+            val key = ProfileScopedKey.of(autoParallelConnectionsEnabledKey)
+            if (sharedPreferences.contains(key)) {
+                sharedPreferences.getBoolean(key, true)
+            } else {
+                null
+            }
+        }
+
+    actual fun saveAutoParallelConnectionsEnabled(value: Boolean) {
+        preferences
+            ?.edit()
+            ?.putBoolean(ProfileScopedKey.of(autoParallelConnectionsEnabledKey), value)
             ?.apply()
     }
 

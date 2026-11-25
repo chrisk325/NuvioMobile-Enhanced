@@ -757,6 +757,10 @@ internal object SettingsConfigTransfer {
         PlayerSettingsStorage.loadPlaybackBackBufferSeconds()?.let { put("playback_back_buffer_seconds", encodeSyncInt(it)) }
         PlayerSettingsStorage.loadPlaybackTargetBufferMb()?.let { put("playback_target_buffer_mb", encodeSyncInt(it)) }
         PlayerSettingsStorage.loadVodDiskCacheSizeMb()?.let { put("vod_disk_cache_size_mb", encodeSyncInt(it)) }
+        PlayerSettingsStorage.loadParallelConnectionsEnabled()?.let { put("parallel_connections_enabled", encodeSyncBoolean(it)) }
+        PlayerSettingsStorage.loadParallelConnectionCount()?.let { put("parallel_connection_count", encodeSyncInt(it)) }
+        PlayerSettingsStorage.loadParallelChunkSizeMb()?.let { put("parallel_chunk_size_mb", encodeSyncInt(it)) }
+        PlayerSettingsStorage.loadAutoParallelConnectionsEnabled()?.let { put("auto_parallel_connections_enabled", encodeSyncBoolean(it)) }
         PlayerSettingsStorage.loadStreamAutoPlayMode()?.let { put("stream_auto_play_mode", encodeSyncString(it)) }
         PlayerSettingsStorage.loadStreamAutoPlaySource()?.let { put("stream_auto_play_source", encodeSyncString(it)) }
         PlayerSettingsStorage.loadStreamAutoPlaySelectedAddons()?.let { put("stream_auto_play_selected_addons", encodeSyncStringSet(it)) }
@@ -897,6 +901,10 @@ internal object SettingsConfigTransfer {
         payload.decodeSyncInt("playback_back_buffer_seconds")?.let { PlayerSettingsStorage.savePlaybackBackBufferSeconds(it) }
         payload.decodeSyncInt("playback_target_buffer_mb")?.let { PlayerSettingsStorage.savePlaybackTargetBufferMb(it) }
         payload.decodeSyncInt("vod_disk_cache_size_mb")?.let { PlayerSettingsStorage.saveVodDiskCacheSizeMb(it) }
+        payload.decodeSyncBoolean("parallel_connections_enabled")?.let { PlayerSettingsStorage.saveParallelConnectionsEnabled(it) }
+        payload.decodeSyncInt("parallel_connection_count")?.let { PlayerSettingsStorage.saveParallelConnectionCount(it) }
+        payload.decodeSyncInt("parallel_chunk_size_mb")?.let { PlayerSettingsStorage.saveParallelChunkSizeMb(it) }
+        payload.decodeSyncBoolean("auto_parallel_connections_enabled")?.let { PlayerSettingsStorage.saveAutoParallelConnectionsEnabled(it) }
         payload.decodeSyncString("stream_auto_play_mode")?.let { PlayerSettingsStorage.saveStreamAutoPlayMode(it) }
         payload.decodeSyncString("stream_auto_play_source")?.let { PlayerSettingsStorage.saveStreamAutoPlaySource(it) }
         payload.decodeSyncStringSet("stream_auto_play_selected_addons")?.let { PlayerSettingsStorage.saveStreamAutoPlaySelectedAddons(it) }

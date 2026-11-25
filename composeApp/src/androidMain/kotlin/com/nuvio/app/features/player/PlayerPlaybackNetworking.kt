@@ -94,12 +94,34 @@ internal object PlayerPlaybackNetworking {
             .build()
     }
 
+    /**
+     * Parallel connections need one TCP connection per ranged request. HTTP/2 would multiplex all of
+     * them onto a single connection to the host and gain nothing, so this client stays on HTTP/1.1.
+     */
+    private val parallelPlaybackHttpClient: OkHttpClient by lazy {
+        playbackHttpClient.newBuilder()
+            .protocols(listOf(Protocol.HTTP_1_1))
+            .build()
+    }
+
     fun createHttpDataSourceFactory(
         defaultHeaders: Map<String, String> = emptyMap(),
         useLongReadTimeout: Boolean = false,
-    ): DataSource.Factory {
+    ): DataSource.Factory = createOkHttpDataSourceFactory(
+        defaultHeaders,
+        if (useLongReadTimeout) loopbackPlaybackHttpClient else playbackHttpClient,
+    )
+
+    /** The upstream for [ParallelRangeDataSource]: the playback client and headers, on HTTP/1.1. */
+    fun createParallelHttpDataSourceFactory(
+        defaultHeaders: Map<String, String> = emptyMap(),
+    ): OkHttpDataSource.Factory = createOkHttpDataSourceFactory(defaultHeaders, parallelPlaybackHttpClient)
+
+    private fun createOkHttpDataSourceFactory(
+        defaultHeaders: Map<String, String>,
+        baseClient: OkHttpClient,
+    ): OkHttpDataSource.Factory {
         val requestHeaders = sanitizeHeaders(defaultHeaders)
-        val baseClient = if (useLongReadTimeout) loopbackPlaybackHttpClient else playbackHttpClient
         val client = requestHeaders.headerValue("Authorization")?.let { authorization ->
             baseClient.newBuilder()
                 .addNetworkInterceptor { chain ->

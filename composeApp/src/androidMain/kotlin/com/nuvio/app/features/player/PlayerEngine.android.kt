@@ -160,6 +160,7 @@ actual fun PlatformPlayerSurface(
     useNativeController: Boolean,
     discPlaybackEnabled: Boolean,
     liveStream: Boolean,
+    sourceFileSizeBytes: Long?,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -235,6 +236,7 @@ actual fun PlatformPlayerSurface(
             animeContent = animeContent,
             discPlaybackEnabled = discPlaybackEnabled,
             liveStream = liveStream,
+            sourceFileSizeBytes = sourceFileSizeBytes,
             onInitialPositionHandled = onInitialPositionHandled,
             onControllerReady = surfaceOnControllerReady,
             onSnapshot = surfaceOnSnapshot,
@@ -303,6 +305,7 @@ private fun ExoPlayerSurface(
     animeContent: Boolean,
     discPlaybackEnabled: Boolean,
     liveStream: Boolean,
+    sourceFileSizeBytes: Long?,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -388,6 +391,8 @@ private fun ExoPlayerSurface(
     var chaptersProbeDone by remember(playerSourceKey) { mutableStateOf(false) }
     var playbackResumeGeneration by remember(playerSourceKey) { mutableStateOf(0) }
     val stallSession = remember(playerSourceKey) { PlaybackReopenSession(initialPositionMs) }
+    // Most connections left for this source after source errors on parallel connections.
+    var parallelConnectionCap by remember(playerSourceKey) { mutableStateOf<Int?>(null) }
     val effectiveDecoderPriority = decoderPriorityOverride ?: playerSettings.decoderPriority
     val volumeBoostAudioProcessor = remember(playerSourceKey) {
         PlayerOutputAudioProcessor(stereoDownmixEnabled = !playerSettings.androidAudioPassthroughEnabled).apply {
@@ -439,6 +444,31 @@ private fun ExoPlayerSurface(
             }
             .let { factory -> aiostreamsAss?.extractors(factory) ?: factory }
     }
+    val parallelPlan = remember(playerSourceKey, parallelConnectionCap) {
+        ParallelPlaybackPolicy.plan(
+            manualEnabled = playerSettings.parallelConnectionsEnabled,
+            manualConnections = playerSettings.parallelConnectionCount,
+            manualChunkSizeMb = playerSettings.parallelChunkSizeMb,
+            autoEnabled = playerSettings.autoParallelConnectionsEnabled,
+            connectionCap = parallelConnectionCap,
+            supported = ParallelConnectionDefaults.supported,
+            deviceMemoryMb = PlaybackMemoryInfo.deviceMemoryMb(),
+            progressive = isProgressivePlaybackSource(sourceUrl, sanitizedSourceResponseHeaders, normalizedStreamType),
+            liveStream = liveStream,
+            youtubeChunked = useYoutubeChunkedPlayback,
+            hasResponseHeaderOverrides = sanitizedSourceResponseHeaders.isNotEmpty(),
+            url = sourceUrl,
+            requestHeaders = sanitizedSourceHeaders,
+            fileSizeBytes = sourceFileSizeBytes,
+        ).also { plan ->
+            InAppLogger.info(
+                "ExoPlayer/Android",
+                "parallel connections=${plan?.connections ?: 1} automatic=${plan?.automatic ?: false} " +
+                    "chunkKb=${plan?.chunkSizeKb ?: 0} cap=${parallelConnectionCap ?: "none"} " +
+                    "fileSize=${sourceFileSizeBytes ?: "unknown"}",
+            )
+        }
+    }
     val networkBytesRead = remember(playerSourceKey) { AtomicLong(0L) }
     val networkSpeedSampler = remember(playerSourceKey) { ByteRateSampler() }
     val dataSourceFactory = remember(
@@ -449,6 +479,7 @@ private fun ExoPlayerSurface(
         useYoutubeChunkedPlayback,
         externalSubtitles,
         liveStream,
+        parallelPlan,
     ) {
         val loopbackSource = isLoopbackPlaybackSource(sourceUrl)
         PlatformPlaybackDataSourceFactory.create(
@@ -465,7 +496,11 @@ private fun ExoPlayerSurface(
                 streamType = normalizedStreamType,
             ).localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8
             if (hls) HlsParameterSetInitDataSource.Factory(factory) else factory
-        }.withPlaybackBuffering(
+        }.withParallelConnections(
+            sourceUrl = sourceUrl,
+            plan = parallelPlan,
+            requestHeaders = sanitizedSourceHeaders,
+        ).withPlaybackBuffering(
             context = context,
             settings = playerSettings,
             // A live channel never ends and never repeats: the VOD disk cache would replay an old
@@ -561,6 +596,7 @@ private fun ExoPlayerSurface(
         videoEffectsNeeded,
         animeRebuildGeneration,
         liveStream,
+        parallelPlan,
     ) {
         aiostreamsAss?.reset(
             PlatformPlaybackDataSourceFactory.create(
@@ -1071,6 +1107,25 @@ private fun ExoPlayerSurface(
                         ).show()
                         return
                     }
+                }
+
+                // Parallel connections are the first suspect for a source error (2xxx) while they are
+                // on: rebuild the player with fewer of them (4, 2, then one) at the same position.
+                val activeParallelPlan = parallelPlan
+                if (activeParallelPlan != null &&
+                    error.errorCode in PlaybackException.ERROR_CODE_IO_UNSPECIFIED until 3000 &&
+                    ParallelPlaybackPolicy.shouldStepDownFor(error.invalidResponseCode())
+                ) {
+                    val nextConnections = ParallelPlaybackPolicy.stepDown(activeParallelPlan.connections)
+                    InAppLogger.warn(
+                        "ExoPlayer/Android",
+                        "PARALLEL_FALLBACK: ${error.errorCodeName} on ${activeParallelPlan.connections} " +
+                            "connections (automatic=${activeParallelPlan.automatic}); retrying with $nextConnections",
+                    )
+                    fallbackStartPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+                    parallelConnectionCap = nextConnections
+                    latestOnError.value(null)
+                    return
                 }
 
                 val positionMs = exoPlayer.currentPosition.coerceAtLeast(0L)

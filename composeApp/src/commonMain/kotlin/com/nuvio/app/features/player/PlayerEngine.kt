@@ -127,6 +127,8 @@ expect fun PlatformPlayerSurface(
     discPlaybackEnabled: Boolean = false,
     /** A Live TV channel: an endless stream that gets live-specific buffering and recovery. */
     liveStream: Boolean = false,
+    /** File size the addon reported for this stream, when known (decides automatic parallel connections). */
+    sourceFileSizeBytes: Long? = null,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit = { _, _ -> },
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
