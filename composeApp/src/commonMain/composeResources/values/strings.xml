@@ -1598,6 +1598,14 @@
     <string name="settings_playback_vod_disk_cache_auto_size_description">Size the cache from free disk space. Turn off to choose a size.</string>
     <string name="settings_playback_vod_disk_cache_size">Cache Size</string>
     <string name="settings_playback_vod_disk_cache_note">Disk writes continue while a cached stream plays. A new size applies the next time the app starts.</string>
+    <string name="settings_playback_network_section">Network</string>
+    <string name="settings_playback_parallel_connections">Parallel connections</string>
+    <string name="settings_playback_parallel_connections_description">Fetch every progressive stream over several connections at once. Helps when your internet is fast but a single connection to the server is not.</string>
+    <string name="settings_playback_parallel_connection_count">Connections</string>
+    <string name="settings_playback_parallel_chunk_size">Chunk size</string>
+    <string name="settings_playback_auto_parallel_connections">Automatic for large files</string>
+    <string name="settings_playback_auto_parallel_connections_description">Remote files of 20 GB and up use four connections, fewer if the server refuses. Needs 3 GB of RAM or more.</string>
+    <string name="settings_playback_parallel_connections_note">ExoPlayer only, on Android 8.1 or newer. If a stream fails on several connections, it is retried with fewer, down to one. Changes apply to the next stream you open.</string>
     <string name="settings_playback_tunneled_playback_description">Hardware-level audio/video sync. May improve playback on some Android TV devices</string>
     <string name="settings_playback_exo_chapters">Show Chapters</string>
     <string name="settings_playback_exo_chapters_description">Mark chapters on the progress bar and list them in the player. With ExoPlayer this makes a few small extra requests once playback starts to read MKV and MP4 chapters.</string>

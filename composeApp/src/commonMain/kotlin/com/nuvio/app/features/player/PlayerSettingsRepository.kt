@@ -105,6 +105,10 @@ data class PlayerSettingsUiState(
     val playbackBackBufferSeconds: Int = 10,
     val playbackTargetBufferMb: Int = 256,
     val vodDiskCacheSizeMb: Int = 2048,
+    val parallelConnectionsEnabled: Boolean = false,
+    val parallelConnectionCount: Int = 2,
+    val parallelChunkSizeMb: Int = 16,
+    val autoParallelConnectionsEnabled: Boolean = true,
     val streamAutoPlayMode: StreamAutoPlayMode = StreamAutoPlayMode.MANUAL,
     val streamAutoPlaySource: StreamAutoPlaySource = StreamAutoPlaySource.ALL_SOURCES,
     val streamAutoPlaySelectedAddons: Set<String> = emptySet(),
@@ -244,6 +248,10 @@ object PlayerSettingsRepository {
     private var playbackBackBufferSeconds = 10
     private var playbackTargetBufferMb = 256
     private var vodDiskCacheSizeMb = 2048
+    private var parallelConnectionsEnabled = false
+    private var parallelConnectionCount = 2
+    private var parallelChunkSizeMb = 16
+    private var autoParallelConnectionsEnabled = true
     private var streamAutoPlayMode = StreamAutoPlayMode.MANUAL
     private var streamAutoPlaySource = StreamAutoPlaySource.ALL_SOURCES
     private var streamAutoPlaySelectedAddons: Set<String> = emptySet()
@@ -369,6 +377,10 @@ object PlayerSettingsRepository {
         playbackBackBufferSeconds = 10
         playbackTargetBufferMb = 256
         vodDiskCacheSizeMb = 2048
+        parallelConnectionsEnabled = false
+        parallelConnectionCount = 2
+        parallelChunkSizeMb = 16
+        autoParallelConnectionsEnabled = true
         streamAutoPlayMode = StreamAutoPlayMode.MANUAL
         streamAutoPlaySource = StreamAutoPlaySource.ALL_SOURCES
         streamAutoPlaySelectedAddons = emptySet()
@@ -534,6 +546,10 @@ object PlayerSettingsRepository {
         playbackBackBufferSeconds = PlayerSettingsStorage.loadPlaybackBackBufferSeconds() ?: 10
         playbackTargetBufferMb = PlayerSettingsStorage.loadPlaybackTargetBufferMb() ?: 256
         vodDiskCacheSizeMb = PlayerSettingsStorage.loadVodDiskCacheSizeMb() ?: 2048
+        parallelConnectionsEnabled = PlayerSettingsStorage.loadParallelConnectionsEnabled() ?: false
+        parallelConnectionCount = (PlayerSettingsStorage.loadParallelConnectionCount() ?: 2).coerceIn(2, 4)
+        parallelChunkSizeMb = (PlayerSettingsStorage.loadParallelChunkSizeMb() ?: 16).coerceIn(4, 32)
+        autoParallelConnectionsEnabled = PlayerSettingsStorage.loadAutoParallelConnectionsEnabled() ?: true
         streamAutoPlayMode = PlayerSettingsStorage.loadStreamAutoPlayMode()
             ?.let { runCatching { StreamAutoPlayMode.valueOf(it) }.getOrNull() }
             ?: StreamAutoPlayMode.MANUAL
@@ -1197,6 +1213,40 @@ object PlayerSettingsRepository {
         PlayerSettingsStorage.saveVodDiskCacheSizeMb(value)
     }
 
+    fun setParallelConnectionsEnabled(value: Boolean) {
+        ensureLoaded()
+        if (parallelConnectionsEnabled == value) return
+        parallelConnectionsEnabled = value
+        publish()
+        PlayerSettingsStorage.saveParallelConnectionsEnabled(value)
+    }
+
+    fun setParallelConnectionCount(value: Int) {
+        ensureLoaded()
+        val clamped = value.coerceIn(2, 4)
+        if (parallelConnectionCount == clamped) return
+        parallelConnectionCount = clamped
+        publish()
+        PlayerSettingsStorage.saveParallelConnectionCount(clamped)
+    }
+
+    fun setParallelChunkSizeMb(value: Int) {
+        ensureLoaded()
+        val clamped = value.coerceIn(4, 32)
+        if (parallelChunkSizeMb == clamped) return
+        parallelChunkSizeMb = clamped
+        publish()
+        PlayerSettingsStorage.saveParallelChunkSizeMb(clamped)
+    }
+
+    fun setAutoParallelConnectionsEnabled(value: Boolean) {
+        ensureLoaded()
+        if (autoParallelConnectionsEnabled == value) return
+        autoParallelConnectionsEnabled = value
+        publish()
+        PlayerSettingsStorage.saveAutoParallelConnectionsEnabled(value)
+    }
+
     fun setStreamAutoPlayMode(mode: StreamAutoPlayMode) {
         ensureLoaded()
         if (streamAutoPlayMode == mode) return
@@ -1669,6 +1719,10 @@ object PlayerSettingsRepository {
             playbackBackBufferSeconds = playbackBackBufferSeconds,
             playbackTargetBufferMb = playbackTargetBufferMb,
             vodDiskCacheSizeMb = vodDiskCacheSizeMb,
+            parallelConnectionsEnabled = parallelConnectionsEnabled,
+            parallelConnectionCount = parallelConnectionCount,
+            parallelChunkSizeMb = parallelChunkSizeMb,
+            autoParallelConnectionsEnabled = autoParallelConnectionsEnabled,
             streamAutoPlayMode = streamAutoPlayMode,
             streamAutoPlaySource = streamAutoPlaySource,
             streamAutoPlaySelectedAddons = streamAutoPlaySelectedAddons,

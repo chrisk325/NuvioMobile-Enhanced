@@ -1353,6 +1353,23 @@ actual object PlayerSettingsStorage {
 
     actual fun saveVodDiskCacheSizeMb(value: Int) {}
 
+    // Parallel connections are an Android ExoPlayer feature; iOS keeps no value.
+    actual fun loadParallelConnectionsEnabled(): Boolean? = null
+
+    actual fun saveParallelConnectionsEnabled(value: Boolean) {}
+
+    actual fun loadParallelConnectionCount(): Int? = null
+
+    actual fun saveParallelConnectionCount(value: Int) {}
+
+    actual fun loadParallelChunkSizeMb(): Int? = null
+
+    actual fun saveParallelChunkSizeMb(value: Int) {}
+
+    actual fun loadAutoParallelConnectionsEnabled(): Boolean? = null
+
+    actual fun saveAutoParallelConnectionsEnabled(value: Boolean) {}
+
     actual fun loadLibassRenderScale(): String? = null
 
     actual fun saveLibassRenderScale(scale: String) {}

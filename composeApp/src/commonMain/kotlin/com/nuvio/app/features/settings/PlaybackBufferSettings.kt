@@ -170,5 +170,57 @@ internal fun PlaybackBufferSettings(
                 }
             }
         }
+        SettingsSection(
+            title = stringResource(Res.string.settings_playback_network_section),
+            isTablet = isTablet,
+        ) {
+            SettingsGroup(isTablet = isTablet) {
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.settings_playback_parallel_connections),
+                    description = stringResource(Res.string.settings_playback_parallel_connections_description),
+                    checked = settings.parallelConnectionsEnabled,
+                    enabled = exoOptionsEnabled,
+                    isTablet = isTablet,
+                    onCheckedChange = PlayerSettingsRepository::setParallelConnectionsEnabled,
+                )
+                if (settings.parallelConnectionsEnabled) {
+                    SettingsSliderRow(
+                        title = stringResource(Res.string.settings_playback_parallel_connection_count),
+                        value = settings.parallelConnectionCount.coerceIn(2, 4),
+                        formatValue = { "$it" },
+                        valueRange = 2..4,
+                        step = 1,
+                        isTablet = isTablet,
+                        enabled = exoOptionsEnabled,
+                        onValueChange = PlayerSettingsRepository::setParallelConnectionCount,
+                    )
+                    SettingsSliderRow(
+                        title = stringResource(Res.string.settings_playback_parallel_chunk_size),
+                        value = settings.parallelChunkSizeMb.coerceIn(4, 32),
+                        formatValue = { "$it MB" },
+                        valueRange = 4..32,
+                        step = 4,
+                        isTablet = isTablet,
+                        enabled = exoOptionsEnabled,
+                        onValueChange = PlayerSettingsRepository::setParallelChunkSizeMb,
+                    )
+                } else {
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsSwitchRow(
+                        title = stringResource(Res.string.settings_playback_auto_parallel_connections),
+                        description = stringResource(Res.string.settings_playback_auto_parallel_connections_description),
+                        checked = settings.autoParallelConnectionsEnabled,
+                        enabled = exoOptionsEnabled,
+                        isTablet = isTablet,
+                        onCheckedChange = PlayerSettingsRepository::setAutoParallelConnectionsEnabled,
+                    )
+                }
+                PlaybackSettingsNote(
+                    text = stringResource(Res.string.settings_playback_parallel_connections_note),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    isTablet = isTablet,
+                )
+            }
+        }
     }
 }
