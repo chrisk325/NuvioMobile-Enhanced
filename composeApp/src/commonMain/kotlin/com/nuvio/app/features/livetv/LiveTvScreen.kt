@@ -176,45 +176,76 @@ fun LiveTvScreen(
     val uncategorizedLabel = stringResource(Res.string.live_tv_group_uncategorized)
     val chooseCategoryLabel = stringResource(Res.string.live_tv_filter_choose_category)
 
-    val categoryOptions = remember(
+    // Large playlists (tens of thousands of channels) made every keystroke, filter change and
+    // favorite toggle re-sort and re-lowercase the whole list on the main thread, twice. The
+    // channel index below is built once per playlist load on a background thread (sorted, with
+    // lowercased search fields precomputed), and filtering plus chip counts run in one pass off
+    // the main thread, so the list stays smooth regardless of playlist size.
+    val channelIndex by produceState(
+        initialValue = cachedLiveTvChannelIndex(
+            channels = uiState.channels,
+            allChannelsLabel = allChannelsLabel,
+            favoritesLabel = favoritesLabel,
+            uncategorizedLabel = uncategorizedLabel,
+        ),
         uiState.channels,
         allChannelsLabel,
         favoritesLabel,
         uncategorizedLabel,
     ) {
-        buildLiveTvCategoryFilterOptions(
-            channels = uiState.channels,
-            allChannelsLabel = allChannelsLabel,
-            favoritesLabel = favoritesLabel,
-            uncategorizedLabel = uncategorizedLabel,
-        )
+        val channels = uiState.channels
+        val cached = cachedLiveTvChannelIndex(channels, allChannelsLabel, favoritesLabel, uncategorizedLabel)
+        value = cached ?: withContext(Dispatchers.Default) {
+            buildLiveTvChannelIndex(
+                channels = channels,
+                allChannelsLabel = allChannelsLabel,
+                favoritesLabel = favoritesLabel,
+                uncategorizedLabel = uncategorizedLabel,
+            )
+        }.also(::storeLiveTvChannelIndex)
     }
 
-    val visibleChannels = remember(
-        uiState.channels,
+    val channelFilterResult by produceState(
+        initialValue = remember {
+            channelIndex?.let { index ->
+                filterLiveTvChannelIndex(
+                    index = index,
+                    favoriteChannelIds = uiState.favoriteChannelIds,
+                    recentChannelIds = uiState.recentChannelIds,
+                    filterMode = filterMode,
+                    selectedCategoryName = selectedCategoryName,
+                    searchQuery = searchQuery,
+                )
+            }
+        },
+        channelIndex,
         uiState.favoriteChannelIds,
         uiState.recentChannelIds,
         filterMode,
         selectedCategoryName,
         searchQuery,
-        uncategorizedLabel,
     ) {
-        filterLiveTvChannels(
-            channels = uiState.channels,
-            favoriteChannelIds = uiState.favoriteChannelIds,
-            recentChannelIds = uiState.recentChannelIds,
-            filterMode = filterMode,
-            selectedCategoryName = selectedCategoryName,
-            searchQuery = searchQuery,
-            uncategorizedGroupName = uncategorizedLabel,
-        )
-    }
-
-    val lastWatchedChannel = remember(uiState.channels, uiState.lastWatchedChannelId) {
-        uiState.lastWatchedChannelId?.let { channelId ->
-            uiState.channels.firstOrNull { it.id == channelId }
+        val index = channelIndex ?: return@produceState
+        val favoriteIds = uiState.favoriteChannelIds
+        val recentIds = uiState.recentChannelIds
+        val mode = filterMode
+        val category = selectedCategoryName
+        val query = searchQuery
+        value = withContext(Dispatchers.Default) {
+            filterLiveTvChannelIndex(
+                index = index,
+                favoriteChannelIds = favoriteIds,
+                recentChannelIds = recentIds,
+                filterMode = mode,
+                selectedCategoryName = category,
+                searchQuery = query,
+            )
         }
     }
+
+    val categoryOptions = channelIndex?.categoryOptions.orEmpty()
+    val visibleChannels = channelFilterResult?.visibleChannels.orEmpty()
+    val channelChipCounts = channelFilterResult?.counts ?: EmptyLiveTvChannelChipCounts
 
     val hasRecents = remember(uiState.channels, uiState.recentChannelIds) {
         val ids = uiState.recentChannelIds.toSet()
@@ -224,11 +255,11 @@ fun LiveTvScreen(
         uiState.favoriteChannelIds.isNotEmpty() &&
             uiState.channels.any { it.id in uiState.favoriteChannelIds }
     }
-    val categoryChips = remember(categoryOptions, uiState.channels, uncategorizedLabel) {
-        val hasUncategorized = uiState.channels.any { it.group.isNullOrBlank() }
+    val categoryChips = remember(channelIndex, uncategorizedLabel) {
+        val index = channelIndex ?: return@remember emptyList()
         categoryOptions
             .filter { it.mode == LiveTvChannelFilterMode.Category }
-            .filter { hasUncategorized || it.categoryName != uncategorizedLabel }
+            .filter { index.hasUncategorized || it.categoryName != uncategorizedLabel }
             .mapNotNull { it.categoryName }
     }
 
@@ -239,33 +270,6 @@ fun LiveTvScreen(
             filterMode = LiveTvChannelFilterMode.All
             selectedCategoryName = null
         }
-    }
-
-    val channelChipCounts = remember(
-        uiState.channels,
-        uiState.favoriteChannelIds,
-        uiState.recentChannelIds,
-        searchQuery,
-        uncategorizedLabel,
-    ) {
-        val searched = filterLiveTvChannels(
-            channels = uiState.channels,
-            favoriteChannelIds = uiState.favoriteChannelIds,
-            recentChannelIds = uiState.recentChannelIds,
-            filterMode = LiveTvChannelFilterMode.All,
-            selectedCategoryName = null,
-            searchQuery = searchQuery,
-            uncategorizedGroupName = uncategorizedLabel,
-        )
-        val recentIds = uiState.recentChannelIds.toSet()
-        LiveTvChannelChipCounts(
-            all = searched.size,
-            recents = searched.count { it.id in recentIds },
-            favorites = searched.count { it.id in uiState.favoriteChannelIds },
-            categories = searched
-                .groupingBy { categoryNameForChannel(it, uncategorizedLabel).lowercase() }
-                .eachCount(),
-        )
     }
 
     val matchingCategories = remember(categoryChips, searchQuery, channelChipCounts) {
@@ -286,11 +290,31 @@ fun LiveTvScreen(
     }
 
     // Guide ------------------------------------------------------------------------------------
-    val guideChannels = remember(visibleChannels, uiState.epgPrograms, guideWindowStart, uiState.favoriteChannelIds) {
-        visibleChannels
-            .filter { liveTvGuideHasPrograms(uiState.epgPrograms[it.id], guideWindowStart) }
-            .sortedByDescending { it.id in uiState.favoriteChannelIds }
+    // Only computed while the Guide tab is open, and off the main thread: it walks every visible
+    // channel's programme list. Null means "not computed yet" and shows a spinner.
+    val guideChannelsOrNull by produceState<List<LiveTvChannel>?>(
+        initialValue = null,
+        section,
+        channelFilterResult,
+        uiState.epgPrograms,
+        guideWindowStart,
+        uiState.favoriteChannelIds,
+    ) {
+        val filterResult = channelFilterResult
+        if (section != LiveTvSection.Guide || filterResult == null) {
+            value = null
+            return@produceState
+        }
+        val epgPrograms = uiState.epgPrograms
+        val favoriteIds = uiState.favoriteChannelIds
+        val windowStart = guideWindowStart
+        value = withContext(Dispatchers.Default) {
+            filterResult.visibleChannels
+                .filter { liveTvGuideHasPrograms(epgPrograms[it.id], windowStart) }
+                .sortedByDescending { it.id in favoriteIds }
+        }
     }
+    val guideChannels = guideChannelsOrNull.orEmpty()
     LaunchedEffect(section, guideWindowStart, guideChannels.isNotEmpty()) {
         if (section != LiveTvSection.Guide || guideChannels.isEmpty()) return@LaunchedEffect
         withTimeoutOrNull(3_000L) {
@@ -375,7 +399,9 @@ fun LiveTvScreen(
         listState.scrollToItem(0)
     }
 
-    LaunchedEffect(categoryOptions, filterMode, selectedCategoryName) {
+    LaunchedEffect(channelIndex, filterMode, selectedCategoryName) {
+        // Wait for the index: an empty option list while it builds must not drop the selection.
+        if (channelIndex == null) return@LaunchedEffect
         if (filterMode == LiveTvChannelFilterMode.Category && selectedCategoryName != null) {
             val selectedStillExists = categoryOptions.any { option ->
                 option.mode == LiveTvChannelFilterMode.Category && option.categoryName == selectedCategoryName
@@ -585,6 +611,8 @@ fun LiveTvScreen(
 
             if (uiState.hasPlaylist && section == LiveTvSection.Guide && uiState.channels.isNotEmpty()) {
                 when {
+                    guideChannelsOrNull == null -> liveTvLoadingItem()
+
                     guideChannels.isNotEmpty() -> liveTvGuideRows(
                         channels = guideChannels,
                         epgPrograms = uiState.epgPrograms,
@@ -724,6 +752,9 @@ fun LiveTvScreen(
                     }
                 }
 
+                // Channel index / filter still being computed on a background thread.
+                channelFilterResult == null -> liveTvLoadingItem()
+
                 else -> {
                     if (matchingCategories.isNotEmpty()) {
                         liveTvCategorySearchResults(
@@ -841,12 +872,15 @@ private fun LazyListScope.liveTvChannelGrid(
     epgPrograms: Map<String, List<LiveTvEpgProgram>>,
     nowMillis: Long,
 ) {
-    val rows = channels.chunked(columns)
+    // Rows are sliced lazily instead of chunking the whole list up front, which allocated a
+    // list per row for every channel on each recomposition of the screen.
+    val rowCount = (channels.size + columns - 1) / columns
     items(
-        count = rows.size,
-        key = { index -> "channel-grid:$columns:${rows[index].first().id}" },
+        count = rowCount,
+        key = { index -> "channel-grid:$columns:${channels[index * columns].id}" },
+        contentType = { "channel-grid-row" },
     ) { index ->
-        val row = rows[index]
+        val row = channels.subList(index * columns, minOf((index + 1) * columns, channels.size))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(LiveTvGridGap),
@@ -1439,6 +1473,7 @@ private fun LazyListScope.liveTvChannelList(
     items(
         items = channels,
         key = { channel -> "channel:${channel.id}" },
+        contentType = { "channel" },
     ) { channel ->
         LiveTvChannelCard(
             channel = channel,
@@ -1648,39 +1683,163 @@ private fun buildLiveTvCategoryFilterOptions(
     }
 }
 
-private fun filterLiveTvChannels(
+/** A channel with its derived, lowercased fields computed once instead of on every filter pass. */
+private class LiveTvIndexedChannel(
+    val channel: LiveTvChannel,
+    /** Position in the repository's channel list, used to keep the recents order stable. */
+    val sourceIndex: Int,
+    val categoryName: String,
+    val categoryKey: String,
+    val nameKey: String,
+    val playlistKey: String,
+)
+
+private class LiveTvChannelIndex(
+    val channels: List<LiveTvChannel>,
+    val allChannelsLabel: String,
+    val favoritesLabel: String,
+    val uncategorizedLabel: String,
+    /** Every channel, sorted by lowercased name (stable, same order as the old per-pass sort). */
+    val sortedEntries: List<LiveTvIndexedChannel>,
+    val categoryOptions: List<LiveTvCategoryFilterOption>,
+    val hasUncategorized: Boolean,
+)
+
+private class LiveTvChannelFilterResult(
+    val visibleChannels: List<LiveTvChannel>,
+    val counts: LiveTvChannelChipCounts,
+)
+
+private val EmptyLiveTvChannelChipCounts = LiveTvChannelChipCounts(
+    all = 0,
+    recents = 0,
+    favorites = 0,
+    categories = emptyMap(),
+)
+
+// The last built index survives the screen leaving composition (switching tabs, opening the
+// player), so coming back to Live TV doesn't rebuild it or flash a spinner.
+private var lastLiveTvChannelIndex: LiveTvChannelIndex? = null
+
+private fun cachedLiveTvChannelIndex(
     channels: List<LiveTvChannel>,
+    allChannelsLabel: String,
+    favoritesLabel: String,
+    uncategorizedLabel: String,
+): LiveTvChannelIndex? = lastLiveTvChannelIndex?.takeIf { index ->
+    index.channels === channels &&
+        index.allChannelsLabel == allChannelsLabel &&
+        index.favoritesLabel == favoritesLabel &&
+        index.uncategorizedLabel == uncategorizedLabel
+}
+
+private fun storeLiveTvChannelIndex(index: LiveTvChannelIndex) {
+    lastLiveTvChannelIndex = index
+}
+
+private fun buildLiveTvChannelIndex(
+    channels: List<LiveTvChannel>,
+    allChannelsLabel: String,
+    favoritesLabel: String,
+    uncategorizedLabel: String,
+): LiveTvChannelIndex {
+    var hasUncategorized = false
+    val entries = ArrayList<LiveTvIndexedChannel>(channels.size)
+    channels.forEachIndexed { position, channel ->
+        if (channel.group.isNullOrBlank()) hasUncategorized = true
+        val categoryName = categoryNameForChannel(channel, uncategorizedLabel)
+        entries += LiveTvIndexedChannel(
+            channel = channel,
+            sourceIndex = position,
+            categoryName = categoryName,
+            categoryKey = categoryName.lowercase(),
+            nameKey = channel.name.lowercase(),
+            playlistKey = channel.playlistName.orEmpty().lowercase(),
+        )
+    }
+    entries.sortBy { it.nameKey }
+    return LiveTvChannelIndex(
+        channels = channels,
+        allChannelsLabel = allChannelsLabel,
+        favoritesLabel = favoritesLabel,
+        uncategorizedLabel = uncategorizedLabel,
+        sortedEntries = entries,
+        categoryOptions = buildLiveTvCategoryFilterOptions(
+            channels = channels,
+            allChannelsLabel = allChannelsLabel,
+            favoritesLabel = favoritesLabel,
+            uncategorizedLabel = uncategorizedLabel,
+        ),
+        hasUncategorized = hasUncategorized,
+    )
+}
+
+/**
+ * One pass over the pre-sorted index that yields both the visible channels and the chip counts.
+ * The counts are taken over the search matches regardless of the selected filter, as before.
+ */
+private fun filterLiveTvChannelIndex(
+    index: LiveTvChannelIndex,
     favoriteChannelIds: Set<String>,
     recentChannelIds: List<String>,
     filterMode: LiveTvChannelFilterMode,
     selectedCategoryName: String?,
     searchQuery: String,
-    uncategorizedGroupName: String,
-): List<LiveTvChannel> {
+): LiveTvChannelFilterResult {
     val normalizedQuery = searchQuery.trim().lowercase()
-    val recentOrder = recentChannelIds.withIndex().associate { (index, id) -> id to index }
-    val filtered = channels
-        .asSequence()
-        .filter { channel ->
-            when (filterMode) {
-                LiveTvChannelFilterMode.All -> true
-                LiveTvChannelFilterMode.Recents -> channel.id in recentOrder
-                LiveTvChannelFilterMode.Favorites -> channel.id in favoriteChannelIds
-                LiveTvChannelFilterMode.Category -> selectedCategoryName == null ||
-                    categoryNameForChannel(channel, uncategorizedGroupName).equals(selectedCategoryName, ignoreCase = true)
-            }
+    val hasQuery = normalizedQuery.isNotBlank()
+    val recentOrder = HashMap<String, Int>(recentChannelIds.size * 2)
+    recentChannelIds.forEachIndexed { position, id -> recentOrder[id] = position }
+
+    var all = 0
+    var recents = 0
+    var favorites = 0
+    val categoryCounts = HashMap<String, Int>()
+    val visible = ArrayList<LiveTvIndexedChannel>()
+
+    for (entry in index.sortedEntries) {
+        if (hasQuery &&
+            !entry.nameKey.contains(normalizedQuery) &&
+            !entry.categoryKey.contains(normalizedQuery) &&
+            !entry.playlistKey.contains(normalizedQuery)
+        ) {
+            continue
         }
-        .filter { channel ->
-            normalizedQuery.isBlank() ||
-                channel.name.lowercase().contains(normalizedQuery) ||
-                categoryNameForChannel(channel, uncategorizedGroupName).lowercase().contains(normalizedQuery) ||
-                channel.playlistName.orEmpty().lowercase().contains(normalizedQuery)
+        val id = entry.channel.id
+        val isRecent = id in recentOrder
+        val isFavorite = id in favoriteChannelIds
+        all++
+        if (isRecent) recents++
+        if (isFavorite) favorites++
+        categoryCounts[entry.categoryKey] = (categoryCounts[entry.categoryKey] ?: 0) + 1
+
+        val matchesMode = when (filterMode) {
+            LiveTvChannelFilterMode.All -> true
+            LiveTvChannelFilterMode.Recents -> isRecent
+            LiveTvChannelFilterMode.Favorites -> isFavorite
+            LiveTvChannelFilterMode.Category -> selectedCategoryName == null ||
+                entry.categoryName.equals(selectedCategoryName, ignoreCase = true)
         }
-    return if (filterMode == LiveTvChannelFilterMode.Recents) {
-        filtered.sortedBy { recentOrder[it.id] ?: Int.MAX_VALUE }.toList()
-    } else {
-        filtered.sortedBy { it.name.lowercase() }.toList()
+        if (matchesMode) visible += entry
     }
+
+    if (filterMode == LiveTvChannelFilterMode.Recents) {
+        // Most recent first; ties keep the playlist order.
+        visible.sortWith(
+            compareBy<LiveTvIndexedChannel> { recentOrder[it.channel.id] ?: Int.MAX_VALUE }
+                .thenBy { it.sourceIndex },
+        )
+    }
+
+    return LiveTvChannelFilterResult(
+        visibleChannels = visible.map { it.channel },
+        counts = LiveTvChannelChipCounts(
+            all = all,
+            recents = recents,
+            favorites = favorites,
+            categories = categoryCounts,
+        ),
+    )
 }
 
 private fun categoryNameForChannel(
