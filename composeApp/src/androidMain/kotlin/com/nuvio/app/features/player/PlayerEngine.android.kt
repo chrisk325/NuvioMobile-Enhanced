@@ -443,6 +443,7 @@ private fun ExoPlayerSurface(
                 } else factory
             }
             .let { factory -> aiostreamsAss?.extractors(factory) ?: factory }
+            .withMatroskaResync()
     }
     val parallelPlan = remember(playerSourceKey, parallelConnectionCap) {
         ParallelPlaybackPolicy.plan(
@@ -1109,12 +1110,16 @@ private fun ExoPlayerSurface(
                     }
                 }
 
-                // Parallel connections are the first suspect for a source error (2xxx) while they are
+                // Parallel connections are the first suspect for a network error (2xxx) while they are
                 // on: rebuild the player with fewer of them (4, 2, then one) at the same position.
+                // Unexpected loader failures also arrive as 2000 but are not network errors.
                 val activeParallelPlan = parallelPlan
                 if (activeParallelPlan != null &&
                     error.errorCode in PlaybackException.ERROR_CODE_IO_UNSPECIFIED until 3000 &&
-                    ParallelPlaybackPolicy.shouldStepDownFor(error.invalidResponseCode())
+                    ParallelPlaybackPolicy.shouldStepDownFor(
+                        httpStatus = error.invalidResponseCode(),
+                        unexpectedLoaderFailure = error.isUnexpectedLoaderFailure(),
+                    )
                 ) {
                     val nextConnections = ParallelPlaybackPolicy.stepDown(activeParallelPlan.connections)
                     InAppLogger.warn(
