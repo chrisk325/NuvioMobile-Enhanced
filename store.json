@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.40",
+          "buildVersion": "257",
+          "date": "2026-11-25T12:21:09Z",
+          "localizedDescription": "- [parallel connections (#125)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/125) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.40-beta/nuvio-1.0.40-enhanced-release.ipa",
+          "size": 77527640,
+          "sha256": "aab3012b335e8045333ee1656eb46c25025cf52e60dc447956f19ffb8087e097",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.39",
           "buildVersion": "256",
           "date": "2026-11-25T08:17:52Z",
