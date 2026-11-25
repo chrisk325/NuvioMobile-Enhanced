@@ -76,6 +76,10 @@ typedef struct {
     // The GL surface's own size, which some drivers make the window's rather than the buffers asked for.
     int surface_width;
     int surface_height;
+    // The video's place in the frame, as libass's margins give it; without margins in use, nothing is
+    // drawn outside it, whatever libass gives.
+    int clipping;
+    int margin_top, margin_bottom, margin_left, margin_right;
     Picture *shown;
     int gpu;        // draws with GlMasks rather than blending on the CPU
     // What the picture holds images on, which the next one has to clear.
@@ -371,7 +375,13 @@ JNIEXPORT void JNICALL METHOD(setLayout)(
         JNIEnv *env, jclass clazz, jlong handle, jint videoWidth, jint videoHeight,
         jint top, jint bottom, jint left, jint right, jboolean useMargins,
         jfloat fontScale, jdouble linePosition) {
-    ASS_Renderer *renderer = ((Surface *) handle)->renderer;
+    Surface *surface = (Surface *) handle;
+    ASS_Renderer *renderer = surface->renderer;
+    surface->clipping = !useMargins;
+    surface->margin_top = top;
+    surface->margin_bottom = bottom;
+    surface->margin_left = left;
+    surface->margin_right = right;
     libass.set_storage_size(renderer, videoWidth, videoHeight);
     libass.set_margins(renderer, top, bottom, left, right);
     libass.set_use_margins(renderer, useMargins);
@@ -507,6 +517,28 @@ static int drawn_mask(const Surface *surface, const Placed *placed) {
     return placed->x + placed->mask->w <= surface->window_width && placed->y + placed->mask->h <= surface->window_height;
 }
 
+// Where subtitles may show in the frame: the video, or the whole frame where libass's margins are in use.
+static ARect video_clip(const Surface *surface) {
+    ARect clip = {0, 0, surface->window_width, surface->window_height};
+    if (!surface->clipping) return clip;
+    if (surface->margin_left > clip.left) clip.left = surface->margin_left;
+    if (surface->margin_top > clip.top) clip.top = surface->margin_top;
+    if (surface->window_width - surface->margin_right < clip.right) clip.right = surface->window_width - surface->margin_right;
+    if (surface->window_height - surface->margin_bottom < clip.bottom) clip.bottom = surface->window_height - surface->margin_bottom;
+    if (clip.right < clip.left) clip.right = clip.left;
+    if (clip.bottom < clip.top) clip.bottom = clip.top;
+    return clip;
+}
+
+static ARect intersect(ARect a, const ARect *b) {
+    if (b->left > a.left) a.left = b->left;
+    if (b->top > a.top) a.top = b->top;
+    if (b->right < a.right) a.right = b->right;
+    if (b->bottom < a.bottom) a.bottom = b->bottom;
+    if (empty(&a)) return (ARect) {0, 0, 0, 0};
+    return a;
+}
+
 // The GL surface's size as it is now, the frame's where EGL can't say.
 static void query_surface(Surface *surface) {
     EGLint width = 0, height = 0;
@@ -524,14 +556,28 @@ static int on_surface(int at, int frame, int size) {
     return frame == size ? at : (int) (((long long) at * size + frame / 2) / frame);
 }
 
-// Blends the picture's masks into the rectangle they cover, which a texture brings to the window.
-static void draw_blended(Surface *surface, const Picture *picture, ARect next) {
+// The clip as a GL scissor on the surface: x, rows from the bottom, width, height.
+static void surface_scissor(const Surface *surface, const ARect *clip, int scissor[4]) {
+    int left = on_surface(clip->left, surface->window_width, surface->surface_width);
+    int right = on_surface(clip->right, surface->window_width, surface->surface_width);
+    int top = on_surface(clip->top, surface->window_height, surface->surface_height);
+    int bottom = on_surface(clip->bottom, surface->window_height, surface->surface_height);
+    scissor[0] = left;
+    scissor[1] = surface->surface_height - bottom;
+    scissor[2] = right - left;
+    scissor[3] = bottom - top;
+}
+
+// Blends the picture's masks into the rectangle they cover (`full`), which a texture brings to the
+// window, showing only what's within `clip`.
+static void draw_blended(Surface *surface, const Picture *picture, ARect full, const ARect *clip) {
+    glDisable(GL_SCISSOR_TEST);
     glViewport(0, 0, surface->surface_width, surface->surface_height);
     // A clear costs a tiled GPU nothing.
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT);
-    if (empty(&next)) return;
-    int width = next.right - next.left, height = next.bottom - next.top;
+    if (empty(&full) || empty(clip)) return;
+    int width = full.right - full.left, height = full.bottom - full.top;
     size_t pixels = (size_t) width * height;
     if (pixels > surface->scratch_pixels) {
         uint32_t *scratch = realloc(surface->scratch, pixels * 4);
@@ -541,7 +587,7 @@ static void draw_blended(Surface *surface, const Picture *picture, ARect next) {
     }
     memset(surface->scratch, 0, pixels * 4);
     for (int i = 0; i < picture->count; i++) {
-        if (drawn_mask(surface, &picture->placed[i])) blend(&picture->placed[i], surface->scratch, width, next.left, next.top);
+        if (drawn_mask(surface, &picture->placed[i])) blend(&picture->placed[i], surface->scratch, width, full.left, full.top);
     }
     static const GLfloat corners[] = {-1, -1, 1, -1, -1, 1, 1, 1};
     glUseProgram(surface->program);
@@ -562,23 +608,31 @@ static void draw_blended(Surface *surface, const Picture *picture, ARect next) {
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, surface->scratch);
     glUniform2f(surface->extent, (float) width / surface->texture_width, (float) height / surface->texture_height);
     // GL counts rows from the bottom; the frame stretches over the whole surface.
-    int left = on_surface(next.left, surface->window_width, surface->surface_width);
-    int right = on_surface(next.right, surface->window_width, surface->surface_width);
-    int top = on_surface(next.top, surface->window_height, surface->surface_height);
-    int bottom = on_surface(next.bottom, surface->window_height, surface->surface_height);
+    int left = on_surface(full.left, surface->window_width, surface->surface_width);
+    int right = on_surface(full.right, surface->window_width, surface->surface_width);
+    int top = on_surface(full.top, surface->window_height, surface->surface_height);
+    int bottom = on_surface(full.bottom, surface->window_height, surface->surface_height);
     glViewport(left, surface->surface_height - bottom, right - left, bottom - top);
+    int scissor[4];
+    surface_scissor(surface, clip, scissor);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glDisable(GL_SCISSOR_TEST);
 }
 
-// Without GL: blends into the window's next buffer, clearing only what changed.
-static int draw_window(Surface *surface, const Picture *picture, ARect next) {
+// Without GL: blends into the window's next buffer, clearing only what changed, and what's outside `clip`.
+static int draw_window(Surface *surface, const Picture *picture, ARect full, const ARect *clip) {
     ARect dirty = surface->drawn;
-    if (!empty(&next)) include(&dirty, next.left, next.top, next.right, next.bottom);
+    if (!empty(&full)) include(&dirty, full.left, full.top, full.right, full.bottom);
     // The window copies the rest from the buffer before, and may widen the rectangle.
     if (ANativeWindow_lock(surface->window, &surface->buffer, &dirty) != 0) return 0;
     ANativeWindow_Buffer *buffer = &surface->buffer;
+    if (dirty.left < 0) dirty.left = 0;
+    if (dirty.top < 0) dirty.top = 0;
     if (dirty.right > buffer->width) dirty.right = buffer->width;
     if (dirty.bottom > buffer->height) dirty.bottom = buffer->height;
+    if (empty(&dirty)) return 1;
     uint32_t *bits = buffer->bits;
     for (int y = dirty.top; y < dirty.bottom; y++) {
         memset(bits + y * buffer->stride + dirty.left, 0, (dirty.right - dirty.left) * 4);
@@ -589,6 +643,17 @@ static int draw_window(Surface *surface, const Picture *picture, ARect next) {
             blend(placed, bits, buffer->stride, 0, 0);
         }
     }
+    // Takes back what reached outside the video.
+    ARect keep = intersect(dirty, clip);
+    for (int y = dirty.top; y < dirty.bottom; y++) {
+        uint32_t *row = bits + y * buffer->stride;
+        if (empty(&keep) || y < keep.top || y >= keep.bottom) {
+            memset(row + dirty.left, 0, (dirty.right - dirty.left) * 4);
+            continue;
+        }
+        if (keep.left > dirty.left) memset(row + dirty.left, 0, (keep.left - dirty.left) * 4);
+        if (dirty.right > keep.right) memset(row + keep.right, 0, (dirty.right - keep.right) * 4);
+    }
     return 1;
 }
 
@@ -597,11 +662,14 @@ JNIEXPORT jboolean JNICALL METHOD(draw)(JNIEnv *env, jclass clazz, jlong handle)
     Surface *surface = (Surface *) handle;
     if (!surface->window) return JNI_FALSE;
     Picture *picture = surface->shown;
-    ARect next = {0, 0, 0, 0};
+    ARect full = {0, 0, 0, 0};
     for (int i = 0; picture && i < picture->count; i++) {
         const Placed *placed = &picture->placed[i];
-        if (drawn_mask(surface, placed)) include(&next, placed->x, placed->y, placed->x + placed->mask->w, placed->y + placed->mask->h);
+        if (drawn_mask(surface, placed)) include(&full, placed->x, placed->y, placed->x + placed->mask->w, placed->y + placed->mask->h);
     }
+    ARect clip = video_clip(surface);
+    // What shows of the picture, which the next one has to clear.
+    ARect next = intersect(full, &clip);
     if (empty(&next) && empty(&surface->drawn)) return JNI_FALSE;
     if (surface->gpu && surface->context != EGL_NO_CONTEXT && !surface->masks_gl) {
         // The app limits libass's cache where memory is short.
@@ -610,16 +678,25 @@ JNIEXPORT jboolean JNICALL METHOD(draw)(JNIEnv *env, jclass clazz, jlong handle)
     }
     if (surface->context != EGL_NO_CONTEXT) query_surface(surface);
     if (surface->context == EGL_NO_CONTEXT) {
-        if (!draw_window(surface, picture, next)) return JNI_FALSE;
+        if (!draw_window(surface, picture, full, &clip)) return JNI_FALSE;
     } else if (surface->gpu) {
-        gl_masks_draw(surface->masks_gl, picture, surface->window_width, surface->window_height,
-                      surface->surface_width, surface->surface_height);
+        int scissor[4];
+        surface_scissor(surface, &clip, scissor);
+        gl_masks_draw(surface->masks_gl, empty(&next) ? NULL : picture, surface->window_width, surface->window_height,
+                      surface->surface_width, surface->surface_height, scissor);
     } else {
-        draw_blended(surface, picture, next);
+        draw_blended(surface, picture, full, &clip);
     }
     surface->drawn = next;
     surface->pending = 1;
     return JNI_TRUE;
+}
+
+// The size of what the last draw went to: the GL surface's, width in the high half; 0 without GL.
+JNIEXPORT jlong JNICALL METHOD(surfaceSize)(JNIEnv *env, jclass clazz, jlong handle) {
+    Surface *surface = (Surface *) handle;
+    if (surface->context == EGL_NO_CONTEXT) return 0;
+    return ((jlong) surface->surface_width << 32) | (uint32_t) surface->surface_height;
 }
 
 // Posts the drawn picture, with GL for the compositor to show at `atNanos`, or at once when 0.
