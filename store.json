@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.41",
+          "buildVersion": "258",
+          "date": "2026-11-25T17:00:10Z",
+          "localizedDescription": "- [Fix player errors on damaged MKV data with parallel connections (#126)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/126) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.41-beta/nuvio-1.0.41-enhanced-release.ipa",
+          "size": 77527677,
+          "sha256": "c705f6b464389ff032eb6194ca08dc4a1dfaf7016f1151afe1a1e9434c07a26f",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.40",
           "buildVersion": "257",
           "date": "2026-11-25T12:21:09Z",
