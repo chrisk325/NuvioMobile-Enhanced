@@ -33,12 +33,14 @@ import androidx.media3.extractor.mkv.MatroskaExtractor
 import androidx.media3.extractor.text.CuesWithTiming
 import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleParser
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.nuvio.app.features.addons.httpGetTextWithHeaders
 import com.nuvio.app.features.player.SubtitleStyleState
 import com.nuvio.app.features.player.replaceInnermostExtractor
 import `is`.xyz.mpv.Utils
 import java.io.File
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -104,9 +106,30 @@ internal class AiostreamsAssEngine(
     private var style = SubtitleStyleState.DEFAULT
     private var released = false
 
+    /** The video's display aspect ratio, which places it within the content frame. */
+    private var videoAspect = 0f
+
     private val preDraw = ViewTreeObserver.OnPreDrawListener {
         stage?.let(::measureStage)
         true
+    }
+
+    // The tree observer is the window's: a view attached again, or to another window, needs the listener again.
+    private val attachState = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) {
+            v.viewTreeObserver.removeOnPreDrawListener(preDraw)
+            v.viewTreeObserver.addOnPreDrawListener(preDraw)
+            stage?.let(::measureStage)
+        }
+
+        override fun onViewDetachedFromWindow(v: View) {
+            v.viewTreeObserver.removeOnPreDrawListener(preDraw)
+        }
+    }
+
+    // Layout changes reach the view itself, whatever window it's in.
+    private val layoutChange = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        stage?.let(::measureStage)
     }
 
     private val clock = object : Choreographer.FrameCallback {
@@ -203,9 +226,12 @@ internal class AiostreamsAssEngine(
     fun attach(view: PlayerView) {
         if (released) return
         if (stage !== view) {
-            stage?.viewTreeObserver?.removeOnPreDrawListener(preDraw)
+            stage?.let(::unwatchStage)
             stage = view
             view.viewTreeObserver.addOnPreDrawListener(preDraw)
+            view.addOnAttachStateChangeListener(attachState)
+            view.addOnLayoutChangeListener(layoutChange)
+            contentFrame(view)?.addOnLayoutChangeListener(layoutChange)
         }
         val overlay = ass.view
         if (overlay.parent !== view) {
@@ -258,7 +284,7 @@ internal class AiostreamsAssEngine(
     fun release() {
         if (released) return
         player?.let(::unbind)
-        stage?.viewTreeObserver?.removeOnPreDrawListener(preDraw)
+        stage?.let(::unwatchStage)
         stage = null
         (ass.view.parent as? ViewGroup)?.removeView(ass.view)
         released = true
@@ -287,7 +313,10 @@ internal class AiostreamsAssEngine(
 
     override fun onVideoSizeChanged(videoSize: VideoSize) {
         if (videoSize.width == 0 || videoSize.height == 0) return
+        videoAspect = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
         layout = layout.copy(videoWidth = videoSize.width, videoHeight = videoSize.height)
+        // The content frame takes the video's shape on its next layout.
+        stage?.let(::measureStage)
         updateLayout()
     }
 
@@ -342,19 +371,30 @@ internal class AiostreamsAssEngine(
     private fun fontsMayLoad(bytes: Long) = bytes <= SMALL_FONTS_BYTES || shown
 
     private fun measureStage(view: PlayerView) {
-        val frame = view.findViewById<View>(androidx.media3.ui.R.id.exo_content_frame) ?: return
+        val frame = contentFrame(view) ?: return
         if (view.width <= 0 || view.height <= 0 || frame.width <= 0 || frame.height <= 0) return
         val left = frame.left + frame.translationX + frame.pivotX * (1 - frame.scaleX)
         val top = frame.top + frame.translationY + frame.pivotY * (1 - frame.scaleY)
-        val video = Rect(
+        val frameBounds = Rect(
             left.roundToInt(),
             top.roundToInt(),
             (left + frame.width * frame.scaleX).roundToInt(),
             (top + frame.height * frame.scaleY).roundToInt(),
         )
+        val video = shownVideo(frameBounds, videoAspect, view.resizeMode)
         if (layout.stageWidth == view.width && layout.stageHeight == view.height && layout.video == video) return
         layout = layout.copy(stageWidth = view.width, stageHeight = view.height, video = video)
         updateLayout()
+    }
+
+    private fun contentFrame(view: PlayerView): View? =
+        view.findViewById(androidx.media3.ui.R.id.exo_content_frame)
+
+    private fun unwatchStage(view: PlayerView) {
+        view.viewTreeObserver.removeOnPreDrawListener(preDraw)
+        view.removeOnAttachStateChangeListener(attachState)
+        view.removeOnLayoutChangeListener(layoutChange)
+        contentFrame(view)?.removeOnLayoutChangeListener(layoutChange)
     }
 
     private fun updateLayout() {
@@ -429,3 +469,27 @@ private fun customSubtitleFontPath(fontId: String): String? {
     val context = com.nuvio.app.features.player.PlayerSettingsStorage.applicationContext() ?: return null
     return java.io.File(context.filesDir, "subtitle-fonts").resolve(fontId).takeIf { it.isFile }?.path
 }
+
+/**
+ * Where the video shows within the content frame's bounds. The frame normally takes the video's shape
+ * itself; until it has, or where something else sizes it, the video is fitted (or, zoomed, made to cover
+ * it) by its display aspect ratio, as AspectRatioFrameLayout would. libass clips to this rectangle, so
+ * a frame left the stage's size would let typesetting spill into the bars.
+ */
+internal fun shownVideo(frame: Rect, aspect: Float, resizeMode: Int): Rect {
+    if (frame.isEmpty || aspect <= 0f || !aspect.isFinite() || resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FILL) {
+        return Rect(frame)
+    }
+    val frameAspect = frame.width().toFloat() / frame.height()
+    // AspectRatioFrameLayout leaves the frame as it is within this much, stretching the video over it.
+    if (abs(aspect / frameAspect - 1f) <= ASPECT_TOLERANCE) return Rect(frame)
+    val cover = resizeMode == AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+    val widthLimited = (aspect > frameAspect) != cover
+    val width = if (widthLimited) frame.width().toFloat() else frame.height() * aspect
+    val height = if (widthLimited) frame.width() / aspect else frame.height().toFloat()
+    val left = frame.left + (frame.width() - width) / 2f
+    val top = frame.top + (frame.height() - height) / 2f
+    return Rect(left.roundToInt(), top.roundToInt(), (left + width).roundToInt(), (top + height).roundToInt())
+}
+
+private const val ASPECT_TOLERANCE = 0.01f
