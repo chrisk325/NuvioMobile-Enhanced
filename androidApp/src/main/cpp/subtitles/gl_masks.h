@@ -12,5 +12,6 @@ typedef struct GlMasks GlMasks;
 GlMasks *gl_masks_new(MaskStore *store, int small);
 void gl_masks_free(GlMasks *gl);
 
-// Clears the `width` by `height` window and draws the picture over it.
-void gl_masks_draw(GlMasks *gl, Picture *picture, int width, int height);
+// Clears the `surface_width` by `surface_height` GL surface and draws the picture over it, its `width` by
+// `height` frame stretched over the whole surface. Masks that reach past the frame aren't drawn.
+void gl_masks_draw(GlMasks *gl, Picture *picture, int width, int height, int surface_width, int surface_height);

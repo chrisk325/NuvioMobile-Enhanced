@@ -325,9 +325,10 @@ static void flush(GlMasks *gl, GLuint texture, const float *end) {
     glDrawArrays(GL_TRIANGLES, 0, floats / FLOATS);
 }
 
-void gl_masks_draw(GlMasks *gl, Picture *picture, int width, int height) {
+void gl_masks_draw(GlMasks *gl, Picture *picture, int width, int height, int surface_width, int surface_height) {
     take_back(gl);
-    glViewport(0, 0, width, height);
+    // The frame's coordinates map onto the whole surface, whatever size the window's buffers came out.
+    glViewport(0, 0, surface_width, surface_height);
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT);
     if (!picture || !picture->count) return;
@@ -359,6 +360,8 @@ void gl_masks_draw(GlMasks *gl, Picture *picture, int width, int height) {
     for (int i = 0; i < picture->count; i++) {
         const Placed *placed = &picture->placed[i];
         const Mask *mask = placed->mask;
+        // libass places masks within its frame, which is the window's size but for a moment after it changes.
+        if (placed->x < 0 || placed->y < 0 || placed->x + mask->w > width || placed->y + mask->h > height) continue;
         // The picture's own masks are where its block is.
         int own = picture_owns(picture, mask);
         const GpuPlace *place = own ? &picture->gpu : &mask->gpu;
