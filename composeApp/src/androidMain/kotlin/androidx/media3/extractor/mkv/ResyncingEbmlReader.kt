@@ -20,8 +20,10 @@ import java.util.ArrayDeque
  * element id or size starts; that byte has no length marker and Media3's VarintReader throws
  * "IllegalStateException: No valid varint length mask found", which ends playback too. In both
  * cases this reader instead closes the elements opened below the Segment and searches for the next
- * level 1 element (normally the next Cluster), so playback carries on from there. The search also returns end of input instead of throwing when the stream
- * ends before a level 1 element is found.
+ * level 1 element (normally the next Cluster), so playback carries on from there. The search also
+ * returns end of input instead of throwing when the stream ends before a level 1 element is found.
+ * A Block or SimpleBlock whose track number starts with a zero byte is skipped, since
+ * MatroskaExtractor would throw the same IllegalStateException on it.
  *
  * Ported from NuvioTV's dvmkv DefaultEbmlReader. [MatroskaResync] swaps it into extractors.
  */
@@ -35,6 +37,11 @@ internal class ResyncingEbmlReader : EbmlReader {
     private var elementState = ELEMENT_STATE_READ_ID
     private var elementId = 0
     private var elementContentSize = 0L
+
+    // True once the content of the current binary element has been handed to the processor. A read
+    // error inside the processor hands the same element over again to resume it; by then its first
+    // byte has been read, so it must not be checked again.
+    private var binaryContentStarted = false
 
     override fun init(processor: EbmlProcessor) {
         this.processor = processor
@@ -85,6 +92,7 @@ internal class ResyncingEbmlReader : EbmlReader {
                 }
                 elementContentSize = size
                 elementState = ELEMENT_STATE_READ_CONTENT
+                binaryContentStarted = false
             }
 
             when (val type = processor.getElementType(elementId)) {
@@ -134,7 +142,13 @@ internal class ResyncingEbmlReader : EbmlReader {
                 EbmlProcessor.ELEMENT_TYPE_BINARY -> {
                     if (elementContentSize > Int.MAX_VALUE) {
                         startResync(input, processor, oversizeReason())
+                    } else if (!binaryContentStarted && hasInvalidTrackNumber(input)) {
+                        Log.w(TAG, "Block at position ${input.position} has an invalid track number; skipping it")
+                        input.skipFully(elementContentSize.toInt())
+                        elementState = ELEMENT_STATE_READ_ID
+                        return true
                     } else {
+                        binaryContentStarted = true
                         processor.binaryElement(elementId, elementContentSize.toInt(), input)
                         elementState = ELEMENT_STATE_READ_ID
                         return true
@@ -172,6 +186,22 @@ internal class ResyncingEbmlReader : EbmlReader {
         varintReader.readUnsignedVarint(input, allowEndOfInput, removeLengthMask, maximumAllowedLength)
     } catch (_: IllegalStateException) {
         null
+    }
+
+    /**
+     * Returns whether the current element is a Block or SimpleBlock whose first byte is zero.
+     *
+     * A block starts with its track number as a varint, and no varint starts with a zero byte, so the
+     * block is damaged. MatroskaExtractor would throw "IllegalStateException: No valid varint length
+     * mask found" on it, which ends playback. The element's own size was read fine, so only this
+     * block is lost when the reader skips it. The byte is peeked, so a read error here leaves the
+     * input where the block starts.
+     */
+    private fun hasInvalidTrackNumber(input: ExtractorInput): Boolean {
+        if ((elementId != ID_BLOCK && elementId != ID_SIMPLE_BLOCK) || elementContentSize == 0L) return false
+        input.peekFully(scratch, 0, 1)
+        input.resetPeekPosition()
+        return scratch[0].toInt() == 0
     }
 
     /**
@@ -255,6 +285,10 @@ internal class ResyncingEbmlReader : EbmlReader {
 
         /** Matroska Segment, the only master element kept on the stack across a resync. */
         const val ID_SEGMENT = 0x18538067
+
+        /** Matroska Block and SimpleBlock, whose content starts with the track number as a varint. */
+        const val ID_BLOCK = 0xA1
+        const val ID_SIMPLE_BLOCK = 0xA3
 
         const val MAX_ID_BYTES = 4
         const val MAX_LENGTH_BYTES = 8
