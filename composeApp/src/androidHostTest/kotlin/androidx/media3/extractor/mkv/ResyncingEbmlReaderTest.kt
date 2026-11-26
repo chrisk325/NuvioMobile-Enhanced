@@ -17,6 +17,8 @@ import java.io.IOException
  * An element header whose size does not fit in an int (damaged data) used to be skipped with the
  * size cast to an int. The negative length made [DefaultExtractorInput] throw
  * "ArrayIndexOutOfBoundsException: src.length=65536 srcPos=-1747899964 ..." and playback ended.
+ * A zero byte where an element id or size starts made Media3's VarintReader throw
+ * "IllegalStateException: No valid varint length mask found", which also ended playback.
  * The reader now closes what was open under the Segment and resyncs to the next Cluster.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -50,6 +52,44 @@ class ResyncingEbmlReaderTest {
     @Test
     fun `an open block group is closed before the resync`() {
         val events = parse(stream(garbageId = intArrayOf(0x42, 0x86), inBlockGroup = true))
+        assertEquals(
+            listOf(
+                "start 18538067", "start 1f43b675", "int e7=5", "start a0", "bin a1 2", "end a0",
+                "end 1f43b675", "start 1f43b675", "int e7=9", "bin a3 1", "end 1f43b675",
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun `a zero byte where an element id starts resyncs to the next cluster`() {
+        val events = parse(stream(garbageId = intArrayOf(0x00), garbageSize = intArrayOf()))
+        assertEquals(
+            listOf(
+                "start 18538067", "start 1f43b675", "int e7=5", "end 1f43b675",
+                "start 1f43b675", "int e7=9", "bin a3 1", "end 1f43b675",
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun `a zero byte where an element size starts resyncs to the next cluster`() {
+        val events = parse(stream(garbageId = intArrayOf(0x42, 0x86), garbageSize = intArrayOf(0x00)))
+        assertEquals(
+            listOf(
+                "start 18538067", "start 1f43b675", "int e7=5", "end 1f43b675",
+                "start 1f43b675", "int e7=9", "bin a3 1", "end 1f43b675",
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun `an open block group is closed before a resync on a zero byte`() {
+        val events = parse(
+            stream(garbageId = intArrayOf(0x00), garbageSize = intArrayOf(), inBlockGroup = true),
+        )
         assertEquals(
             listOf(
                 "start 18538067", "start 1f43b675", "int e7=5", "start a0", "bin a1 2", "end a0",
@@ -108,7 +148,11 @@ class ResyncingEbmlReaderTest {
     }
 
     /** Segment > Cluster with a damaged element header, noise, then an intact Cluster. */
-    private fun stream(garbageId: IntArray, inBlockGroup: Boolean = false): ByteArray {
+    private fun stream(
+        garbageId: IntArray,
+        garbageSize: IntArray = OVERSIZED,
+        inBlockGroup: Boolean = false,
+    ): ByteArray {
         val out = ByteArrayOutputStream()
         fun put(vararg bytes: Int) = bytes.forEach(out::write)
         put(0x18, 0x53, 0x80, 0x67, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)
@@ -119,8 +163,7 @@ class ResyncingEbmlReaderTest {
             put(BLOCK, 0x82, 0x81, 0x00)
         }
         put(*garbageId)
-        // 8-byte size 0x97D129C4 = 2547067332, which wraps to -1747899964 as an int.
-        put(0x01, 0x00, 0x00, 0x00, 0x97, 0xD1, 0x29, 0xC4)
+        put(*garbageSize)
         repeat(40) { put((it * 37 + 11) and 0x7F) }
         put(0x1F, 0x43, 0xB6, 0x75, 0x86)
         put(TIMECODE, 0x81, 0x09)
@@ -192,5 +235,8 @@ class ResyncingEbmlReaderTest {
         const val BLOCK = 0xA1
         const val SIMPLE_BLOCK = 0xA3
         const val TIMECODE = 0xE7
+
+        /** 8-byte size 0x97D129C4 = 2547067332, which wraps to -1747899964 as an int. */
+        val OVERSIZED = intArrayOf(0x01, 0x00, 0x00, 0x00, 0x97, 0xD1, 0x29, 0xC4)
     }
 }

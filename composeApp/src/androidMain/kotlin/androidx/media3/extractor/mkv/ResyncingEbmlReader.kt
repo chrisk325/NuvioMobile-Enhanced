@@ -16,9 +16,11 @@ import java.util.ArrayDeque
  * Media3 casts the size of a binary or unknown element to an int. On damaged data (in the file or
  * the stream) the header it just read is noise, the size wraps negative, and skipping a negative
  * length throws "ArrayIndexOutOfBoundsException: src.length=65536 srcPos=-1747899964 ..." inside
- * DefaultExtractorInput, which ends playback. This reader instead closes the elements opened below
- * the Segment and searches for the next level 1 element (normally the next Cluster), so playback
- * carries on from there. The search also returns end of input instead of throwing when the stream
+ * DefaultExtractorInput, which ends playback. Damaged data can also put a zero byte where an
+ * element id or size starts; that byte has no length marker and Media3's VarintReader throws
+ * "IllegalStateException: No valid varint length mask found", which ends playback too. In both
+ * cases this reader instead closes the elements opened below the Segment and searches for the next
+ * level 1 element (normally the next Cluster), so playback carries on from there. The search also returns end of input instead of throwing when the stream
  * ends before a level 1 element is found.
  *
  * Ported from NuvioTV's dvmkv DefaultEbmlReader. [MatroskaResync] swaps it into extractors.
@@ -61,7 +63,11 @@ internal class ResyncingEbmlReader : EbmlReader {
             }
 
             if (elementState == ELEMENT_STATE_READ_ID) {
-                var result = varintReader.readUnsignedVarint(input, true, false, MAX_ID_BYTES)
+                var result = readVarintOrNull(input, allowEndOfInput = true, removeLengthMask = false, MAX_ID_BYTES)
+                if (result == null) {
+                    startResync(input, processor, "Invalid element id")
+                    continue
+                }
                 if (result == C.RESULT_MAX_LENGTH_EXCEEDED.toLong()) {
                     result = maybeResyncToNextLevel1Element(input, processor)
                 }
@@ -72,7 +78,12 @@ internal class ResyncingEbmlReader : EbmlReader {
             }
 
             if (elementState == ELEMENT_STATE_READ_CONTENT_SIZE) {
-                elementContentSize = varintReader.readUnsignedVarint(input, false, true, MAX_LENGTH_BYTES)
+                val size = readVarintOrNull(input, allowEndOfInput = false, removeLengthMask = true, MAX_LENGTH_BYTES)
+                if (size == null) {
+                    startResync(input, processor, "Element 0x${Integer.toHexString(elementId)} has an invalid size")
+                    continue
+                }
+                elementContentSize = size
                 elementState = ELEMENT_STATE_READ_CONTENT
             }
 
@@ -122,7 +133,7 @@ internal class ResyncingEbmlReader : EbmlReader {
                 }
                 EbmlProcessor.ELEMENT_TYPE_BINARY -> {
                     if (elementContentSize > Int.MAX_VALUE) {
-                        startResync(input, processor)
+                        startResync(input, processor, oversizeReason())
                     } else {
                         processor.binaryElement(elementId, elementContentSize.toInt(), input)
                         elementState = ELEMENT_STATE_READ_ID
@@ -131,7 +142,7 @@ internal class ResyncingEbmlReader : EbmlReader {
                 }
                 EbmlProcessor.ELEMENT_TYPE_UNKNOWN -> {
                     if (elementContentSize > Int.MAX_VALUE) {
-                        startResync(input, processor)
+                        startResync(input, processor, oversizeReason())
                     } else {
                         input.skipFully(elementContentSize.toInt())
                         elementState = ELEMENT_STATE_READ_ID
@@ -148,15 +159,31 @@ internal class ResyncingEbmlReader : EbmlReader {
     }
 
     /**
-     * Handles a binary or unknown element whose size does not fit in an int: no real Matroska
-     * element of these types is that large, so the reader has lost its place.
+     * Reads a varint, or returns null when its first byte is zero: no varint starts with a zero byte,
+     * so the reader has lost its place. Media3's VarintReader throws IllegalStateException for that
+     * byte after consuming it and before changing its own state, so it is ready for the next varint.
      */
-    private fun startResync(input: ExtractorInput, processor: EbmlProcessor) {
-        Log.w(
-            TAG,
-            "Element 0x${Integer.toHexString(elementId)} declares $elementContentSize bytes at position " +
-                "${input.position}; resyncing to the next level 1 element",
-        )
+    private fun readVarintOrNull(
+        input: ExtractorInput,
+        allowEndOfInput: Boolean,
+        removeLengthMask: Boolean,
+        maximumAllowedLength: Int,
+    ): Long? = try {
+        varintReader.readUnsignedVarint(input, allowEndOfInput, removeLengthMask, maximumAllowedLength)
+    } catch (_: IllegalStateException) {
+        null
+    }
+
+    /**
+     * A binary or unknown element whose size does not fit in an int: no real Matroska element of
+     * these types is that large, so the reader has lost its place.
+     */
+    private fun oversizeReason() =
+        "Element 0x${Integer.toHexString(elementId)} declares $elementContentSize bytes"
+
+    /** Gives up on the current element after damaged data and starts the search for a level 1 element. */
+    private fun startResync(input: ExtractorInput, processor: EbmlProcessor, reason: String) {
+        Log.w(TAG, "$reason at position ${input.position}; resyncing to the next level 1 element")
         elementState = ELEMENT_STATE_RESYNC
         elementContentSize = 0
         elementId = 0
