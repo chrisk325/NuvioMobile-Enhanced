@@ -22,8 +22,8 @@ import java.util.ArrayDeque
  * cases this reader instead closes the elements opened below the Segment and searches for the next
  * level 1 element (normally the next Cluster), so playback carries on from there. The search also
  * returns end of input instead of throwing when the stream ends before a level 1 element is found.
- * A Block or SimpleBlock whose track number starts with a zero byte is skipped, since
- * MatroskaExtractor would throw the same IllegalStateException on it.
+ * A Block or SimpleBlock whose header is damaged (its track number starts with a zero byte, or its
+ * lacing sizes are invalid) is skipped, since MatroskaExtractor would fail on it too.
  *
  * Ported from NuvioTV's dvmkv DefaultEbmlReader. [MatroskaResync] swaps it into extractors.
  */
@@ -42,6 +42,9 @@ internal class ResyncingEbmlReader : EbmlReader {
     // error inside the processor hands the same element over again to resume it; by then its first
     // byte has been read, so it must not be checked again.
     private var binaryContentStarted = false
+
+    // Bytes of the current block peeked by findBlockDamage.
+    private var blockBytesPeeked = 0
 
     override fun init(processor: EbmlProcessor) {
         this.processor = processor
@@ -142,14 +145,15 @@ internal class ResyncingEbmlReader : EbmlReader {
                 EbmlProcessor.ELEMENT_TYPE_BINARY -> {
                     if (elementContentSize > Int.MAX_VALUE) {
                         startResync(input, processor, oversizeReason())
-                    } else if (!binaryContentStarted && hasInvalidTrackNumber(input)) {
-                        Log.w(TAG, "Block at position ${input.position} has an invalid track number; skipping it")
-                        input.skipFully(elementContentSize.toInt())
-                        elementState = ELEMENT_STATE_READ_ID
-                        return true
                     } else {
-                        binaryContentStarted = true
-                        processor.binaryElement(elementId, elementContentSize.toInt(), input)
+                        val blockDamage = if (binaryContentStarted) null else findBlockDamage(input)
+                        if (blockDamage != null) {
+                            Log.w(TAG, "Block at position ${input.position} has $blockDamage; skipping it")
+                            input.skipFully(elementContentSize.toInt())
+                        } else {
+                            binaryContentStarted = true
+                            processor.binaryElement(elementId, elementContentSize.toInt(), input)
+                        }
                         elementState = ELEMENT_STATE_READ_ID
                         return true
                     }
@@ -189,19 +193,83 @@ internal class ResyncingEbmlReader : EbmlReader {
     }
 
     /**
-     * Returns whether the current element is a Block or SimpleBlock whose first byte is zero.
+     * Checks the header of the current element if it is a Block or SimpleBlock, and returns what is
+     * damaged in it, or null when it is intact (or the element is not a block).
      *
-     * A block starts with its track number as a varint, and no varint starts with a zero byte, so the
-     * block is damaged. MatroskaExtractor would throw "IllegalStateException: No valid varint length
-     * mask found" on it, which ends playback. The element's own size was read fine, so only this
-     * block is lost when the reader skips it. The byte is peeked, so a read error here leaves the
-     * input where the block starts.
+     * A block starts with its track number as a varint, a timecode, flags and, for a laced block,
+     * the sizes of its frames. Damaged data there makes MatroskaExtractor fail ("IllegalStateException:
+     * No valid varint length mask found", "EBML lacing sample size out of range") or produce frame
+     * sizes below zero or beyond the block, which ends playback. The element's own size was read
+     * fine, so only this block is lost when the reader skips it. The header is checked as
+     * MatroskaExtractor (1.8.0) parses it. It is only peeked, so a read error here leaves the input
+     * where the block starts.
      */
-    private fun hasInvalidTrackNumber(input: ExtractorInput): Boolean {
-        if ((elementId != ID_BLOCK && elementId != ID_SIMPLE_BLOCK) || elementContentSize == 0L) return false
+    private fun findBlockDamage(input: ExtractorInput): String? {
+        if ((elementId != ID_BLOCK && elementId != ID_SIMPLE_BLOCK) || elementContentSize == 0L) return null
+        blockBytesPeeked = 0
+        return try {
+            peekBlockDamage(input, elementContentSize.toInt())
+        } finally {
+            input.resetPeekPosition()
+        }
+    }
+
+    private fun peekBlockDamage(input: ExtractorInput, blockSize: Int): String? {
+        val firstByte = peekBlockByte(input, blockSize)
+        if (firstByte == 0) return "an invalid track number"
+        val trackNumberLength = VarintReader.parseUnsignedVarintLength(firstByte)
+        // The rest of the track number, the timecode (2 bytes) and the flags (1 byte).
+        var flags = 0
+        for (i in 1 until trackNumberLength + 3) {
+            flags = peekBlockByte(input, blockSize)
+            if (flags == PAST_BLOCK_END) return HEADER_TOO_LONG
+        }
+        val lacing = (flags and 0x06) shr 1
+        if (lacing == LACING_NONE) return null
+        val frameCountByte = peekBlockByte(input, blockSize)
+        if (frameCountByte == PAST_BLOCK_END) return HEADER_TOO_LONG
+        val frameCount = frameCountByte + 1
+        if (lacing == LACING_FIXED_SIZE) return null
+        // Sizes of all frames but the last, which takes what is left of the block.
+        var totalFramesSize = 0L
+        var frameSize = 0L
+        for (frame in 0 until frameCount - 1) {
+            if (lacing == LACING_XIPH) {
+                frameSize = 0
+                do {
+                    val sizeByte = peekBlockByte(input, blockSize)
+                    if (sizeByte == PAST_BLOCK_END) return HEADER_TOO_LONG
+                    frameSize += sizeByte
+                } while (sizeByte == 0xFF)
+            } else {
+                // LACING_EBML: the first size is a varint, later ones are signed varint offsets.
+                val sizeFirstByte = peekBlockByte(input, blockSize)
+                if (sizeFirstByte == PAST_BLOCK_END) return HEADER_TOO_LONG
+                if (sizeFirstByte == 0) return "an invalid lacing size"
+                val sizeLength = VarintReader.parseUnsignedVarintLength(sizeFirstByte)
+                var value = (sizeFirstByte and (0x80 shr (sizeLength - 1)).inv()).toLong()
+                for (i in 1 until sizeLength) {
+                    val sizeByte = peekBlockByte(input, blockSize)
+                    if (sizeByte == PAST_BLOCK_END) return HEADER_TOO_LONG
+                    value = (value shl 8) or sizeByte.toLong()
+                }
+                if (frame > 0) value -= (1L shl (6 + (sizeLength - 1) * 7)) - 1
+                if (value < Int.MIN_VALUE || value > Int.MAX_VALUE) return "a lacing size out of range"
+                frameSize = if (frame == 0) value else frameSize + value
+            }
+            if (frameSize < 0) return "a negative lacing size"
+            totalFramesSize += frameSize
+            if (totalFramesSize > blockSize - blockBytesPeeked) return "lacing sizes larger than the block"
+        }
+        return null
+    }
+
+    /** Peeks the next byte of the current block, or returns [PAST_BLOCK_END] when the block has no more bytes. */
+    private fun peekBlockByte(input: ExtractorInput, blockSize: Int): Int {
+        if (blockBytesPeeked >= blockSize) return PAST_BLOCK_END
         input.peekFully(scratch, 0, 1)
-        input.resetPeekPosition()
-        return scratch[0].toInt() == 0
+        blockBytesPeeked++
+        return scratch[0].toInt() and 0xFF
     }
 
     /**
@@ -286,9 +354,18 @@ internal class ResyncingEbmlReader : EbmlReader {
         /** Matroska Segment, the only master element kept on the stack across a resync. */
         const val ID_SEGMENT = 0x18538067
 
-        /** Matroska Block and SimpleBlock, whose content starts with the track number as a varint. */
+        /** Matroska Block and SimpleBlock, whose content starts with a header MatroskaExtractor parses. */
         const val ID_BLOCK = 0xA1
         const val ID_SIMPLE_BLOCK = 0xA3
+
+        const val LACING_NONE = 0
+        const val LACING_XIPH = 1
+        const val LACING_FIXED_SIZE = 2
+        const val LACING_EBML = 3
+
+        /** Returned by [peekBlockByte] when the block header runs past the end of the block. */
+        const val PAST_BLOCK_END = -1
+        const val HEADER_TOO_LONG = "a header longer than the block"
 
         const val MAX_ID_BYTES = 4
         const val MAX_LENGTH_BYTES = 8
