@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.44",
+          "buildVersion": "261",
+          "date": "2026-11-26T08:00:24Z",
+          "localizedDescription": "- [fix potential playback errors with usenet streams (#129)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/129) @chrisk325  \n- [Resync instead of failing on a zero byte in MKV element headers (#128)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/128) @chrisk325  \n- [perf(subtitles): bump nuvio-libass AAR to v0.0.14 (Laskco libass fork) (#127)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/127) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.44-beta/nuvio-1.0.44-enhanced-release.ipa",
+          "size": 77527683,
+          "sha256": "0b94ad4a3f4425b143a4332e4836cf502be546a3b55464b16ce4761e2152f8d4",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.41",
           "buildVersion": "258",
           "date": "2026-11-25T17:00:10Z",
