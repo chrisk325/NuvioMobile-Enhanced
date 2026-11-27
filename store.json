@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.47",
+          "buildVersion": "264",
+          "date": "2026-11-27T08:09:17Z",
+          "localizedDescription": "- [perf(subtitles): update nuvio-libass AAR (#132)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/132) @chrisk325  \n- [Enable poster long-press actions inside collection folders (#131)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/131) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.47-beta/nuvio-1.0.47-enhanced-release.ipa",
+          "size": 77537236,
+          "sha256": "855352a95e69a421af4686a6167c579f229a31be984eaea0f70995ad1f4fddde",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.45",
           "buildVersion": "262",
           "date": "2026-11-27T06:17:49Z",
