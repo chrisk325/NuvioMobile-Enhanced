@@ -34,7 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -55,7 +55,8 @@ import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.nuvioCardDepth
 import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.NuvioTokens
-import com.nuvio.app.core.poster.rememberAddonArtwork
+import com.nuvio.app.core.poster.AddonArtworkTarget
+import com.nuvio.app.core.poster.rememberAddonArtworksFor
 import com.nuvio.app.core.poster.withAddonArtwork
 import com.nuvio.app.core.ui.PosterLandscapeAspectRatio
 import com.nuvio.app.core.ui.PosterCardStyleUiState
@@ -134,6 +135,14 @@ private fun localizedContinueWatchingMetaLine(item: ContinueWatchingItem): Strin
             stringResource(Res.string.library_source_cloud)
         else ->
             stringResource(Res.string.media_movie)
+    }
+
+/** The addon lookup for this item's artwork, or null when a media server already sent both artworks. */
+private fun ContinueWatchingItem.addonArtworkTarget(): AddonArtworkTarget? =
+    if (mediaServerArtwork && poster != null && landscapePoster != null) {
+        null
+    } else {
+        AddonArtworkTarget(type = parentMetaType, id = parentMetaId)
     }
 
 private fun ContinueWatchingItem.isCloudLibraryItem(): Boolean =
@@ -353,6 +362,21 @@ private fun HomeContinueWatchingSectionContent(
             )
         }
         val displayEntries = disintegration.sync(dataSourceKey, items, disintegrationRequest)
+        // The user's meta addon artwork: its poster, and its landscape poster for the wide cards.
+        // Looked up once for the whole row; a subscription per card made the row heavy to compose
+        // every time it scrolled back into view.
+        val artworkTargets = displayEntries.mapNotNull { entry ->
+            entry.item.addonArtworkTarget()
+        }.distinct()
+        val addonArtworks = rememberAddonArtworksFor(artworkTargets)
+        val todayIsoDate = CurrentDateProvider.todayIsoDate()
+        val posterCardStyle = rememberPosterCardStyleUiState()
+        val cardMetrics = remember(posterCardStyle.widthDp, posterCardStyle.cornerRadiusDp) {
+            continueWatchingLandscapeCardMetrics(
+                basePosterWidthDp = posterCardStyle.widthDp,
+                cornerRadiusDp = posterCardStyle.cornerRadiusDp,
+            )
+        }
 
         NuvioShelfSection(
             title = title ?: stringResource(Res.string.compose_settings_page_continue_watching),
@@ -369,13 +393,7 @@ private fun HomeContinueWatchingSectionContent(
             val sourceItem = entry.item
             val onClick = if (entry.exiting) null else onItemClick?.let { { it(sourceItem) } }
             val onLongClick = if (entry.exiting) null else onItemLongPress?.let { { it(sourceItem) } }
-            // The user's meta addon artwork: its poster, and its landscape poster for the wide cards.
-            val addonArtwork = rememberAddonArtwork(
-                type = sourceItem.parentMetaType,
-                id = sourceItem.parentMetaId,
-                // A media server that already sent both artworks needs no addon lookup.
-                enabled = !(sourceItem.mediaServerArtwork && sourceItem.poster != null && sourceItem.landscapePoster != null),
-            )
+            val addonArtwork = sourceItem.addonArtworkTarget()?.let { addonArtworks[it.key] }
             val item = remember(sourceItem, addonArtwork) { sourceItem.withAddonArtwork(addonArtwork) }
             DisintegratingContainer(
                 disintegrating = entry.exiting,
@@ -384,6 +402,8 @@ private fun HomeContinueWatchingSectionContent(
                 when (style) {
                     ContinueWatchingSectionStyle.Card -> ContinueWatchingCard(
                         item = item,
+                        cardMetrics = cardMetrics,
+                        todayIsoDate = todayIsoDate,
                         useEpisodeThumbnails = useEpisodeThumbnails,
                         blurNextUp = blurNextUp,
                         onClick = onClick,
@@ -689,19 +709,13 @@ private fun continueWatchingLandscapeCardMetrics(
 @Composable
 private fun ContinueWatchingCard(
     item: ContinueWatchingItem,
+    cardMetrics: ContinueWatchingLandscapeCardMetrics,
+    todayIsoDate: String,
     useEpisodeThumbnails: Boolean,
     blurNextUp: Boolean,
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
 ) {
-    val posterCardStyle = rememberPosterCardStyleUiState()
-    val cardMetrics = remember(posterCardStyle.widthDp, posterCardStyle.cornerRadiusDp) {
-        continueWatchingLandscapeCardMetrics(
-            basePosterWidthDp = posterCardStyle.widthDp,
-            cornerRadiusDp = posterCardStyle.cornerRadiusDp,
-        )
-    }
-    val todayIsoDate = CurrentDateProvider.todayIsoDate()
     val airDateText = if (item.progressFraction <= 0f && item.seasonNumber != null && item.episodeNumber != null) {
         computeAirDateBadgeText(item.released, todayIsoDate)
     } else {
@@ -756,9 +770,8 @@ private fun ContinueWatchingCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(if (shouldBlurArtwork) Modifier.blur(18.dp) else Modifier)
-                    .drawWithContent {
-                        drawContent()
-
+                    .drawWithCache {
+                        // Built once per size, not on every frame the image draws (e.g. its crossfade).
                         val startY = size.height * 0.45f
                         val gradient = Brush.verticalGradient(
                             colorStops = arrayOf(
@@ -769,12 +782,12 @@ private fun ContinueWatchingCard(
                             startY = startY,
                             endY = size.height,
                         )
-
-                        drawRect(
-                            brush = gradient,
-                            topLeft = Offset(-2f, startY),
-                            size = Size(size.width + 4f, (size.height - startY) + 4f),
-                        )
+                        val gradientTopLeft = Offset(-2f, startY)
+                        val gradientSize = Size(size.width + 4f, (size.height - startY) + 4f)
+                        onDrawWithContent {
+                            drawContent()
+                            drawRect(brush = gradient, topLeft = gradientTopLeft, size = gradientSize)
+                        }
                     },
                 contentScale = ContentScale.Crop,
             )

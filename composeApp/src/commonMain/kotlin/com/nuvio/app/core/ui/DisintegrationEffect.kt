@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
@@ -46,8 +47,19 @@ fun DisintegratingContainer(
     val onDisintegratedState = rememberUpdatedState(onDisintegrated)
     val onDisintegrationStartedState = rememberUpdatedState(onDisintegrationStarted)
 
+    // Content goes through the offscreen layer only while a snapshot is needed. Recording every
+    // card into its own layer on every draw made rows of these (Continue Watching) stutter.
+    var capturing by remember { mutableStateOf(false) }
+
     LaunchedEffect(disintegrating) {
-        if (!disintegrating) return@LaunchedEffect
+        if (!disintegrating) {
+            capturing = false
+            return@LaunchedEffect
+        }
+        capturing = true
+        // The first frame redraws into the layer; the second resumes after that draw.
+        withFrameNanos { }
+        withFrameNanos { }
         val bitmap = runCatching { graphicsLayer.toImageBitmap() }.getOrNull()
         if (bitmap == null) {
             onDisintegrationStartedState.value()
@@ -68,8 +80,12 @@ fun DisintegratingContainer(
         modifier = modifier.drawWithContent {
             val activeField = field
             if (activeField == null) {
-                graphicsLayer.record { this@drawWithContent.drawContent() }
-                drawLayer(graphicsLayer)
+                if (capturing) {
+                    graphicsLayer.record { this@drawWithContent.drawContent() }
+                    drawLayer(graphicsLayer)
+                } else {
+                    drawContent()
+                }
             } else {
                 drawAsh(activeField, progress.value)
             }
