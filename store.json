@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.45",
+          "buildVersion": "262",
+          "date": "2026-11-27T06:17:49Z",
+          "localizedDescription": "- [Reduce stutter when scrolling past the Continue Watching rows (#130)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/130) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.45-beta/nuvio-1.0.45-enhanced-release.ipa",
+          "size": 77533602,
+          "sha256": "3d4fd191dca92e1399a0dd27fb16cad8e44581763f80cacf2b3927bb6a844358",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.44",
           "buildVersion": "261",
           "date": "2026-11-26T08:00:24Z",
