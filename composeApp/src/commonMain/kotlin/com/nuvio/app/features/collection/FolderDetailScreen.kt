@@ -81,6 +81,7 @@ fun FolderDetailScreen(
     onBack: () -> Unit,
     onCatalogClick: (HomeCatalogSection) -> Unit,
     onPosterClick: (MetaPreview) -> Unit,
+    onPosterLongClick: ((MetaPreview) -> Unit)? = null,
 ) {
     val uiState by FolderDetailRepository.uiState.collectAsState()
     val watchedUiState by remember {
@@ -180,6 +181,7 @@ fun FolderDetailScreen(
                 modifier = Modifier.weight(1f).then(contentModifier),
                 onTabSelected = { FolderDetailRepository.selectTab(it) },
                 onPosterClick = onPosterClick,
+                onPosterLongClick = onPosterLongClick,
             )
             FolderViewMode.ROWS -> RowsContent(
                 uiState = uiState,
@@ -187,6 +189,7 @@ fun FolderDetailScreen(
                 modifier = Modifier.weight(1f).then(contentModifier),
                 onCatalogClick = onCatalogClick,
                 onPosterClick = onPosterClick,
+                onPosterLongClick = onPosterLongClick,
             )
             FolderViewMode.FOLLOW_LAYOUT -> RowsContent(
                 uiState = uiState,
@@ -194,6 +197,7 @@ fun FolderDetailScreen(
                 modifier = Modifier.weight(1f).then(contentModifier),
                 onCatalogClick = onCatalogClick,
                 onPosterClick = onPosterClick,
+                onPosterLongClick = onPosterLongClick,
             )
         }
     }
@@ -224,6 +228,7 @@ private fun TabbedGridContent(
     modifier: Modifier = Modifier,
     onTabSelected: (Int) -> Unit,
     onPosterClick: (MetaPreview) -> Unit,
+    onPosterLongClick: ((MetaPreview) -> Unit)?,
 ) {
     val gridState = rememberLazyGridState()
 
@@ -313,6 +318,7 @@ private fun TabbedGridContent(
                                     item = item,
                                 ),
                                 onClick = { onPosterClick(item) },
+                                onLongClick = onPosterLongClick?.let { { it(item) } },
                             )
                         }
 
@@ -335,6 +341,7 @@ private fun RowsContent(
     modifier: Modifier = Modifier,
     onCatalogClick: (HomeCatalogSection) -> Unit,
     onPosterClick: (MetaPreview) -> Unit,
+    onPosterLongClick: ((MetaPreview) -> Unit)?,
 ) {
     val sections = FolderDetailRepository.getCatalogSectionsForRows()
 
@@ -370,6 +377,7 @@ private fun RowsContent(
                 },
                 watchedKeys = watchedKeys,
                 onPosterClick = { onPosterClick(it) },
+                onPosterLongClick = onPosterLongClick,
             )
         }
     }
