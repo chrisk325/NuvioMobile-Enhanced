@@ -189,6 +189,36 @@ fun rememberAddonArtworks(items: List<MetaPreview>, enabled: Boolean = true): Ma
     return artwork
 }
 
+/** One (type, id) pair to look up with [rememberAddonArtworksFor]. */
+data class AddonArtworkTarget(val type: String, val id: String) {
+    val key: String get() = AddonArtworkRepository.key(type, id)
+}
+
+/**
+ * Addon artwork for several (type, id) pairs at once, keyed by [AddonArtworkTarget.key].
+ * One subscription for a whole row, instead of one per card as [rememberAddonArtwork] needs.
+ */
+@Composable
+fun rememberAddonArtworksFor(targets: List<AddonArtworkTarget>): Map<String, AddonArtwork> {
+    val keys = remember(targets) { targets.map { it.key } }
+    val flow = remember(keys) {
+        AddonArtworkRepository.artwork
+            .map { all -> keys.mapNotNull { key -> all[key]?.let { key to it } }.toMap() }
+            .distinctUntilChanged()
+    }
+    val artwork by flow.collectAsStateWithLifecycle(
+        initialValue = remember(keys) {
+            val all = AddonArtworkRepository.artwork.value
+            keys.mapNotNull { key -> all[key]?.let { key to it } }.toMap()
+        },
+    )
+    val generation by AddonArtworkRepository.generation.collectAsStateWithLifecycle()
+    LaunchedEffect(targets, generation) {
+        targets.forEach { target -> AddonArtworkRepository.request(target.type, target.id) }
+    }
+    return artwork
+}
+
 fun MetaPreview.addonArtworkKey(): String = AddonArtworkRepository.key(type, id)
 
 /**
