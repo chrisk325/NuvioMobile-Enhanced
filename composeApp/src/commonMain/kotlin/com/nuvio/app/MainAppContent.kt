@@ -2067,6 +2067,7 @@ internal fun MainAppContent(
                         route = route,
                         navController = navController,
                         onCatalogClick = onCatalogClick,
+                        onPosterLongClick = openPosterActions,
                     )
                 }
                     }.let { provider ->
