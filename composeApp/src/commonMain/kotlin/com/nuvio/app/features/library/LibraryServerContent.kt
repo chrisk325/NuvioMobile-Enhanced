@@ -24,9 +24,12 @@ import com.nuvio.app.features.servers.ServerLibraryRef
 import com.nuvio.app.features.servers.message
 import com.nuvio.app.features.servers.serverFailure
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_retry
 import nuvio.composeapp.generated.resources.library_server_load_failed
@@ -46,7 +49,8 @@ internal data class LibraryServerShelf(
 /**
  * The Servers shelves last loaded, kept for the app's lifetime so the tab shows them at once when opened again. They
  * stay current until the server setup changes (the servers revision) or the app changes a favourite on a server
- * (the favourites write count); a load in which any shelf failed is not kept, so retrying always reloads.
+ * (the favourites write count); a load in which any shelf failed is not kept, so retrying always reloads. Full loads
+ * are also kept on the device ([LibraryServerShelfStore]), so after the app starts the tab shows them while it loads.
  */
 internal object LibraryServerShelfCache {
     private class Entry(val revision: Int, val writes: Int, val shelves: List<LibraryServerShelf>)
@@ -61,8 +65,13 @@ internal object LibraryServerShelfCache {
     /** The cached shelves for the same server setup, even from before the latest favourite change, else null. */
     fun peek(revision: Int): List<LibraryServerShelf>? = entry?.takeIf { it.revision == revision }?.shelves
 
-    fun put(revision: Int, writes: Int, shelves: List<LibraryServerShelf>) {
-        entry = if (shelves.any { it.failure != null }) null else Entry(revision, writes, shelves)
+    /** The shelves kept on the device for the current server setup, else null. */
+    suspend fun stored(): List<LibraryServerShelf>? = withContext(Dispatchers.IO) { LibraryServerShelfStore.read() }
+
+    suspend fun put(revision: Int, writes: Int, shelves: List<LibraryServerShelf>) {
+        val complete = shelves.none { it.failure != null }
+        entry = if (complete) Entry(revision, writes, shelves) else null
+        if (complete) withContext(Dispatchers.IO) { LibraryServerShelfStore.write(shelves) }
     }
 }
 

@@ -474,9 +474,17 @@ fun LibraryScreen(
             if (cached != null) {
                 serverShelves = cached
             } else {
-                val loaded = loadServerShelves()
-                LibraryServerShelfCache.put(revision, writes, loaded)
-                serverShelves = loaded
+                // Nothing on screen yet, as after the app starts: show the shelves kept on the device while they load.
+                val showingKept = serverShelves == null &&
+                    LibraryServerShelfCache.stored()?.also { serverShelves = it } != null
+                if (showingKept) serverShelvesRefreshing = true
+                try {
+                    val loaded = loadServerShelves()
+                    LibraryServerShelfCache.put(revision, writes, loaded)
+                    serverShelves = loaded
+                } finally {
+                    if (showingKept) serverShelvesRefreshing = false
+                }
             }
         }
     }
