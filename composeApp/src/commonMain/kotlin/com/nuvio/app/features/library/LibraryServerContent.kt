@@ -1,8 +1,12 @@
 package com.nuvio.app.features.library
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioShelfSectionHeader
@@ -59,6 +63,28 @@ internal object LibraryServerShelfCache {
 
     fun put(revision: Int, writes: Int, shelves: List<LibraryServerShelf>) {
         entry = if (shelves.any { it.failure != null }) null else Entry(revision, writes, shelves)
+    }
+}
+
+/** Pull to refresh around the library content, active only while the Servers tab is shown. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun LibraryServerPullToRefresh(
+    enabled: Boolean,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (enabled) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            content()
+        }
+    } else {
+        content()
     }
 }
 

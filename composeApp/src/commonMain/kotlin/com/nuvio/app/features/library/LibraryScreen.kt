@@ -290,6 +290,27 @@ fun LibraryScreen(
         runCatching { LibraryWatchedFilter.valueOf(libraryWatchedFilterName) }.getOrDefault(LibraryWatchedFilter.ALL)
     }
     val coroutineScope = rememberCoroutineScope()
+    var serverShelvesRefreshing by remember { mutableStateOf(false) }
+    val refreshServerShelves: () -> Unit = refresh@{
+        if (serverShelvesRefreshing) return@refresh
+        serverShelvesRefreshing = true
+        coroutineScope.launch {
+            try {
+                ServerFavorites.ensureFresh(force = true)
+                val revision = serversUiState.revision
+                val writes = serverFavoritesUiState.writes
+                val loaded = loadServerShelves()
+                LibraryServerShelfCache.put(revision, writes, loaded)
+                serverShelves = loaded
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                // Keep showing the shelves already on screen.
+            } finally {
+                serverShelvesRefreshing = false
+            }
+        }
+    }
     val listState = rememberLazyListState()
     ScreenActivityEffect(listState) { screenActive ->
         if (!screenActive) listState.stopScroll()
@@ -622,6 +643,11 @@ fun LibraryScreen(
                 )
             }
 
+            LibraryServerPullToRefresh(
+                enabled = sourceMode == LibraryViewMode.Servers,
+                isRefreshing = serverShelvesRefreshing,
+                onRefresh = refreshServerShelves,
+            ) {
             NuvioScreen(
                 modifier = Modifier.fillMaxSize(),
                 horizontalPadding = 0.dp,
@@ -805,6 +831,7 @@ fun LibraryScreen(
                 }
             }
         }
+            }
     }
     }
 
