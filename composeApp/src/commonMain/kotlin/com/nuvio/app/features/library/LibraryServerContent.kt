@@ -31,12 +31,36 @@ import nuvio.composeapp.generated.resources.library_servers_empty_title
 import nuvio.composeapp.generated.resources.library_servers_no_favorites_message
 import nuvio.composeapp.generated.resources.library_servers_no_favorites_title
 import org.jetbrains.compose.resources.stringResource
+import kotlin.concurrent.Volatile
 
 internal data class LibraryServerShelf(
     val ref: ServerLibraryRef,
     val section: HomeCatalogSection? = null,
     val failure: ServerFailure? = null,
 )
+
+/**
+ * The Servers shelves last loaded, kept for the app's lifetime so the tab shows them at once when opened again. They
+ * stay current until the server setup changes (the servers revision) or the app changes a favourite on a server
+ * (the favourites write count); a load in which any shelf failed is not kept, so retrying always reloads.
+ */
+internal object LibraryServerShelfCache {
+    private class Entry(val revision: Int, val writes: Int, val shelves: List<LibraryServerShelf>)
+
+    @Volatile
+    private var entry: Entry? = null
+
+    /** The cached shelves when nothing has changed since they were loaded, else null. */
+    fun current(revision: Int, writes: Int): List<LibraryServerShelf>? =
+        entry?.takeIf { it.revision == revision && it.writes == writes }?.shelves
+
+    /** The cached shelves for the same server setup, even from before the latest favourite change, else null. */
+    fun peek(revision: Int): List<LibraryServerShelf>? = entry?.takeIf { it.revision == revision }?.shelves
+
+    fun put(revision: Int, writes: Int, shelves: List<LibraryServerShelf>) {
+        entry = if (shelves.any { it.failure != null }) null else Entry(revision, writes, shelves)
+    }
+}
 
 internal suspend fun loadServerShelves(): List<LibraryServerShelf> = coroutineScope {
     ServerCatalog.libraryShelves().map { ref ->

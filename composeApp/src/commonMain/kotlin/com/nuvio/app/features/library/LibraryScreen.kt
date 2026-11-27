@@ -269,7 +269,9 @@ fun LibraryScreen(
         } else {
             0
         }
-    var serverShelves by remember { mutableStateOf<List<LibraryServerShelf>?>(null) }
+    var serverShelves by remember {
+        mutableStateOf<List<LibraryServerShelf>?>(LibraryServerShelfCache.peek(serversUiState.revision))
+    }
     var serverShelvesRequest by remember { mutableStateOf(0) }
     var selectedProviderId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedTypeName by rememberSaveable { mutableStateOf<String?>(null) }
@@ -445,7 +447,16 @@ fun LibraryScreen(
     LaunchedEffect(sourceMode, serversUiState.revision, serverShelvesRequest, serverFavoritesUiState.writes) {
         if (sourceMode == LibraryViewMode.Servers) {
             ServerFavorites.ensureFresh()
-            serverShelves = loadServerShelves()
+            val revision = serversUiState.revision
+            val writes = serverFavoritesUiState.writes
+            val cached = LibraryServerShelfCache.current(revision, writes)
+            if (cached != null) {
+                serverShelves = cached
+            } else {
+                val loaded = loadServerShelves()
+                LibraryServerShelfCache.put(revision, writes, loaded)
+                serverShelves = loaded
+            }
         }
     }
 
