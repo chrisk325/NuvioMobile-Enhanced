@@ -269,7 +269,9 @@ fun LibraryScreen(
         } else {
             0
         }
-    var serverShelves by remember { mutableStateOf<List<LibraryServerShelf>?>(null) }
+    var serverShelves by remember {
+        mutableStateOf<List<LibraryServerShelf>?>(LibraryServerShelfCache.peek(serversUiState.revision))
+    }
     var serverShelvesRequest by remember { mutableStateOf(0) }
     var selectedProviderId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedTypeName by rememberSaveable { mutableStateOf<String?>(null) }
@@ -288,6 +290,27 @@ fun LibraryScreen(
         runCatching { LibraryWatchedFilter.valueOf(libraryWatchedFilterName) }.getOrDefault(LibraryWatchedFilter.ALL)
     }
     val coroutineScope = rememberCoroutineScope()
+    var serverShelvesRefreshing by remember { mutableStateOf(false) }
+    val refreshServerShelves: () -> Unit = refresh@{
+        if (serverShelvesRefreshing) return@refresh
+        serverShelvesRefreshing = true
+        coroutineScope.launch {
+            try {
+                ServerFavorites.ensureFresh(force = true)
+                val revision = serversUiState.revision
+                val writes = serverFavoritesUiState.writes
+                val loaded = loadServerShelves()
+                LibraryServerShelfCache.put(revision, writes, loaded)
+                serverShelves = loaded
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                // Keep showing the shelves already on screen.
+            } finally {
+                serverShelvesRefreshing = false
+            }
+        }
+    }
     val listState = rememberLazyListState()
     ScreenActivityEffect(listState) { screenActive ->
         if (!screenActive) listState.stopScroll()
@@ -445,7 +468,16 @@ fun LibraryScreen(
     LaunchedEffect(sourceMode, serversUiState.revision, serverShelvesRequest, serverFavoritesUiState.writes) {
         if (sourceMode == LibraryViewMode.Servers) {
             ServerFavorites.ensureFresh()
-            serverShelves = loadServerShelves()
+            val revision = serversUiState.revision
+            val writes = serverFavoritesUiState.writes
+            val cached = LibraryServerShelfCache.current(revision, writes)
+            if (cached != null) {
+                serverShelves = cached
+            } else {
+                val loaded = loadServerShelves()
+                LibraryServerShelfCache.put(revision, writes, loaded)
+                serverShelves = loaded
+            }
         }
     }
 
@@ -611,6 +643,11 @@ fun LibraryScreen(
                 )
             }
 
+            LibraryServerPullToRefresh(
+                enabled = sourceMode == LibraryViewMode.Servers,
+                isRefreshing = serverShelvesRefreshing,
+                onRefresh = refreshServerShelves,
+            ) {
             NuvioScreen(
                 modifier = Modifier.fillMaxSize(),
                 horizontalPadding = 0.dp,
@@ -794,6 +831,7 @@ fun LibraryScreen(
                 }
             }
         }
+            }
     }
     }
 
