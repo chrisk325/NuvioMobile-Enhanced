@@ -20,6 +20,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.0.51",
+          "buildVersion": "268",
+          "date": "2026-11-27T14:33:25Z",
+          "localizedDescription": "- [Fix in-app updater failing when GitHub release list exceeds 1 MiB (#136)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/136) @chrisk325  \n- [perf (servers) keep library shelves on the device across app starts (#135)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/135) @chrisk325  \n- [perf (servers) pull to refresh library (#134)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/134) @chrisk325  \n- [Library: grid layout by default for Servers tab, add header layout (#133)](https://github.com/chrisk325/NuvioMobile-Enhanced/pull/133) @chrisk325  \n",
+          "downloadURL": "https://github.com/chrisk325/NuvioMobile-Enhanced/releases/download/1.0.51-beta/nuvio-1.0.51-enhanced-release.ipa",
+          "size": 77562244,
+          "sha256": "aad884b4229815830b631517822e0ffb9caf6aace32b1d1b1423240494d63b8a",
+          "minOSVersion": "16.1"
+        },
+        {
           "version": "1.0.47",
           "buildVersion": "264",
           "date": "2026-11-27T08:09:17Z",
