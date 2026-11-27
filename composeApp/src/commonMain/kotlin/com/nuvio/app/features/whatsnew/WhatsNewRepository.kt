@@ -21,7 +21,7 @@ import kotlin.time.Clock
 private const val RELEASE_PAGE_SIZE = 100
 private const val CACHE_TTL_MILLIS = 24L * 60L * 60L * 1000L
 private const val FAILED_REFRESH_RETRY_MILLIS = 6L * 60L * 60L * 1000L
-private const val MAX_RESPONSE_BODY_BYTES = 2 * 1024 * 1024
+private const val MAX_RESPONSE_BODY_BYTES = 8 * 1024 * 1024
 
 @Serializable
 private data class WhatsNewCacheEnvelope(
