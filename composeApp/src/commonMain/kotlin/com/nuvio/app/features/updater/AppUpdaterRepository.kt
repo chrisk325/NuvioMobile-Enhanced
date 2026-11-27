@@ -36,6 +36,9 @@ internal const val GITHUB_API_BASE = "https://api.github.com"
 internal const val GITHUB_OWNER = "chrisk325"
 internal const val GITHUB_REPO = "NuvioMobile-Enhanced"
 
+private const val BETA_RELEASE_PAGE_SIZE = 30
+private const val RELEASES_RESPONSE_MAX_BYTES = 8 * 1024 * 1024
+
 internal object AppUpdaterRepository {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -51,6 +54,9 @@ internal object AppUpdaterRepository {
                 "User-Agent" to "NuvioMobile",
             ),
             body = "",
+            // GitHub release lists embed full uploader objects per asset and easily exceed the
+            // 1 MiB default; a truncated body fails JSON parsing.
+            maxResponseBodyBytes = RELEASES_RESPONSE_MAX_BYTES,
         )
         currentCoroutineContext().ensureActive()
         if (response.status == 404) throw NoChannelReleaseException()
@@ -63,7 +69,7 @@ internal object AppUpdaterRepository {
 
     internal fun releasePath(channel: UpdateChannel): String = when (channel) {
         UpdateChannel.STABLE -> "releases/latest"
-        UpdateChannel.BETA -> "releases?per_page=100"
+        UpdateChannel.BETA -> "releases?per_page=$BETA_RELEASE_PAGE_SIZE"
     }
 
     internal fun selectUpdate(

@@ -8,7 +8,7 @@ class AppUpdaterRepositoryTest {
     @Test
     fun channelsUseTheSameReleaseEndpointsAsTv() {
         assertEquals("releases/latest", AppUpdaterRepository.releasePath(UpdateChannel.STABLE))
-        assertEquals("releases?per_page=100", AppUpdaterRepository.releasePath(UpdateChannel.BETA))
+        assertEquals("releases?per_page=30", AppUpdaterRepository.releasePath(UpdateChannel.BETA))
     }
 
     @Test
