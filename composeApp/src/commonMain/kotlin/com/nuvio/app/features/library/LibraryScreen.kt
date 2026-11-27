@@ -513,14 +513,26 @@ fun LibraryScreen(
                 ) {
                     if (sourceMode == LibraryViewMode.Saved) {
                         LibraryListManagementButton()
-                        val targetLayout = if (displaySettings.layoutMode == LibraryLayoutMode.HORIZONTAL) {
+                    }
+                    if (sourceMode == LibraryViewMode.Saved || sourceMode == LibraryViewMode.Servers) {
+                        val isServers = sourceMode == LibraryViewMode.Servers
+                        val currentLayout = if (isServers) {
+                            displaySettings.serverLayoutMode
+                        } else {
+                            displaySettings.layoutMode
+                        }
+                        val targetLayout = if (currentLayout == LibraryLayoutMode.HORIZONTAL) {
                             LibraryLayoutMode.VERTICAL
                         } else {
                             LibraryLayoutMode.HORIZONTAL
                         }
                         IconButton(
                             onClick = {
-                                LibraryDisplaySettingsRepository.setLayoutMode(targetLayout)
+                                if (isServers) {
+                                    LibraryDisplaySettingsRepository.setServerLayoutMode(targetLayout)
+                                } else {
+                                    LibraryDisplaySettingsRepository.setLayoutMode(targetLayout)
+                                }
                             },
                         ) {
                             Crossfade(

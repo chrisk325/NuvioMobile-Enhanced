@@ -32,7 +32,7 @@ enum class LibraryWatchedFilter {
 
 data class LibraryDisplaySettingsUiState(
     val layoutMode: LibraryLayoutMode = LibraryLayoutMode.HORIZONTAL,
-    val serverLayoutMode: LibraryLayoutMode = LibraryLayoutMode.HORIZONTAL,
+    val serverLayoutMode: LibraryLayoutMode = LibraryLayoutMode.VERTICAL,
     val sortOption: LibrarySortOption = LibrarySortOption.DEFAULT,
     val selectedSectionKey: String? = null,
     val selectedType: String? = null,
@@ -338,7 +338,7 @@ internal fun decodeLibraryDisplaySettings(payload: String?): LibraryDisplaySetti
             ?: LibraryLayoutMode.HORIZONTAL,
         serverLayoutMode = stored?.serverLayoutMode
             ?.let { value -> LibraryLayoutMode.entries.firstOrNull { it.name == value } }
-            ?: LibraryLayoutMode.HORIZONTAL,
+            ?: LibraryLayoutMode.VERTICAL,
         sortOption = stored?.sortOption
             ?.let { value -> LibrarySortOption.entries.firstOrNull { it.name == value } }
             ?: LibrarySortOption.DEFAULT,
@@ -380,7 +380,7 @@ internal val LibrarySourceMode.isRemoteTrackingSource: Boolean
 @Serializable
 private data class StoredLibraryDisplaySettings(
     @SerialName("layout_mode") val layoutMode: String = LibraryLayoutMode.HORIZONTAL.name,
-    @SerialName("server_layout_mode") val serverLayoutMode: String = LibraryLayoutMode.HORIZONTAL.name,
+    @SerialName("server_layout_mode") val serverLayoutMode: String = LibraryLayoutMode.VERTICAL.name,
     @SerialName("sort_option") val sortOption: String = LibrarySortOption.DEFAULT.name,
     @SerialName("selected_section_key") val selectedSectionKey: String? = null,
     @SerialName("selected_type") val selectedType: String? = null,
